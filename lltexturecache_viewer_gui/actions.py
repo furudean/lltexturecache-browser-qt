@@ -1,0 +1,184 @@
+import sys
+from collections.abc import Callable
+from functools import partial
+from pathlib import Path
+
+from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
+
+from lltexturecache_viewer_gui.export import DEFAULT_FORMAT, FORMATS, Format
+from lltexturecache_viewer_gui.formatting import format_count
+from lltexturecache_viewer_gui.recents import RecentCaches
+
+PREVIEW_KEY = "showPreview"
+
+
+def triggers(entry: QAction, call: Callable[[], object]) -> None:
+    entry.triggered.connect(lambda _checked=False: call())
+
+
+def export_title(count: int, *, everything: bool) -> str:
+    if everything:
+        return "Export Full Cache As..."
+
+    if count == 1:
+        return "Export As..."
+
+    return f"Export {format_count(count)} Selected As..." if count else "Export Selected As..."
+
+
+class WindowActions(QObject):
+    new_window = Signal()
+    opened = Signal()
+    reopened = Signal(Path)
+    reloaded = Signal()
+    exported = Signal(Format, bool)
+    previewed = Signal(bool)
+
+    def __init__(self, window: QMainWindow) -> None:
+        super().__init__(window)
+
+        # the entries belong to the window rather than to this, since a shortcut
+        # is only answered by a window the action can be reached from
+        menu = window.menuBar()
+
+        file_menu = menu.addMenu("&File")
+
+        new = QAction("&New Window", window)
+        new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
+        new.setStatusTip("Open another window")
+        triggers(new, self.new_window.emit)
+
+        open = QAction("&Open...", window)
+        open.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
+        open.setStatusTip("Open a texture cache")
+        triggers(open, self.opened.emit)
+
+        # the standard refresh key is f5 off mac, which we want to rewrite
+        refresh_keys = [*QKeySequence.keyBindings(QKeySequence.StandardKey.Refresh), QKeySequence("Ctrl+R")]
+
+        self.reload = QAction("&Reload", window)
+        self.reload.setShortcuts(list(dict.fromkeys(refresh_keys)))
+        self.reload.setStatusTip("Reload the open texture cache from disk")
+        self.reload.setEnabled(False)
+        triggers(self.reload, self.reloaded.emit)
+
+        close = QAction("&Close Window", window)
+        close.setShortcut(QKeySequence(QKeySequence.StandardKey.Close))
+        close.setStatusTip("Close this window")
+        triggers(close, window.close)
+
+        file_menu.addAction(open)
+
+        self._recents = file_menu.addMenu("Open &Recent")
+
+        file_menu.addSeparator()
+        file_menu.addAction(self.reload)
+
+        file_menu.addSeparator()
+        file_menu.addAction(new)
+        file_menu.addAction(close)
+
+        RecentCaches.shared().changed.connect(self.populate_recents)
+
+        self.populate_recents()
+
+        self.exports = menu.addMenu("&Export")
+        self._selected_export = self.format_menu(self.exports, "Export Selected As...", everything=False)
+        self._all_export = self.format_menu(self.exports, "Export Full Cache As...", everything=True)
+
+        # the first format wraps the codestream the cache is already holding
+        # instead of encoding a new one, which is what a shortcut should reach
+        # for. only the entry under the menu bar answers it, since the context
+        # menu builds its own copy of these and two answers to a key is none
+        quick = self._selected_export.actions()[FORMATS.index(DEFAULT_FORMAT)]
+        quick.setShortcut(QKeySequence("Ctrl+E"))
+
+        # how much is selected and how much is in the cache both move around
+        # under the menu, so the two entries are named on the way open. there is
+        # neither of them to count yet, and the titles are what the entries come
+        # up as until a window has something to say about it
+        self.sync_export(0, 0, idle=True)
+
+        view_menu = menu.addMenu("&View")
+
+        # qt spells the command key "Ctrl" on mac and hands "Meta" to control
+        preview_key = "Shift+Ctrl+P" if sys.platform == "darwin" else "Shift+Alt+P"
+
+        self.preview = QAction("Show &Preview", window)
+        self.preview.setShortcut(QKeySequence(preview_key))
+        self.preview.setStatusTip("Show a preview of the selected texture")
+        self.preview.setCheckable(True)
+        self.preview.setChecked(bool(QSettings().value(PREVIEW_KEY, True, type=bool)))
+        # written down before it goes out, so nothing acting on the pane moving
+        # can find the setting saying it is still where it was
+        self.preview.toggled.connect(self.store_preview)
+        self.preview.toggled.connect(self.previewed)
+
+        view_menu.addAction(self.preview)
+
+    def shutdown(self) -> None:
+        RecentCaches.shared().changed.disconnect(self.populate_recents)
+
+    def format_menu(self, parent: QMenu, title: str, *, everything: bool) -> QMenu:
+        menu = parent.addMenu(title)
+
+        for format in FORMATS:
+            entry = menu.addAction(format.label)
+            entry.setStatusTip(
+                f"Write every texture in the cache out as {format.label}"
+                if everything
+                else f"Write the selected textures out as {format.label}"
+            )
+            triggers(entry, partial(self.exported.emit, format, everything))
+
+        return menu
+
+    def context_menu(self, parent: QWidget, selected: int, *, idle: bool) -> QMenu:
+        menu = QMenu(parent)
+
+        entries = self.format_menu(menu, export_title(selected, everything=False), everything=False)
+        entries.setEnabled(idle)
+
+        return menu
+
+    def sync_export(self, selected: int, total: int, *, idle: bool) -> None:
+        self._selected_export.setTitle(export_title(selected, everything=False))
+        self._selected_export.setEnabled(idle and selected > 0)
+
+        self._all_export.setTitle(export_title(total, everything=True))
+        self._all_export.setEnabled(idle and total > 0)
+
+    def populate_recents(self) -> None:
+        recents = RecentCaches.shared()
+        paths = recents.paths()
+
+        self._recents.clear()
+        self._recents.setEnabled(bool(paths))
+
+        for path in paths:
+            entry = self._recents.addAction(str(path).replace("&", "&&"))
+            entry.setStatusTip(f"Open {path}")
+            triggers(entry, partial(self.reopened.emit, path))
+
+        self._recents.addSeparator()
+
+        clear = self._recents.addAction("Clear recent file list")
+        clear.setStatusTip("Forget the caches opened before")
+        triggers(clear, recents.clear)
+
+    def store_preview(self, shown: bool) -> None:
+        QSettings().setValue(PREVIEW_KEY, shown)
+
+
+def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:
+    bar = QMenuBar()
+
+    # only the one entry: everything else an app can do it does to a cache or
+    # to a window, and both of those are a new window away
+    new = bar.addMenu("&File").addAction("&New Window")
+    new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
+    triggers(new, new_window)
+
+    return bar
