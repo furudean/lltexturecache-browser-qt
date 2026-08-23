@@ -306,7 +306,7 @@ class DecodeTask(QRunnable):
         try:
             # buffered with lock
             with self._reads:
-                codestream = self._texture.as_jpeg_2000_codestream()
+                codestream = self._texture.codestream()
 
             image = decode_image(codestream)
         except TextureCacheError, OSError:
@@ -431,7 +431,7 @@ class TextureModel(QAbstractListModel):
     def thumbnail(self, texture: Texture) -> QImage:
         try:
             with self._thumbnails:
-                thumbnail = texture.thumbnail_as_png()
+                thumbnail = texture.thumbnail_png()
         except TextureCacheError, OSError:
             thumbnail = None
 

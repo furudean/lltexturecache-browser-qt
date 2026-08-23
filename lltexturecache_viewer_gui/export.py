@@ -62,13 +62,13 @@ def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) ->
 
     if fmt.encoder is None:
         with reads:
-            jp2_bytes = texture.as_jpeg2000()
+            jp2_bytes = texture.jpeg_2000()
         path.write_bytes(jp2_bytes)
     else:
         with reads:
             # pillow can natively understand the codestream, so this would be extra
             # processing with loads_jp2()
-            codestream = texture.as_jpeg_2000_codestream()
+            codestream = texture.codestream()
         with open_image(codestream) as image:
             encodable(image, fmt).save(path, fmt.encoder, **fmt.options)
 
