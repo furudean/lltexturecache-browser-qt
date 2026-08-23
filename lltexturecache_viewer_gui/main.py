@@ -640,7 +640,7 @@ class MainWindow(QMainWindow):
 
         MainWindow.save_session()
 
-        self.setWindowTitle(f"{cache.cache_dir} - {APP_NAME}")
+        self.setWindowTitle(f"{cache.cache_dir} — {APP_NAME}")
         self.setWindowFilePath(str(cache.cache_dir))
         self.populate_grid()
 
