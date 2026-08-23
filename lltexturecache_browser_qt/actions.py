@@ -7,9 +7,9 @@ from PySide6.QtCore import QObject, QSettings, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
-from lltexturecache_viewer_gui.export import DEFAULT_FORMAT, FORMATS, Format
-from lltexturecache_viewer_gui.formatting import format_count
-from lltexturecache_viewer_gui.recents import RecentCaches
+from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS, Format
+from lltexturecache_browser_qt.formatting import format_count
+from lltexturecache_browser_qt.recents import RecentCaches
 
 PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"

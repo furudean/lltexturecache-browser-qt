@@ -12,8 +12,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 from texture_courier import Texture
 
-from lltexturecache_viewer_gui.checkerboard import checkerboard
-from lltexturecache_viewer_gui.formatting import format_count, format_size
+from lltexturecache_browser_qt.checkerboard import checkerboard
+from lltexturecache_browser_qt.formatting import format_count, format_size
 
 WINDOW_SIZE = 480
 WINDOW_MIN_SIZE = 320

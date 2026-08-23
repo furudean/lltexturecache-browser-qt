@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture
 
-from lltexturecache_viewer_gui.formatting import format_count, format_size, format_time
+from lltexturecache_browser_qt.formatting import format_count, format_size, format_time
 
 INSPECTOR_WIDTH = 260
 INSPECTOR_MIN_WIDTH = 200

@@ -10,8 +10,8 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from texture_courier import Texture, TextureCacheError
 from texture_courier.encode import wrap_jp2
 
-from lltexturecache_viewer_gui.decode import decode_rgba, extra_components
-from lltexturecache_viewer_gui.reveal import REVEAL_LIMIT
+from lltexturecache_browser_qt.decode import decode_rgba, extra_components
+from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
 
 CONCURRENCY = 8
 

@@ -32,21 +32,21 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_viewer_gui.actions import WindowActions, fallback_menu
-from lltexturecache_viewer_gui.checkerboard import sync_checkerboard
-from lltexturecache_viewer_gui.export import ExportJob, Format
-from lltexturecache_viewer_gui.formatting import format_count
-from lltexturecache_viewer_gui.inspector import (
+from lltexturecache_browser_qt.actions import WindowActions, fallback_menu
+from lltexturecache_browser_qt.checkerboard import sync_checkerboard
+from lltexturecache_browser_qt.export import ExportJob, Format
+from lltexturecache_browser_qt.formatting import format_count
+from lltexturecache_browser_qt.inspector import (
     INSPECTOR_WIDTH,
     STACK_CARDS,
     InspectorPane,
     stack_pixmap,
 )
-from lltexturecache_viewer_gui.preview import PreviewWindow
-from lltexturecache_viewer_gui.recents import RecentCaches
-from lltexturecache_viewer_gui.reveal import reveal
-from lltexturecache_viewer_gui.signals import SignalWatcher
-from lltexturecache_viewer_gui.tiles import (
+from lltexturecache_browser_qt.preview import PreviewWindow
+from lltexturecache_browser_qt.recents import RecentCaches
+from lltexturecache_browser_qt.reveal import reveal
+from lltexturecache_browser_qt.signals import SignalWatcher
+from lltexturecache_browser_qt.tiles import (
     CELL_PADDING,
     PIXMAP_CACHE_KB,
     THUMBNAIL_SIZE,

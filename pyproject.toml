@@ -22,7 +22,7 @@ requires = ["setuptools", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-lltexturecache-browser-qt = "lltexturecache_viewer_gui.main:main"
+lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 
 [tool.mypy]
 python_version = "3.14"

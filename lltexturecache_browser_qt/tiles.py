@@ -43,9 +43,9 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture, TextureCacheError, wrap_jp2
 
-from lltexturecache_viewer_gui.checkerboard import checkerboard_generation, over_checkerboard
-from lltexturecache_viewer_gui.decode import decode_rgba, extra_components
-from lltexturecache_viewer_gui.formatting import format_time
+from lltexturecache_browser_qt.checkerboard import checkerboard_generation, over_checkerboard
+from lltexturecache_browser_qt.decode import decode_rgba, extra_components
+from lltexturecache_browser_qt.formatting import format_time
 
 FULL_SIZE = 800
 CELL_PADDING = 14
