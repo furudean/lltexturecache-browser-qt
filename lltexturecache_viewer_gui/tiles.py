@@ -41,9 +41,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from texture_courier import Texture
-from texture_courier.core import TextureCacheError
-from texture_courier.encode import wrap_jp2
+from texture_courier import Texture, TextureCacheError, wrap_jp2
 
 from lltexturecache_viewer_gui.checkerboard import checkerboard_generation, over_checkerboard
 from lltexturecache_viewer_gui.decode import decode_rgba, extra_components
@@ -308,7 +306,7 @@ class DecodeTask(QRunnable):
         try:
             # buffered with lock
             with self._reads:
-                codestream = self._texture.loads_j2c()
+                codestream = self._texture.as_jpeg_2000_codestream()
 
             image = decode_image(codestream)
         except TextureCacheError, OSError:
@@ -433,7 +431,7 @@ class TextureModel(QAbstractListModel):
     def thumbnail(self, texture: Texture) -> QImage:
         try:
             with self._thumbnails:
-                thumbnail = texture.loads_thumbnail_png()
+                thumbnail = texture.thumbnail_as_png()
         except TextureCacheError, OSError:
             thumbnail = None
 

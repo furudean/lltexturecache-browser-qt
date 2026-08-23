@@ -30,8 +30,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStatusBar,
 )
-from texture_courier import Texture, TextureCache
-from texture_courier.core import TextureCacheError
+from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_viewer_gui.actions import WindowActions, fallback_menu
 from lltexturecache_viewer_gui.checkerboard import sync_checkerboard

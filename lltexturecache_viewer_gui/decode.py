@@ -1,5 +1,5 @@
 import imagecodecs
-from texture_courier.core import TextureCacheError
+from texture_courier import TextureCacheError
 from texture_courier.encode import codestream_size
 
 # qt and pillow both stop at rgba, so this is the count past which a codestream

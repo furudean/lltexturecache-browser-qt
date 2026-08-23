@@ -7,8 +7,7 @@ from typing import Any
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
-from texture_courier import Texture
-from texture_courier.core import TextureCacheError
+from texture_courier import Texture, TextureCacheError
 from texture_courier.encode import wrap_jp2
 
 from lltexturecache_viewer_gui.decode import decode_rgba, extra_components
@@ -59,14 +58,17 @@ def export_path(out_dir: Path, uuid: str, format: Format) -> Path:
 
 
 def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) -> Path:
-    with reads:
-        codestream = texture.loads_j2c()
-
     path = export_path(out_dir, texture.uuid, fmt)
 
     if fmt.encoder is None:
-        path.write_bytes(wrap_jp2(codestream))
+        with reads:
+            jp2_bytes = texture.as_jpeg2000()
+        path.write_bytes(jp2_bytes)
     else:
+        with reads:
+            # pillow can natively understand the codestream, so this would be extra
+            # processing with loads_jp2()
+            codestream = texture.as_jpeg_2000_codestream()
         with open_image(codestream) as image:
             encodable(image, fmt).save(path, fmt.encoder, **fmt.options)
 
