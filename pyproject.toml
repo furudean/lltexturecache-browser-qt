@@ -1,5 +1,5 @@
 [project]
-name = "lltexturecache-viewer-gui"
+name = "lltexturecache-browser-qt"
 version = "0.1.0"
 description = "A cross-platform user interface for the Second Life texture cache"
 readme = "README.md"
@@ -22,7 +22,7 @@ requires = ["setuptools", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-lltexturecache-viewer-gui = "lltexturecache_viewer_gui.main:main"
+lltexturecache-browser-qt = "lltexturecache_viewer_gui.main:main"
 
 [tool.mypy]
 python_version = "3.14"

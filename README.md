@@ -1,4 +1,4 @@
-# lltexturecache-viewer-gui
+# lltexturecache-browser-qt
 
 ![alt text](<preview.png>)
 

@@ -57,7 +57,7 @@ from lltexturecache_viewer_gui.tiles import (
     sidebar_key,
 )
 
-APP_NAME = "lltexturecache-viewer-gui"
+APP_NAME = "lltexturecache-browser-qt"
 
 
 # keys to track how the last window was left so it can be restored
