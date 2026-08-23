@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Self
 
 from PySide6.QtCore import QObject, QSettings, Signal
 
@@ -10,7 +10,7 @@ RECENT_KEY = "recentCaches"
 class RecentCaches(QObject):
     changed = Signal()
 
-    _shared: ClassVar[RecentCaches | None] = None
+    _shared: ClassVar[Self | None] = None
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -18,7 +18,7 @@ class RecentCaches(QObject):
         self._paths = self.load()
 
     @classmethod
-    def shared(cls) -> RecentCaches:
+    def shared(cls) -> Self:
         if cls._shared is None:
             cls._shared = cls()
 

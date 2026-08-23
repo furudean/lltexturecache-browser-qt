@@ -6,7 +6,8 @@ from bisect import bisect_left, bisect_right
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import ClassVar, Self, TracebackType
+from types import TracebackType
+from typing import ClassVar, Self
 
 from PySide6.QtCore import (
     QByteArray,
