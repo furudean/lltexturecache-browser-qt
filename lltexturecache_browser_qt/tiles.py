@@ -41,7 +41,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from texture_courier import Texture, TextureCacheError, wrap_jp2
+from texture_courier import Texture, TextureCacheError
+from texture_courier.encode import wrap_jp2
 
 from lltexturecache_browser_qt.checkerboard import checkerboard_generation, over_checkerboard
 from lltexturecache_browser_qt.decode import decode_rgba, extra_components
