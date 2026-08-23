@@ -43,6 +43,7 @@ from lltexturecache_viewer_gui.inspector import (
     InspectorPane,
     stack_pixmap,
 )
+from lltexturecache_viewer_gui.preview import PreviewWindow
 from lltexturecache_viewer_gui.recents import RecentCaches
 from lltexturecache_viewer_gui.reveal import reveal
 from lltexturecache_viewer_gui.signals import SignalWatcher
@@ -63,6 +64,7 @@ APP_NAME = "lltexturecache-viewer-gui"
 SESSION_KEY = "openCaches"
 GEOMETRY_KEY = "windowGeometry"
 SPLITTER_KEY = "windowSplitter"
+PREVIEW_GEOMETRY_KEY = "previewGeometry"
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
@@ -98,9 +100,13 @@ class MainWindow(QMainWindow):
         self._stack: list[Texture] = []
         self._job: ExportJob | None = None
 
+        # a window of its own for the one texture, built the first time it is
+        # asked for and kept afterwards, since it is a keystroke away
+        self._preview: PreviewWindow | None = None
+
         self._settle = QTimer(self)
         self._settle.setSingleShot(True)
-        self._settle.setInterval(150) # wait for layout to settle
+        self._settle.setInterval(150)  # wait for layout to settle
         self._settle.timeout.connect(self.settle_action)
 
         self._view = TextureGrid()
@@ -156,14 +162,17 @@ class MainWindow(QMainWindow):
         self._actions.reopened.connect(self.open_cache)
         self._actions.reloaded.connect(self.refresh_action)
         self._actions.exported.connect(self.export_action)
-        self._actions.previewed.connect(self.sidebar_action)
+        self._actions.previewed.connect(self.preview_action)
+        self._actions.inspected.connect(self.inspector_action)
 
         # how much is selected and how much is in the cache both move around
         # under the menu, and only this end knows either of them
         self._actions.exports.aboutToShow.connect(self.sync_export)
 
-        # the preview entry comes up checked out of the stored setting, before
-        # anything is listening to it, so the pane is put where it wants it here
+        # both entries come up out of their stored settings, before anything is
+        # listening to them, so the pane and the window are put where the menu
+        # already says they are here
+        self.sync_inspector()
         self.sync_preview()
 
     @classmethod
@@ -198,8 +207,14 @@ class MainWindow(QMainWindow):
         settings.setValue(GEOMETRY_KEY, self.saveGeometry())
         settings.setValue(SPLITTER_KEY, self._splitter.saveState())
 
+        if self._preview is not None:
+            settings.setValue(PREVIEW_GEOMETRY_KEY, self._preview.saveGeometry())
+
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_layout()
+
+        if self._preview is not None:
+            self._preview.hide()
 
         self._actions.shutdown()
 
@@ -227,6 +242,11 @@ class MainWindow(QMainWindow):
 
     def restyle(self) -> None:
         sync_checkerboard()
+
+        # the preview window keeps the texture's alpha and lays the board down
+        # behind it, so a new board is a repaint rather than a fresh decode
+        if self._preview is not None:
+            self._preview.update()
 
         model = self._view.model()
 
@@ -280,7 +300,6 @@ class MainWindow(QMainWindow):
         if shown is not None:
             self.select_texture(shown.uuid)
             self.scroll_to_end()
-
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._view.model()
@@ -388,20 +407,73 @@ class MainWindow(QMainWindow):
         if written and not cancelled and not reveal(written_paths):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
 
-    def sidebar_action(self, shown: bool) -> None:
+    def inspector_action(self, shown: bool) -> None:
+        self.sync_inspector()
+
+        if shown:
+            self.fill_inspector()
+
+    def sync_inspector(self) -> None:
+        opened = self._cache is not None
+
+        self._actions.inspector.setEnabled(opened)
+        self._inspector.setVisible(opened and self._actions.inspector.isChecked())
+
+    def preview_action(self, shown: bool) -> None:
         self.sync_preview()
 
         if shown:
-            self.sync_inspector()
+            self.fill_preview()
+
+    def preview_closed_action(self) -> None:
+        self._actions.preview.setChecked(False)
 
     def sync_preview(self) -> None:
         opened = self._cache is not None
 
         self._actions.preview.setEnabled(opened)
-        self._inspector.setVisible(opened and self._actions.preview.isChecked())
+
+        if not (opened and self._actions.preview.isChecked()):
+            if self._preview is not None:
+                self._preview.hide()
+
+            return
+
+        if self._preview is None:
+            self._preview = PreviewWindow(self)
+            self._preview.closed.connect(self.preview_closed_action)
+            self._preview.restore(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
+
+        self._preview.present()
+
+    def preview_ready_action(self, _uuid: str) -> None:
+        self.fill_preview()
+
+    def fill_preview(self) -> None:
+        """Show whatever is selected in the preview window, if one is up"""
+
+        model = self._view.model()
+
+        if self._preview is None or not self._preview.isVisible() or not isinstance(model, TextureModel):
+            return
+
+        index = self.selected_index()
+
+        if not index.isValid():
+            self._preview.clear()
+            return
+
+        texture = model.texture(index.row())
+
+        # asking marks this as the one texture the window is on, so a decode
+        # the selection has already been walked past is dropped when it lands.
+        # the grid and the pane read smaller and sooner, and whichever of them
+        # has already been through this texture stands in until it lands
+        self._preview.show_texture(texture, model.preview(texture), model.standing(texture))
 
     def selection_action(self, *_: object) -> None:
-        self.sync_inspector()
+        self.fill_inspector()
+        self.fill_preview()
         self.sync_export()
         self.sync_selection()
 
@@ -420,7 +492,7 @@ class MainWindow(QMainWindow):
 
         self.paint_inspector()
 
-    def sync_inspector(self) -> None:
+    def fill_inspector(self) -> None:
         model = self._view.model()
 
         if not self._inspector.isVisible() or not isinstance(model, TextureModel):
@@ -472,11 +544,10 @@ class MainWindow(QMainWindow):
             # only the texture on top is worth a decode on the spot. the rest go
             # in with whatever the grid or an earlier selection left behind,
             # until the selection settles and they are decoded properly
-            ready = model.full(texture, decode=False)
-            pixmap = ready[0] if ready is not None else model.cell(texture)
+            ready = model.standing(texture)
 
-            if not pixmap.isNull():
-                cards.append((texture.uuid, pixmap))
+            if ready is not None:
+                cards.append((texture.uuid, ready[0]))
 
         self._inspector.set_sidebar(stack_pixmap(cards), top[1] if top is not None else None)
 
@@ -563,6 +634,7 @@ class MainWindow(QMainWindow):
         self._cache = cache
 
         self._actions.reload.setEnabled(True)
+        self.sync_inspector()
         self.sync_preview()
         self.sync_status()
 
@@ -624,6 +696,7 @@ class MainWindow(QMainWindow):
 
         model = TextureModel(textures, self)
         model.full_ready.connect(self.ready_action)
+        model.preview_ready.connect(self.preview_ready_action)
 
         self._view.setModel(model)
 
@@ -636,6 +709,11 @@ class MainWindow(QMainWindow):
 
         self._stack = []
         self._inspector.clear()
+
+        # the window was showing a texture out of the model just retired, and
+        # is filled again by whatever selection lands in the new one
+        if self._preview is not None:
+            self._preview.clear()
 
         self.sync_export()
         self.scroll_to_end()

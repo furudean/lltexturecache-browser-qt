@@ -3,7 +3,7 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtCore import QObject, QSettings, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
@@ -12,6 +12,7 @@ from lltexturecache_viewer_gui.formatting import format_count
 from lltexturecache_viewer_gui.recents import RecentCaches
 
 PREVIEW_KEY = "showPreview"
+INSPECTOR_KEY = "showInspector"
 
 
 def triggers(entry: QAction, call: Callable[[], object]) -> None:
@@ -34,6 +35,7 @@ class WindowActions(QObject):
     reopened = Signal(Path)
     reloaded = Signal()
     exported = Signal(Format, bool)
+    inspected = Signal(bool)
     previewed = Signal(bool)
 
     def __init__(self, window: QMainWindow) -> None:
@@ -103,20 +105,27 @@ class WindowActions(QObject):
 
         view_menu = menu.addMenu("&View")
 
-        # qt spells the command key "Ctrl" on mac and hands "Meta" to control
-        preview_key = "Shift+Ctrl+P" if sys.platform == "darwin" else "Shift+Alt+P"
-
         self.preview = QAction("Show &Preview", window)
-        self.preview.setShortcut(QKeySequence(preview_key))
-        self.preview.setStatusTip("Show a preview of the selected texture")
+        self.preview.setShortcut(QKeySequence(Qt.Key.Key_Space))
+        self.preview.setStatusTip("Show the selected texture in a window of its own")
         self.preview.setCheckable(True)
-        self.preview.setChecked(bool(QSettings().value(PREVIEW_KEY, True, type=bool)))
-        # written down before it goes out, so nothing acting on the pane moving
-        # can find the setting saying it is still where it was
+        self.preview.setChecked(bool(QSettings().value(PREVIEW_KEY, False, type=bool)))
         self.preview.toggled.connect(self.store_preview)
         self.preview.toggled.connect(self.previewed)
 
+        # the command key "Ctrl" on mac and hands "Meta" to control
+        inspector_key = "Shift+Ctrl+I" if sys.platform == "darwin" else "Shift+Alt+I"
+
+        self.inspector = QAction("Show &Inspector", window)
+        self.inspector.setShortcut(QKeySequence(inspector_key))
+        self.inspector.setStatusTip("Show details of the selected texture beside the grid")
+        self.inspector.setCheckable(True)
+        self.inspector.setChecked(bool(QSettings().value(INSPECTOR_KEY, True, type=bool)))
+        self.inspector.toggled.connect(self.store_inspector)
+        self.inspector.toggled.connect(self.inspected)
+
         view_menu.addAction(self.preview)
+        view_menu.addAction(self.inspector)
 
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
@@ -170,6 +179,9 @@ class WindowActions(QObject):
 
     def store_preview(self, shown: bool) -> None:
         QSettings().setValue(PREVIEW_KEY, shown)
+
+    def store_inspector(self, shown: bool) -> None:
+        QSettings().setValue(INSPECTOR_KEY, shown)
 
 
 def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:

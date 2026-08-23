@@ -24,7 +24,7 @@ from lltexturecache_viewer_gui.formatting import format_count, format_size, form
 INSPECTOR_WIDTH = 260
 INSPECTOR_MIN_WIDTH = 200
 
-PREVIEW_MIN_HEIGHT = 140
+SIDEBAR_MIN_HEIGHT = 140
 
 PANE_MARGIN = 16
 PANE_SPACING = 6
@@ -175,7 +175,7 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
     return canvas
 
 
-class PreviewLabel(QLabel):
+class SidebarLabel(QLabel):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -200,11 +200,11 @@ class PreviewLabel(QLabel):
 
     def heightForWidth(self, width: int) -> int:
         if self._source.isNull():
-            return PREVIEW_MIN_HEIGHT
+            return SIDEBAR_MIN_HEIGHT
 
         fitted = self._source.size().scaled(self.box(width), Qt.AspectRatioMode.KeepAspectRatio)
 
-        return max(fitted.height(), PREVIEW_MIN_HEIGHT)
+        return max(fitted.height(), SIDEBAR_MIN_HEIGHT)
 
     def box(self, width: int) -> QSize:
         return QSize(width, self.maximumHeight()).boundedTo(self._source.size())
@@ -246,7 +246,7 @@ class InspectorPane(QWidget):
         self._empty = dim(QLabel("No selection"))
         self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._sidebar = PreviewLabel()
+        self._sidebar = SidebarLabel()
 
         self._name = wrapped(copyable(bold(QLabel())))
 
@@ -314,7 +314,7 @@ class InspectorPane(QWidget):
     def share_height(self) -> None:
         width = self.width() - 2 * PANE_MARGIN
         text = self._details.heightForWidth(width) if width > 0 else self._details.sizeHint().height()
-        room = max(self.height() - 2 * PANE_MARGIN - PANE_SPACING - text, PREVIEW_MIN_HEIGHT)
+        room = max(self.height() - 2 * PANE_MARGIN - PANE_SPACING - text, SIDEBAR_MIN_HEIGHT)
 
         if room != self._sidebar.maximumHeight():
             self._sidebar.setMaximumHeight(room)

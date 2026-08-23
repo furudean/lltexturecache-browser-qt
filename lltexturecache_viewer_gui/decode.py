@@ -16,14 +16,14 @@ def extra_components(codestream: bytes) -> bool:
 def decode_rgba(codestream: bytes) -> tuple[bytes, int, int]:
     """Colour and opacity from a codestream, as tightly packed rgba rows"""
 
-    # The codestreams an image reader will not take can be decoded through 
+    # The codestreams an image reader will not take can be decoded through
     # openjpeg for compatibility
 
     # Second life encodes some of its material textures with five components rather
     # than the four an rgba image has, and tags them `LL_RGBHM`. Neither reader the
     # rest of the app leans on will touch one: qt's jp2 plugin reports the file as
-    # readable and then fails on the data, and pillow only knows how to name 1-4 
-    # component images, so it cannot even work out a mode. The codestream itself is 
+    # readable and then fails on the data, and pillow only knows how to name 1-4
+    # component images, so it cannot even work out a mode. The codestream itself is
     # fine, and openjpeg decodes it without complaint.
 
     # The viewer keeps a four component thumbnail for every one of these in its fast

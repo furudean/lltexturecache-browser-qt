@@ -49,15 +49,14 @@ from lltexturecache_viewer_gui.checkerboard import checkerboard_generation, over
 from lltexturecache_viewer_gui.decode import decode_rgba, extra_components
 from lltexturecache_viewer_gui.formatting import format_time
 
-THUMBNAIL_SIZE = 100
-
-# the gap between one tile and the next, half of it given by each side
+FULL_SIZE = 800
 CELL_PADDING = 14
 
-# the inspector decodes at a fixed size rather than at whatever width the pane
-# happens to have, so dragging the splitter never sets off a fresh decode. it is
-# generous enough that the pane can be dragged wide without the image going soft
-FULL_SIZE = 800
+THUMBNAIL_SIZE = 100
+PREVIEW_SIZE = 2048
+
+FULL_PRIORITY = 1
+PREVIEW_PRIORITY = 2
 
 # a full decode is a quarter of a megabyte against the 16 KB a cell costs, so
 # only the last few textures the selection passed through are worth holding.
@@ -71,14 +70,9 @@ PIXMAP_CACHE_KB = 1024 * 1024
 DECODE_THREADS = 4
 DECODES_IN_FLIGHT = DECODE_THREADS * 2
 
-PLACEHOLDER_COLOR = QColor(0xFF, 0x00, 0x00)
-
 # how far the empty grid's message may run before it wraps, so a window dragged
 # wide reads as a line of text in the middle of it rather than as a banner
 MESSAGE_WIDTH = 320
-
-# the gap between the message and the button under it
-MESSAGE_SPACING = 12
 
 # an invalid index is the root of a list model, and it is a plain value type,
 # so one shared instance stands in for the default argument
@@ -113,7 +107,7 @@ def thumbnail_image(png: bytes) -> QImage:
     return fit_image(read_image(QByteArray(png)))
 
 
-def fit_image(image: QImage, size: int = THUMBNAIL_SIZE, *, upscale: bool = True) -> QImage:
+def fit_image(image: QImage, size: int = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:
     """Fit an image to a square box, over the board if transparent"""
 
     if image.isNull():
@@ -133,13 +127,15 @@ def fit_image(image: QImage, size: int = THUMBNAIL_SIZE, *, upscale: bool = True
         Qt.TransformationMode.SmoothTransformation,
     )
 
-    return over_checkerboard(scaled)
+    # a caller that draws its own board underneath wants the alpha kept, since
+    # a board painted into an image is scaled along with it
+    return over_checkerboard(scaled) if board else scaled
 
 
 @cache
 def placeholder() -> QPixmap:
     pixmap = QPixmap(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
-    pixmap.fill(PLACEHOLDER_COLOR)
+    pixmap.fill(QColor(0xFF, 0x00, 0x00))
 
     return pixmap
 
@@ -185,7 +181,7 @@ class EmptyState(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(MESSAGE_SPACING)
+        layout.setSpacing(12)
 
         layout.addWidget(self._message, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self._open, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -291,6 +287,7 @@ class DecodeTask(QRunnable):
         size: int = THUMBNAIL_SIZE,
         *,
         upscale: bool = True,
+        board: bool = True,
     ):
         super().__init__()
 
@@ -299,6 +296,7 @@ class DecodeTask(QRunnable):
         self._signals = signals
         self._size = size
         self._upscale = upscale
+        self._board = board
 
     @Slot()
     def run(self) -> None:
@@ -316,11 +314,12 @@ class DecodeTask(QRunnable):
         except TextureCacheError, OSError:
             return QImage(), QSize()
 
-        return fit_image(image, self._size, upscale=self._upscale), image.size()
+        return fit_image(image, self._size, upscale=self._upscale, board=self._board), image.size()
 
 
 class TextureModel(QAbstractListModel):
     full_ready = Signal(str)
+    preview_ready = Signal(str)
 
     def __init__(self, textures: list[Texture], parent: QObject | None = None):
         super().__init__(parent)
@@ -341,6 +340,11 @@ class TextureModel(QAbstractListModel):
         # say the ones whose results are already out of date on arrival
         self._stale: set[str] = set()
         self._full_stale: set[str] = set()
+        # a preview window shows the one texture it is on, so the last one
+        # asked for is the only one worth the room a full sized decode takes
+        self._preview: tuple[str, QPixmap, QSize] | None = None
+        self._previewing: str | None = None
+        self._preview_running: set[str] = set()
         self._generation = checkerboard_generation()
         self._reads = threading.Lock()
         self._thumbnails = threading.Lock()
@@ -355,6 +359,11 @@ class TextureModel(QAbstractListModel):
         # their own size and land in their own cache
         self._full_signals = DecodeSignals(self)
         self._full_signals.done.connect(self.full_decoded)
+
+        # the preview window decodes larger again and keeps its alpha, since it
+        # lays the board down behind the image rather than into it
+        self._preview_signals = DecodeSignals(self)
+        self._preview_signals.done.connect(self.preview_decoded)
 
     @property
     def reads(self) -> threading.Lock:
@@ -459,7 +468,40 @@ class TextureModel(QAbstractListModel):
             # ahead of the screenful of cells the grid has already asked for
             task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False)
 
-            self._pool.start(task, 1)
+            self._pool.start(task, FULL_PRIORITY)
+
+        return None
+
+    def standing(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
+        """The best decode already in hand, and the size it came in at if known
+
+        Nothing is started for it: this is only what a pane or a window can
+        put up on the spot while the decode it really wants is out.
+        """
+
+        if (ready := self.full(texture, decode=False)) is not None:
+            return ready
+
+        # a cell is the grid's own decode, or the thumbnail the cache keeps
+        # alongside it, and carries no record of what it was cut down from
+        cell = self.cell(texture)
+
+        return (cell, QSize()) if not cell.isNull() else None
+
+    def preview(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
+        uuid = texture.uuid
+
+        self._previewing = uuid
+
+        if self._preview is not None and self._preview[0] == uuid:
+            return self._preview[1], self._preview[2]
+
+        if uuid not in self._preview_running:
+            self._preview_running.add(uuid)
+
+            task = DecodeTask(texture, self._reads, self._preview_signals, PREVIEW_SIZE, upscale=False, board=False)
+
+            self._pool.start(task, PREVIEW_PRIORITY)
 
         return None
 
@@ -566,15 +608,32 @@ class TextureModel(QAbstractListModel):
 
         self.full_ready.emit(uuid)
 
+    @Slot(str, QImage, QSize)
+    def preview_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
+        self._preview_running.discard(uuid)
+
+        if uuid != self._previewing:
+            return
+
+        # a texture that could not be decoded comes back null, and is held that
+        # way so a reselect does not set the same doomed decode going again
+        self._preview = (uuid, QPixmap.fromImage(image), natural)
+
+        self.preview_ready.emit(uuid)
+
     def shutdown(self) -> None:
         # a decode the pool already started still reports back, and this model
         # is on its way out, so a stale image could land on top of a fresher
         # one under the same key. dropping the connection drops those reports
         self._signals.done.disconnect(self.decoded)
         self._full_signals.done.disconnect(self.full_decoded)
+        self._preview_signals.done.disconnect(self.preview_decoded)
 
         self._queue.clear()
         self._full.clear()
+
+        self._preview = None
+        self._previewing = None
 
         self._pool.clear()
         self._pool.waitForDone()
