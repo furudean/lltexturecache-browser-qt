@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+
+import tomllib
+from pathlib import Path
+
+
+def main() -> None:
+    root = Path(__file__).parent.parent
+    with open(root / "pyproject.toml", "rb") as f:
+        version = tomllib.load(f)["project"]["version"]
+
+    out = root / "lltexturecache_browser_qt/_meta.py"
+    out.write_text(f'__version__ = "{version}"\n')
+    print(f"wrote {version} to {out}")
+
+if __name__ == "__main__":
+    main()
+    

@@ -63,6 +63,12 @@ from lltexturecache_browser_qt.tiles import (
     sidebar_key,
 )
 
+try:
+    from lltexturecache_browser_qt._meta import __version__
+except ImportError:
+    __version__ = "0.0.0-dev"
+
+
 # keys to track how the last window was left so it can be restored
 SESSION_KEY = "openCaches"
 GEOMETRY_KEY = "windowGeometry"
@@ -729,12 +735,10 @@ class MainWindow(QMainWindow):
         self.show_status(self._showing)
 
     def about_action(self) -> None:
-        version = importlib.metadata.version(APP_NAME)
-
         QMessageBox.about(
             self,
             f"About {APP_NAME}",
-            f"{APP_NAME} v{version}\n\nA cross-platform user interface for the Second Life texture cache.",
+            f"{APP_NAME} v{__version__}\n\nA cross-platform user interface for the Second Life texture cache.",
         )
 
 
@@ -806,6 +810,7 @@ def main() -> None:
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName("paisley softworks")
+    app.setApplicationVersion(__version__)
 
     QPixmapCache.setCacheLimit(PIXMAP_CACHE_KB)
 

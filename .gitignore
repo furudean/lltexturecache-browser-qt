@@ -13,3 +13,5 @@ wheels/
 
 .mypy_cache
 .ruff_cache
+
+lltexturecache_browser_qt/_meta.py
