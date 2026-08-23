@@ -126,7 +126,6 @@ class WindowActions(QObject):
         self.inspector.toggled.connect(self.store_inspector)
         self.inspector.toggled.connect(self.inspected)
 
-
         app_menu = menu.addMenu("About")  # label doesn't matter on macOS
         about_action = app_menu.addAction(f"About {APP_NAME}")
         about_action.setMenuRole(QAction.MenuRole.AboutRole)

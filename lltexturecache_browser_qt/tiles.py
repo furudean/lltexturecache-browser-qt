@@ -310,7 +310,7 @@ class DecodeTask(QRunnable):
                 codestream = self._texture.codestream()
 
             image = decode_image(codestream)
-        except TextureCacheError, OSError:
+        except (TextureCacheError, OSError):
             return QImage(), QSize()
 
         return fit_image(image, self._size, upscale=self._upscale, board=self._board), image.size()
@@ -433,7 +433,7 @@ class TextureModel(QAbstractListModel):
         try:
             with self._thumbnails:
                 thumbnail = texture.thumbnail_png()
-        except TextureCacheError, OSError:
+        except (TextureCacheError, OSError):
             thumbnail = None
 
         return thumbnail_image(thumbnail) if thumbnail is not None else QImage()

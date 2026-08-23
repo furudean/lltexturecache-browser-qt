@@ -3,7 +3,7 @@ name = "lltexturecache-browser-qt"
 version = "0.1.0"
 description = "A cross-platform user interface for the Second Life texture cache"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "imagecodecs>=2026.8.16",
     "pillow>=12.3.0",
@@ -26,12 +26,12 @@ build-backend = "setuptools.build_meta"
 lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 exclude = ["build", "dist"]
 strict = true
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py313"
 line-length = 120
 
 [tool.uv.sources]

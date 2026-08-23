@@ -13,7 +13,7 @@ def quoted(text: str) -> str:
 def ran(command: list[str]) -> bool:
     try:
         finished = subprocess.run(command, capture_output=True, timeout=REVEAL_TIMEOUT_S, check=False)
-    except OSError, subprocess.SubprocessError:
+    except (OSError, subprocess.SubprocessError):
         return False
 
     return finished.returncode == 0
