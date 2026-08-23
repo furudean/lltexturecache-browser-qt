@@ -1,11 +1,12 @@
 import importlib.metadata
 import signal
 import sys
+import traceback
 from bisect import bisect_left, bisect_right
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import ClassVar
+from typing import ClassVar, Self, TracebackType
 
 from PySide6.QtCore import (
     QByteArray,
@@ -20,6 +21,8 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
     QUrl,
+    Signal,
+    Slot,
 )
 from PySide6.QtGui import QCloseEvent, QDesktopServices, QPixmapCache
 from PySide6.QtWidgets import (
@@ -78,7 +81,7 @@ def stored_blob(settings: QSettings, key: str) -> QByteArray:
 
 
 class MainWindow(QMainWindow):
-    _windows: ClassVar[list[MainWindow]] = []
+    _windows: ClassVar[list[Self]] = []
     _quitting: ClassVar[bool] = False
 
     def __init__(self) -> None:
@@ -618,7 +621,7 @@ class MainWindow(QMainWindow):
         else:
             self.new_window(cache)
 
-    def new_window(self, cache: TextureCache | None = None) -> MainWindow:
+    def new_window(self, cache: TextureCache | None = None) -> Self:
         window = MainWindow()
 
         window.move(self.pos() + NEW_WINDOW_OFFSET)
@@ -724,16 +727,15 @@ class MainWindow(QMainWindow):
 
         self.show_status(self._showing)
 
-
-
     def about_action(self) -> None:
         version = importlib.metadata.version(APP_NAME)
-       
+
         QMessageBox.about(
             self,
             f"About {APP_NAME}",
-            f"{APP_NAME} v{version}\n\nA cross-platform user interface for the Second Life texture cache."
+            f"{APP_NAME} v{version}\n\nA cross-platform user interface for the Second Life texture cache.",
         )
+
 
 class AppWatcher(QObject):
     """Catches what happens to the app rather than to any one of its windows"""
@@ -759,7 +761,7 @@ def restore(paths: list[Path]) -> list[MainWindow]:
     for path in paths:
         try:
             cache = TextureCache(path)
-        except FileNotFoundError, TextureCacheError:
+        except (FileNotFoundError, TextureCacheError):
             # a cache cleared out or unplugged
             continue
 
@@ -780,6 +782,21 @@ def stop(app: QApplication) -> None:
 
     app.closeAllWindows()
     app.quit()
+
+
+class ErrorReporter(QObject):
+    error_occurred = Signal(str, str)  # (title, message)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.error_occurred.connect(
+            self._show_error,
+            Qt.ConnectionType.AutoConnection,
+        )
+
+    @Slot(str, str)
+    def _show_error(self, title: str, message: str) -> None:
+        QMessageBox.critical(None, title, message)
 
 
 def main() -> None:
@@ -814,6 +831,19 @@ def main() -> None:
 
     signals = SignalWatcher(signal.SIGINT, signal.SIGTERM, parent=app)
     signals.received.connect(lambda _: stop(app))
+
+    reporter = ErrorReporter()
+
+    def excepthook(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        print(tb_text, file=sys.stderr)
+        reporter.error_occurred.emit("Unhandled Exception", tb_text)
+
+    sys.excepthook = excepthook
 
     sys.exit(app.exec())
 
