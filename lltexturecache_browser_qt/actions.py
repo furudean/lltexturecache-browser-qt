@@ -7,6 +7,7 @@ from PySide6.QtCore import QObject, QSettings, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
+from lltexturecache_browser_qt import APP_NAME
 from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS, Format
 from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.recents import RecentCaches
@@ -37,6 +38,7 @@ class WindowActions(QObject):
     exported = Signal(Format, bool)
     inspected = Signal(bool)
     previewed = Signal(bool)
+    abouted = Signal()
 
     def __init__(self, window: QMainWindow) -> None:
         super().__init__(window)
@@ -123,6 +125,12 @@ class WindowActions(QObject):
         self.inspector.setChecked(bool(QSettings().value(INSPECTOR_KEY, True, type=bool)))
         self.inspector.toggled.connect(self.store_inspector)
         self.inspector.toggled.connect(self.inspected)
+
+
+        app_menu = menu.addMenu("About")  # label doesn't matter on macOS
+        about_action = app_menu.addAction(f"About {APP_NAME}")
+        about_action.setMenuRole(QAction.MenuRole.AboutRole)
+        about_action.triggered.connect(self.abouted.emit)
 
         view_menu.addAction(self.preview)
         view_menu.addAction(self.inspector)

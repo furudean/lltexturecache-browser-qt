@@ -1,3 +1,4 @@
+import importlib.metadata
 import signal
 import sys
 from bisect import bisect_left, bisect_right
@@ -26,12 +27,14 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
     QMainWindow,
+    QMessageBox,
     QProgressDialog,
     QSplitter,
     QStatusBar,
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
+from lltexturecache_browser_qt import APP_NAME
 from lltexturecache_browser_qt.actions import WindowActions, fallback_menu
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
@@ -55,9 +58,6 @@ from lltexturecache_browser_qt.tiles import (
     TextureModel,
     sidebar_key,
 )
-
-APP_NAME = "lltexturecache-browser-qt"
-
 
 # keys to track how the last window was left so it can be restored
 SESSION_KEY = "openCaches"
@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
         self._actions.exported.connect(self.export_action)
         self._actions.previewed.connect(self.preview_action)
         self._actions.inspected.connect(self.inspector_action)
+        self._actions.abouted.connect(self.about_action)
 
         # how much is selected and how much is in the cache both move around
         # under the menu, and only this end knows either of them
@@ -724,6 +725,16 @@ class MainWindow(QMainWindow):
         self.show_status(self._showing)
 
 
+
+    def about_action(self) -> None:
+        version = importlib.metadata.version(APP_NAME)
+       
+        QMessageBox.about(
+            self,
+            f"About {APP_NAME}",
+            f"{APP_NAME} v{version}\n\nA cross-platform user interface for the Second Life texture cache."
+        )
+
 class AppWatcher(QObject):
     """Catches what happens to the app rather than to any one of its windows"""
 
@@ -774,9 +785,9 @@ def stop(app: QApplication) -> None:
 def main() -> None:
     app = QApplication(sys.argv)
 
-    app.setOrganizationName(APP_NAME)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
+    app.setOrganizationName("paisley softworks")
 
     QPixmapCache.setCacheLimit(PIXMAP_CACHE_KB)
 
