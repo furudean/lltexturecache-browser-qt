@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         if self._preview is None:
             self._preview = PreviewWindow(self)
             self._preview.closed.connect(self.preview_closed_action)
-            self._preview.restore(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
+            self._preview.restoreGeometry(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
 
         self._preview.present()
 
