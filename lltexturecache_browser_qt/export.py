@@ -27,7 +27,7 @@ class Format:
 
 
 FORMATS = (
-    Format("JPEG 2000", "jp2"),
+    Format("Original (JPEG 2000)", "jp2"),
     Format("PNG", "png", encoder="PNG"),
     Format("TIFF", "tif", encoder="TIFF", options={"compression": "tiff_lzw"}),
 )
