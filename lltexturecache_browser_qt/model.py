@@ -26,7 +26,6 @@ from lltexturecache_browser_qt.images import (
 )
 
 FULL_SIZE = 800
-PREVIEW_SIZE = 2048
 
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
@@ -60,7 +59,7 @@ class DecodeTask(QRunnable):
         texture: Texture,
         reads: threading.Lock,
         signals: DecodeSignals,
-        size: int = THUMBNAIL_SIZE,
+        size: int | None = THUMBNAIL_SIZE,
         *,
         upscale: bool = True,
         board: bool = True,
@@ -136,8 +135,9 @@ class TextureModel(QAbstractListModel):
         self._full_signals = DecodeSignals(self)
         self._full_signals.done.connect(self.full_decoded)
 
-        # the preview window decodes larger again and keeps its alpha, since it
-        # lays the board down behind the image rather than into it
+        # the preview window decodes at whatever size the texture is and keeps
+        # its alpha, since it lays the board down behind the image rather than
+        # into it
         self._preview_signals = DecodeSignals(self)
         self._preview_signals.done.connect(self.preview_decoded)
 
@@ -275,7 +275,7 @@ class TextureModel(QAbstractListModel):
         if uuid not in self._preview_running:
             self._preview_running.add(uuid)
 
-            task = DecodeTask(texture, self._reads, self._preview_signals, PREVIEW_SIZE, upscale=False, board=False)
+            task = DecodeTask(texture, self._reads, self._preview_signals, None, board=False)
 
             self._pool.start(task, PREVIEW_PRIORITY)
 

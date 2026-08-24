@@ -34,25 +34,28 @@ def thumbnail_image(png: bytes) -> QImage:
     return fit_image(read_image(QByteArray(png)))
 
 
-def fit_image(image: QImage, size: int = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:
+def fit_image(image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:
     """Fit an image to a square box, over the board if transparent"""
 
     if image.isNull():
         return image
 
-    box = QSize(size, size)
+    if size is None:
+        scaled = image
+    else:
+        box = QSize(size, size)
 
-    if not upscale:
-        # a cell has to fill its grid square either way, but a pane with room
-        # to spare is better off leaving a 32x32 texture at 32x32 than blowing
-        # it up into a blur
-        box = box.boundedTo(image.size())
+        if not upscale:
+            # a cell has to fill its grid square either way, but a pane with
+            # room to spare is better off leaving a 32x32 texture at 32x32 than
+            # blowing it up into a blur
+            box = box.boundedTo(image.size())
 
-    scaled = image.scaled(
-        box,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    )
+        scaled = image.scaled(
+            box,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
     # a caller that draws its own board underneath wants the alpha kept, since
     # a board painted into an image is scaled along with it
