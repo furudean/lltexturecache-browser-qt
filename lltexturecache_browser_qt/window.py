@@ -17,7 +17,7 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QPixmapCache
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QPixmap, QPixmapCache
 from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
@@ -36,7 +36,7 @@ from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
 from lltexturecache_browser_qt.inspector import INSPECTOR_WIDTH, InspectorPane
-from lltexturecache_browser_qt.model import TextureModel, sidebar_key
+from lltexturecache_browser_qt.model import TextureModel, full_size, sidebar_key
 from lltexturecache_browser_qt.preview import PreviewWindow
 from lltexturecache_browser_qt.recents import RecentCaches
 from lltexturecache_browser_qt.reveal import reveal
@@ -58,6 +58,17 @@ def stored_blob(settings: QSettings, key: str) -> QByteArray:
     stored = settings.value(key)
 
     return stored if isinstance(stored, QByteArray) else QByteArray()
+
+
+def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
+    laid = full_size(natural)
+
+    if natural.isEmpty() or laid == pixmap.size():
+        return pixmap
+
+    # the stand-in is a picture of the same texture, so any shape it has that
+    # the texture does not is rounding from the size it was kept at
+    return pixmap.scaled(laid, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 class MainWindow(QMainWindow):
@@ -513,19 +524,28 @@ class MainWindow(QMainWindow):
         if not isinstance(model, TextureModel) or not self._stack:
             return
 
-        top = model.full(self._stack[-1])
+        # only the texture on top is worth a decode on the spot
+        model.full(self._stack[-1])
+
         cards = []
 
         for texture in self._stack:
-            # only the texture on top is worth a decode on the spot. the rest go
-            # in with whatever the grid or an earlier selection left behind,
-            # until the selection settles and they are decoded properly
+            # the rest go in with whatever the grid or an earlier selection left
+            # behind, until the selection settles and they are decoded properly
             ready = model.standing(texture)
 
             if ready is not None:
-                cards.append((texture.uuid, ready[0]))
+                cards.append((texture.uuid, laid_card(*ready)))
 
-        self._inspector.set_sidebar(stack_pixmap(cards), top[1] if top is not None else None)
+        self._inspector.set_sidebar(stack_pixmap(cards), self.shape(model, self._stack[-1]))
+
+    def shape(self, model: TextureModel, texture: Texture) -> QSize | None:
+        natural = model.natural(texture)
+
+        if not natural.isEmpty():
+            return natural
+
+        return QSize() if model.full(texture, decode=False) is not None else None
 
     def selected_index(self) -> QModelIndex:
         selection = self._view.selectionModel()

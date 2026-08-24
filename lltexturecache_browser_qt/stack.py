@@ -34,11 +34,29 @@ def dealt_card(card: QPixmap, box: QSize, span: int) -> QPixmap:
 
     scale = min(sqrt(covers * fits), span / max(width, height))
 
+    dealt = QSize(max(1, round(width * scale)), max(1, round(height * scale)))
+
+    # the card that set the box is already the size it is being asked for
+    if dealt == card.size():
+        return card
+
     return card.scaled(
-        QSize(max(1, round(width * scale)), max(1, round(height * scale))),
+        dealt,
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.SmoothTransformation,
     )
+
+
+def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
+    """The card the rest of a stack is sized against
+
+    A pile is of one photograph size rather than of whatever each texture
+    happens to be, so the biggest card keeps its size and everything else is
+    dealt to sit with it. By area, since that is the room a card takes up on
+    the pile rather than how far it reaches in one direction.
+    """
+
+    return max((card.size() for _, card in cards), key=lambda size: size.width() * size.height())
 
 
 def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
@@ -47,12 +65,12 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
     if not cards:
         return QPixmap()
 
-    top = cards[-1][1]
-
-    # every card is sized against the one on top but keeps the shape it was
+    # every card is sized against the biggest of them but keeps the shape it was
     # stored at, since a selection is rarely all the one shape and a card cut to
-    # someone else's is no longer the texture it was meant to be standing in for
-    box = top.size()
+    # someone else's is no longer the texture it was meant to be standing in for.
+    # a small texture on top of larger ones is blown up to sit with them rather
+    # than shrinking the whole pile down to its own size
+    box = biggest_card(cards)
     side = max(box.width(), box.height())
     span = round(side * STACK_SPAN_RATIO)
     frame = max(2, round(side * STACK_FRAME)) if len(cards) > 1 else 0
@@ -66,7 +84,9 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
         )
 
     dealt = [(dealt_card(card, box, span), card_transform(uuid, side)) for uuid, card in cards[:-1]]
-    dealt.append((top, QTransform()))
+    # the card on top is dealt like the rest, and lands where it was stored
+    # whenever it is the one that set the size
+    dealt.append((dealt_card(cards[-1][1], box, span), QTransform()))
 
     bounds = QRectF()
 

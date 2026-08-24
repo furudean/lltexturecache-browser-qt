@@ -49,6 +49,10 @@ def sidebar_key(uuid: str) -> str:
     return f"sidebar:{uuid}"
 
 
+def full_size(natural: QSize) -> QSize:
+    return natural.scaled(QSize(FULL_SIZE, FULL_SIZE).boundedTo(natural), Qt.AspectRatioMode.KeepAspectRatio)
+
+
 class DecodeSignals(QObject):
     done = Signal(str, QImage, QSize)
 
@@ -109,6 +113,7 @@ class TextureModel(QAbstractListModel):
         self._running: set[str] = set()
         self._failed: set[str] = set()
         self._no_sidebar: set[str] = set()
+        self._natural: dict[str, QSize] = {}
         self._full: dict[str, tuple[QPixmap, QSize]] = {}
         self._full_running: set[str] = set()
         # decodes that set out under the palette before this one, which is to
@@ -248,6 +253,9 @@ class TextureModel(QAbstractListModel):
 
         return None
 
+    def natural(self, texture: Texture) -> QSize:
+        return self._natural.get(texture.uuid, QSize())
+
     def standing(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
         """The best decode already in hand, and the size it came in at if known
 
@@ -259,10 +267,11 @@ class TextureModel(QAbstractListModel):
             return ready
 
         # a cell is the grid's own decode, or the thumbnail the cache keeps
-        # alongside it, and carries no record of what it was cut down from
+        # alongside it, and is no record of what it was cut down from. the shape
+        # is asked for beside it, since a decode at any size knew what it was
         cell = self.cell(texture)
 
-        return (cell, QSize()) if not cell.isNull() else None
+        return (cell, self.natural(texture)) if not cell.isNull() else None
 
     def preview(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
         uuid = texture.uuid
@@ -327,9 +336,17 @@ class TextureModel(QAbstractListModel):
         # the list is not just for show, it lets fromkeys size the dict up front
         self._queue = dict.fromkeys([uuid for uuid in self._queue if first_row <= self._rows[uuid] <= last_row])
 
+    def learn(self, uuid: str, natural: QSize) -> None:
+        if not natural.isEmpty():
+            self._natural[uuid] = natural
+
     @Slot(str, QImage, QSize)
-    def decoded(self, uuid: str, image: QImage, _natural: QSize) -> None:
+    def decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
         self._running.discard(uuid)
+
+        # a cell is cut down to the size of a cell, but the decode behind it saw
+        # the texture whole, and that is worth keeping for the panes that ask
+        self.learn(uuid, natural)
 
         self.pump()
 
@@ -360,6 +377,8 @@ class TextureModel(QAbstractListModel):
     def full_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
         self._full_running.discard(uuid)
 
+        self.learn(uuid, natural)
+
         if uuid in self._full_stale:
             # the same as a cell decoded against the old board, except that
             # nothing repaints the inspector on its own, so the texture is
@@ -387,6 +406,9 @@ class TextureModel(QAbstractListModel):
     @Slot(str, QImage, QSize)
     def preview_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
         self._preview_running.discard(uuid)
+
+        # the shape stands even if the selection has moved on from the image
+        self.learn(uuid, natural)
 
         if uuid != self._previewing:
             return
