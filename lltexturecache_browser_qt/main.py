@@ -12,8 +12,8 @@ from texture_courier import TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_NAME, __version__
 from lltexturecache_browser_qt.actions import fallback_menu
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
+from lltexturecache_browser_qt.model import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.signals import SignalWatcher
-from lltexturecache_browser_qt.tiles import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.window import MainWindow
 
 

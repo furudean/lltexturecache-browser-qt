@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QSplitter,
-    QStatusBar,
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
@@ -34,23 +33,15 @@ from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
 from lltexturecache_browser_qt.formatting import format_count
-from lltexturecache_browser_qt.inspector import (
-    INSPECTOR_WIDTH,
-    STACK_CARDS,
-    InspectorPane,
-    stack_pixmap,
-)
+from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
+from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.inspector import INSPECTOR_WIDTH, InspectorPane
+from lltexturecache_browser_qt.model import TextureModel, sidebar_key
 from lltexturecache_browser_qt.preview import PreviewWindow
 from lltexturecache_browser_qt.recents import RecentCaches
 from lltexturecache_browser_qt.reveal import reveal
-from lltexturecache_browser_qt.tiles import (
-    CELL_PADDING,
-    THUMBNAIL_SIZE,
-    CellDelegate,
-    TextureGrid,
-    TextureModel,
-    sidebar_key,
-)
+from lltexturecache_browser_qt.stack import STACK_CARDS, stack_pixmap
+from lltexturecache_browser_qt.status import WindowStatus
 
 # keys to track how the last window was left so it can be restored
 SESSION_KEY = "openCaches"
@@ -61,7 +52,6 @@ PREVIEW_GEOMETRY_KEY = "previewGeometry"
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 DELAY_MESSAGE_DURATION_MS = 250
-NOTICE_DURATION_MS = 5000
 
 
 def stored_blob(settings: QSettings, key: str) -> QByteArray:
@@ -135,18 +125,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(splitter)
 
-        self.setStatusBar(QStatusBar(self))
-
-        self._resting = ""
-
-        # what the bar falls back to once nothing is selected and no notice
-        # is up, kept apart from the resting message the selection writes over
-        self._showing = ""
-
-        self.statusBar().messageChanged.connect(self.status_action)
-
-        # an empty window has nothing to report, and the bar is not up yet
-        self.sync_status()
+        self._status = WindowStatus(self)
 
         self._actions = WindowActions(self)
         self._actions.new_window.connect(self.new_window)
@@ -271,7 +250,7 @@ class MainWindow(QMainWindow):
         try:
             changed = list(self._cache.refresh())
         except (FileNotFoundError, TextureCacheError) as e:
-            self.show_status(f"could not refresh {self._cache.cache_dir}: {e}")
+            self._status.rest(f"could not refresh {self._cache.cache_dir}: {e}")
             return
 
         added = [texture for texture in changed if texture.uuid not in sizes]
@@ -292,7 +271,7 @@ class MainWindow(QMainWindow):
                 f"Reloaded {format_count(len(added))} new and {format_count(len(rewritten))} changed textures"
             )
         else:
-            self.flash_status("No new textures found after reload")
+            self._status.flash("No new textures found after reload")
 
         if shown is not None:
             self.select_texture(shown.uuid)
@@ -399,7 +378,7 @@ class MainWindow(QMainWindow):
         note = "Cancelled export of" if cancelled else "Exported"
         summary = f"{note} {format_count(written)} texture(s) to {out_dir}"
 
-        self.flash_status(f"{summary} ({format_count(failed)} could not be written)" if failed else summary)
+        self._status.flash(f"{summary} ({format_count(failed)} could not be written)" if failed else summary)
 
         if written and not cancelled and not reveal(written_paths):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
@@ -605,7 +584,7 @@ class MainWindow(QMainWindow):
         try:
             cache = TextureCache(cache_dir)
         except (FileNotFoundError, TextureCacheError) as e:
-            self.show_status(f"Could not open {cache_dir}: {e}")
+            self._status.rest(f"Could not open {cache_dir}: {e}")
             return
 
         RecentCaches.shared().remember(cache.cache_dir)
@@ -633,7 +612,7 @@ class MainWindow(QMainWindow):
         self._actions.reload.setEnabled(True)
         self.sync_inspector()
         self.sync_preview()
-        self.sync_status()
+        self._status.set_opened(True)
 
         MainWindow.save_session()
 
@@ -641,42 +620,13 @@ class MainWindow(QMainWindow):
         self.setWindowFilePath(str(cache.cache_dir))
         self.populate_grid()
 
-    def status_action(self, message: str) -> None:
-        if not message and self._resting:
-            self.statusBar().showMessage(self._resting)
-            return
-
-        self.sync_status()
-
-    def sync_status(self) -> None:
-        """Keep the bar down until there is a cache open to report on"""
-
-        # a window with nothing open in it can still have something to say, and
-        # the bar comes up under the message for as long as it is there
-        self.statusBar().setVisible(self._cache is not None or bool(self.statusBar().currentMessage()))
-
-    def show_status(self, message: str) -> None:
-        self._resting = message
-        self.statusBar().showMessage(message)
-
     def sync_selection(self) -> None:
-        """Report how much of the grid is picked out, or fall back to the grid"""
-
         model = self._view.model()
 
         if not isinstance(model, TextureModel):
             return
 
-        selected = len(self._view.selectionModel().selectedIndexes())
-
-        self.show_status(
-            f"Selected {format_count(selected)} of {format_count(model.rowCount())} textures"
-            if selected
-            else self._showing
-        )
-
-    def flash_status(self, message: str) -> None:
-        self.statusBar().showMessage(message, NOTICE_DURATION_MS)
+        self._status.show_selection(len(self._view.selectionModel().selectedIndexes()), model.rowCount())
 
     def populate_grid(self, note: str | None = None) -> None:
         if self._cache is None:
@@ -717,9 +667,7 @@ class MainWindow(QMainWindow):
 
         shown = f"Showing {format_count(len(textures))} textures of {format_count(len(self._cache))} entries in cache"
 
-        self._showing = note if note else shown
-
-        self.show_status(self._showing)
+        self._status.set_summary(note if note else shown)
 
     def about_action(self) -> None:
         QMessageBox.about(

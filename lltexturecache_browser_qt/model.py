@@ -1,16 +1,10 @@
 import threading
-from functools import cache
 
 from PySide6.QtCore import (
-    QAbstractItemModel,
     QAbstractListModel,
-    QBuffer,
-    QByteArray,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
-    QPoint,
-    QRect,
     QRunnable,
     QSize,
     Qt,
@@ -18,49 +12,25 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import (
-    QColor,
-    QIcon,
-    QImage,
-    QImageReader,
-    QMouseEvent,
-    QPainter,
-    QPalette,
-    QPixmap,
-    QPixmapCache,
-    QResizeEvent,
-)
-from PySide6.QtWidgets import (
-    QApplication,
-    QLabel,
-    QListView,
-    QPushButton,
-    QStyle,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtGui import QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCacheError
-from texture_courier.encode import wrap_jp2
 
-from lltexturecache_browser_qt.checkerboard import checkerboard_generation, over_checkerboard
-from lltexturecache_browser_qt.decode import decode_rgba, extra_components
+from lltexturecache_browser_qt.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.formatting import format_time
+from lltexturecache_browser_qt.images import (
+    THUMBNAIL_SIZE,
+    decode_image,
+    fit_image,
+    placeholder,
+    thumbnail_image,
+)
 
 FULL_SIZE = 800
-CELL_PADDING = 14
-
-THUMBNAIL_SIZE = 100
 PREVIEW_SIZE = 2048
 
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
 
-# a full decode is a quarter of a megabyte against the 16 KB a cell costs, so
-# only the last few textures the selection passed through are worth holding.
-# a stack of cards is several of those at once, and they have to outlive each
-# other for the stack to stay put
 FULL_CACHE = 12
 
 # a decoded cell is 64x64x4 bytes, or 16 KB, so this holds about 64k textures
@@ -68,10 +38,6 @@ PIXMAP_CACHE_KB = 1024 * 1024
 
 DECODE_THREADS = 4
 DECODES_IN_FLIGHT = DECODE_THREADS * 2
-
-# how far the empty grid's message may run before it wraps, so a window dragged
-# wide reads as a line of text in the middle of it rather than as a banner
-MESSAGE_WIDTH = 320
 
 # an invalid index is the root of a list model, and it is a plain value type,
 # so one shared instance stands in for the default argument
@@ -82,195 +48,6 @@ type Index = QModelIndex | QPersistentModelIndex
 
 def sidebar_key(uuid: str) -> str:
     return f"sidebar:{uuid}"
-
-
-def read_image(data: QByteArray) -> QImage:
-    buffer = QBuffer(data)
-    buffer.open(QBuffer.OpenModeFlag.ReadOnly)
-
-    return QImageReader(buffer).read()
-
-
-def decode_image(codestream: bytes) -> QImage:
-    if not extra_components(codestream):
-        return read_image(QByteArray(wrap_jp2(codestream)))
-
-    rgba, width, height = decode_rgba(codestream)
-
-    # QImage does not take a copy of what it is handed, and `rgba` goes out of
-    # scope with this call, so the image has to own its pixels before it leaves
-    return QImage(rgba, width, height, QImage.Format.Format_RGBA8888).copy()
-
-
-def thumbnail_image(png: bytes) -> QImage:
-    return fit_image(read_image(QByteArray(png)))
-
-
-def fit_image(image: QImage, size: int = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:
-    """Fit an image to a square box, over the board if transparent"""
-
-    if image.isNull():
-        return image
-
-    box = QSize(size, size)
-
-    if not upscale:
-        # a cell has to fill its grid square either way, but a pane with room
-        # to spare is better off leaving a 32x32 texture at 32x32 than blowing
-        # it up into a blur
-        box = box.boundedTo(image.size())
-
-    scaled = image.scaled(
-        box,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-
-    # a caller that draws its own board underneath wants the alpha kept, since
-    # a board painted into an image is scaled along with it
-    return over_checkerboard(scaled) if board else scaled
-
-
-@cache
-def placeholder() -> QPixmap:
-    pixmap = QPixmap(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
-    pixmap.fill(QColor(0xFF, 0x00, 0x00))
-
-    return pixmap
-
-
-def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
-    if not (state & QStyle.StateFlag.State_Enabled):
-        return QIcon.Mode.Disabled
-
-    return QIcon.Mode.Selected if state & QStyle.StateFlag.State_Selected else QIcon.Mode.Normal
-
-
-class CellDelegate(QStyledItemDelegate):
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Index) -> None:
-        cell = QStyleOptionViewItem(option)
-        self.initStyleOption(cell, index)
-
-        icon = QIcon(cell.icon)
-        cell.icon = QIcon()
-        cell.showDecorationSelected = True
-
-        style = cell.widget.style() if cell.widget is not None else QApplication.style()
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, cell, painter, cell.widget)
-
-        icon.paint(painter, option.rect, Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
-
-    def sizeHint(self, option: QStyleOptionViewItem, index: Index) -> QSize:
-        return QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
-
-
-class EmptyState(QWidget):
-    opened = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        self._message = QLabel()
-        self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self._message.setForegroundRole(QPalette.ColorRole.Text)
-
-        self._open = QPushButton("Open...")
-        self._open.clicked.connect(self.opened)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        layout.addWidget(self._message, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(self._open, 0, Qt.AlignmentFlag.AlignHCenter)
-
-    def set_message(self, message: str) -> None:
-        self._message.setText(message)
-
-        self._message.setWordWrap(False)
-
-        width = self._message.sizeHint().width()
-        wraps = width > MESSAGE_WIDTH
-
-        self._message.setWordWrap(wraps)
-        self._message.setFixedWidth(MESSAGE_WIDTH if wraps else width)
-
-        self.adjustSize()
-
-
-class TextureGrid(QListView):
-    opened = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        self._banding = False
-
-        # a child of the viewport rather than of the view, so it is clipped to
-        # the area the textures are drawn in and not to the frame around it
-        self._empty = EmptyState(self.viewport())
-        self._empty.opened.connect(self.opened)
-
-        self.sync_empty()
-
-    def set_message(self, message: str) -> None:
-        self._empty.set_message(message)
-
-        self.centre_empty()
-
-    def is_empty(self) -> bool:
-        model = self.model()
-
-        return model is None or model.rowCount() == 0
-
-    def setModel(self, model: QAbstractItemModel | None) -> None:
-        old = self.model()
-
-        if old is not None:
-            old.modelReset.disconnect(self.sync_empty)
-            old.rowsInserted.disconnect(self.sync_empty)
-            old.rowsRemoved.disconnect(self.sync_empty)
-
-        super().setModel(model)
-
-        if model is not None:
-            model.modelReset.connect(self.sync_empty)
-            model.rowsInserted.connect(self.sync_empty)
-            model.rowsRemoved.connect(self.sync_empty)
-
-        self.sync_empty()
-
-    def sync_empty(self) -> None:
-        # a grid with textures in it says what it holds by showing them, and
-        # the panel would only be laid over the top of them
-        self._empty.setVisible(self.is_empty())
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-
-        self.centre_empty()
-
-    def centre_empty(self) -> None:
-        viewport = self.viewport().rect()
-
-        # a viewport too small to hold the panel crops it rather than letting
-        # it hang off the edges, so what is left of it stays in the middle
-        box = QRect(QPoint(), self._empty.sizeHint().boundedTo(viewport.size()))
-        box.moveCenter(viewport.center())
-
-        self._empty.setGeometry(box)
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._banding = not self.indexAt(event.position().toPoint()).isValid()
-
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if not self._banding:
-            return
-
-        super().mouseMoveEvent(event)
 
 
 class DecodeSignals(QObject):
