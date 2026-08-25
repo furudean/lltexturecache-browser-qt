@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QSplitter,
 )
-from texture_courier import Texture, TextureCache, TextureCacheError, list_texture_caches
+from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
 from lltexturecache_browser_qt.actions import WindowActions
@@ -45,6 +45,7 @@ from lltexturecache_browser_qt.recents import RecentCaches
 from lltexturecache_browser_qt.reveal import reveal
 from lltexturecache_browser_qt.stack import STACK_CARDS, stack_pixmap
 from lltexturecache_browser_qt.status import WindowStatus
+from lltexturecache_browser_qt.suggested import paths as suggested_paths
 
 # keys to track how the last window was left so it can be restored
 SESSION_KEY = "openCaches"
@@ -285,7 +286,7 @@ class MainWindow(QMainWindow):
         dialog.setFilter(QDir.Filter.AllDirs | QDir.Filter.Hidden | QDir.Filter.NoDotAndDotDot)
         dialog.setLabelText(QFileDialog.DialogLabel.Accept, "Open Cache")
 
-        cache_dirs = [QUrl.fromLocalFile(d.parent) for d in list_texture_caches()]
+        cache_dirs = [QUrl.fromLocalFile(d.parent) for d in suggested_paths()]
         dialog.setSidebarUrls(cache_dirs)
 
         if dialog.exec():

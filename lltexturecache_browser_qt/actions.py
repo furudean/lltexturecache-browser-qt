@@ -11,6 +11,7 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS, Format
 from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.recents import RecentCaches
+from lltexturecache_browser_qt.suggested import paths as suggested_paths
 
 PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"
@@ -77,6 +78,8 @@ class WindowActions(QObject):
 
         self._recents = file_menu.addMenu("Open &Recent")
 
+        self._suggested = file_menu.addMenu("Open &Suggested")
+
         file_menu.addSeparator()
         file_menu.addAction(self.reload)
 
@@ -87,6 +90,7 @@ class WindowActions(QObject):
         RecentCaches.shared().changed.connect(self.populate_recents)
 
         self.populate_recents()
+        self.populate_suggested()
 
         self.exports = menu.addMenu("&Export")
         self._selected_export = self.format_menu(self.exports, "Export Selected As...", everything=False)
@@ -183,6 +187,16 @@ class WindowActions(QObject):
         clear = self._recents.addAction("Clear recent file list")
         clear.setStatusTip("Forget the caches opened before")
         triggers(clear, recents.clear)
+
+    def populate_suggested(self) -> None:
+        paths = suggested_paths()
+
+        self._suggested.setEnabled(bool(paths))
+
+        for path in paths:
+            entry = self._suggested.addAction(str(path).replace("&", "&&"))
+            entry.setStatusTip(f"Open {path}")
+            triggers(entry, partial(self.reopened.emit, path))
 
     def store_preview(self, shown: bool) -> None:
         QSettings().setValue(PREVIEW_KEY, shown)

@@ -14,6 +14,7 @@ from lltexturecache_browser_qt.actions import fallback_menu
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.model import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.signals import SignalWatcher
+from lltexturecache_browser_qt.suggested import resolve as resolve_suggested
 from lltexturecache_browser_qt.window import MainWindow
 
 
@@ -90,6 +91,7 @@ def main() -> None:
     QPixmapCache.setCacheLimit(PIXMAP_CACHE_KB)
 
     sync_checkerboard()
+    resolve_suggested()
 
     # on mac the app can be alive without a window
     mac = sys.platform == "darwin"
