@@ -12,7 +12,6 @@ env:
   # build against the CPython from setup-python, not a uv managed one, because
   # Nuitka does not support python-build-standalone interpreters
   UV_PYTHON_PREFERENCE: only-system
-  NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
 
 jobs:
   build:
@@ -41,13 +40,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Restore nuitka cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.NUITKA_CACHE_DIR }}
-          key: nuitka-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: nuitka-${{ matrix.target }}-
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
