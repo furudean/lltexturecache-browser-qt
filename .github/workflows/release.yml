@@ -14,35 +14,8 @@ env:
   UV_PYTHON_PREFERENCE: only-system
 
 jobs:
-  metadata:
-    name: Resolve metadata
-    runs-on: ubuntu-latest
-    outputs:
-      name: ${{ steps.resolve.outputs.name }}
-      version: ${{ steps.resolve.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Read name and version from pyproject.toml
-        id: resolve
-        env:
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          name="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["name"])')"
-          version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "$name is at version $version"
-
-          if [ -n "$TAG" ] && [ "$TAG" != "v$version" ]; then
-            echo "::error::release tag $TAG does not match pyproject.toml version $version"
-            exit 1
-          fi
-
   build:
     name: Build ${{ matrix.target }}
-    needs: metadata
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -58,12 +31,16 @@ jobs:
           - os: ubuntu-22.04
             target: linux-x86_64
     env:
-      APP_NAME: ${{ needs.metadata.outputs.name }}
-      VERSION: ${{ needs.metadata.outputs.version }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: "Set up Python"
+      - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: ".python-version"
@@ -73,6 +50,21 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Read name and version from pyproject.toml
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          read -r name version <<<"$(uv version)"
+          echo "$name is version $version"
+
+          if [ -n "$TAG" ] && [ "$TAG" != "v$version" ]; then
+            echo "::error::release tag $TAG does not match pyproject.toml version $version"
+            exit 1
+          fi
+
+          echo "APP_NAME=$name" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
       # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries.
       # libxcb-cursor0 has to be present at build time for Nuitka to bundle it.
       - name: Install Linux build dependencies
@@ -81,44 +73,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends patchelf libxcb-cursor0
 
-      - name: Check for signing credentials
-        id: signing
-        if: runner.os == 'macOS'
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: |
-          sign=false
-          notarize=false
-
-          if [ -n "$MACOS_CERTIFICATE" ] && [ -n "$MACOS_CERTIFICATE_PASSWORD" ] \
-            && [ -n "$MACOS_SIGN_IDENTITY" ]; then
-            sign=true
-          else
-            echo "::warning::no signing secrets, building an unsigned app"
-          fi
-
-          # notarization needs a Developer ID signature to attach itself to
-          if [ "$sign" = true ]; then
-            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_TEAM_ID" ] && [ -n "$APPLE_APP_PASSWORD" ]; then
-              notarize=true
-            else
-              echo "::warning::no notarization secrets, leaving the app un-notarized"
-            fi
-          fi
-
-          echo "sign=$sign" >> "$GITHUB_OUTPUT"
-          echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
-
       - name: Import signing certificate
-        if: steps.signing.outputs.sign == 'true'
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
         run: |
           keychain="$RUNNER_TEMP/build.keychain-db"
           keychain_password="$(openssl rand -base64 24)"
@@ -140,16 +96,9 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
       - name: Build
-        env:
-          MACOS_SIGN_IDENTITY: ${{ steps.signing.outputs.sign == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
         run: ./scripts/build
-
       - name: Notarize
-        if: steps.signing.outputs.notarize == 'true'
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
         run: |
           ditto -c -k --keepParent "dist/$APP_NAME.app" "$RUNNER_TEMP/notarize.zip"
 
@@ -184,7 +133,7 @@ jobs:
 
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
-    - name: Upload artifact to workflow
+      - name: Upload artifact to workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.target }}
@@ -192,12 +141,12 @@ jobs:
           if-no-files-found: error
 
       - name: Clean up keychain
-        if: always() && steps.signing.outputs.sign == 'true'
+        if: always() && runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
         run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
 
   upload:
     name: Attach binaries to the release
-    needs: [metadata, build]
+    needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
@@ -215,5 +164,4 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           ls -l artifacts
-          # --clobber so that re-running the workflow replaces the binaries
           gh release upload "$TAG" artifacts/* --clobber
