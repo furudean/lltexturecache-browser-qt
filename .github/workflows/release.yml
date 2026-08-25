@@ -180,3 +180,46 @@ jobs:
         run: |
           ls -l artifacts
           gh release upload "$TAG" artifacts/* --clobber
+
+  homebrew:
+    name: Update homebrew tap
+    needs: upload
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the macOS build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: macos-arm64
+          path: artifacts
+
+      - name: Check out the tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: furudean/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Bump the cask
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          asset="artifacts/lltexturecache-browser-qt-$version-macos-arm64.zip"
+          sha256="$(sha256sum "$asset" | cut -d' ' -f1)"
+          cask="tap/Casks/lltexturecache-browser-qt.rb"
+
+          echo "$asset is $sha256"
+
+          sed -i -E "s|^  version \".*\"|  version \"$version\"|" "$cask"
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"$sha256\"|" "$cask"
+
+          if git -C tap diff --quiet; then
+            echo "::notice::cask already up to date"
+            exit 0
+          fi
+
+          git -C tap config user.name "github-actions[bot]"
+          git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C tap commit --all --message "lltexturecache-browser-qt $version"
+          git -C tap push
