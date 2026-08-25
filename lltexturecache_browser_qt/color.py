@@ -55,7 +55,7 @@ SIGMA = 14.0
 CUTOFF = 3.0
 
 # how much of a texture has to be near a color before it is worth showing
-MATCH_FLOOR = 0.08
+MATCH_FLOOR = 0.12
 
 # bits of each channel a color is rounded to before it is counted, which is
 # 32768 colors and an error too small to move a texture in the ranking
