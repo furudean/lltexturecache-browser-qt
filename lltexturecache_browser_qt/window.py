@@ -500,8 +500,10 @@ class MainWindow(QMainWindow):
         current = self._view.currentIndex()
 
         if current.isValid():
+            self._view.unpin()
             self._view.scrollTo(current, QListView.ScrollHint.PositionAtCenter)
         elif self.narrowed():
+            self._view.unpin()
             self._view.scrollToTop()
         else:
             self.scroll_to_end()
@@ -748,7 +750,7 @@ class MainWindow(QMainWindow):
         )
 
     def scroll_to_end(self) -> None:
-        self._view.scrollToBottom()
+        self._view.pin_to_bottom()
 
     def open_cache(self, cache_dir: Path) -> None:
         try:

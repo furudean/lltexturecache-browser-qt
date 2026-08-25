@@ -1,5 +1,5 @@
 from PySide6.QtCore import QAbstractItemModel, QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QIcon, QMouseEvent, QPainter, QPalette, QResizeEvent
+from PySide6.QtGui import QIcon, QKeyEvent, QMouseEvent, QPainter, QPalette, QResizeEvent, QShowEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -89,11 +89,14 @@ class TextureGrid(QListView):
         super().__init__(parent)
 
         self._banding = False
+        self._pinned = False
 
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it
         self._empty = EmptyState(self.viewport())
         self._empty.opened.connect(self.opened)
+        self.verticalScrollBar().rangeChanged.connect(self.apply_pin)
+        self.verticalScrollBar().actionTriggered.connect(self.unpin)
 
         self.sync_empty()
 
@@ -129,9 +132,34 @@ class TextureGrid(QListView):
         # the panel would only be laid over the top of them
         self._empty.setVisible(self.is_empty())
 
+    def pin_to_bottom(self) -> None:
+        self._pinned = True
+
+        self.apply_pin()
+
+    def apply_pin(self) -> None:
+        if self._pinned:
+            self.scrollToBottom()
+
+    def unpin(self) -> None:
+        self._pinned = False
+
+    def scrollTo(self, index: Index, hint: QListView.ScrollHint = QListView.ScrollHint.EnsureVisible) -> None:
+        # something has a particular texture it wants in view, which outranks
+        # the standing wish for the end of the grid
+        self.unpin()
+
+        super().scrollTo(index, hint)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+
+        self.apply_pin()
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
 
+        self.apply_pin()
         self.centre_empty()
 
     def centre_empty(self) -> None:
@@ -147,7 +175,19 @@ class TextureGrid(QListView):
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._banding = not self.indexAt(event.position().toPoint()).isValid()
 
+        self.unpin()
+
         super().mousePressEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        self.unpin()
+
+        super().wheelEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        self.unpin()
+
+        super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if not self._banding:
