@@ -62,22 +62,3 @@ if you want to sign and/or notarize the app, the following secrets should be set
 | `APPLE_ID`                   | Apple ID the app-specific password belongs to                   | notarization |
 | `APPLE_APP_PASSWORD`         | [app-specific password](https://support.apple.com/en-us/102654) | notarization |
 | `APPLE_TEAM_ID`              | ten character team ID                                           | notarization |
-
-### homebrew tap
-
-after the binaries are attached, the release workflow bumps the `version` and
-`sha256` of the cask in
-[furudean/homebrew-tap](https://github.com/furudean/homebrew-tap) and pushes the
-change. the checksum is taken from the very same zip that was uploaded to the
-release.
-
-this needs a `HOMEBREW_TAP_TOKEN` secret, because the default `GITHUB_TOKEN`
-cannot write to another repository. make a fine-grained personal access token
-scoped to `furudean/homebrew-tap` with **contents: read and write**, then
-
-```bash
-gh secret set HOMEBREW_TAP_TOKEN
-```
-
-prereleases are skipped, so the tap always points at the latest stable version.
-
