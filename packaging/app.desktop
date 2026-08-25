@@ -2,7 +2,7 @@
 Type=Application
 Name=@DISPLAY_NAME@
 GenericName=Texture Cache Browser
-Comment=browse the Second Life texture cache
+Comment=Browse and export images in the Second Life texture cache
 Exec=@NAME@
 Icon=@NAME@
 Categories=Graphics;Viewer;
