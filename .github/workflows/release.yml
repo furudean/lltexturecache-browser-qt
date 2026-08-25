@@ -12,6 +12,7 @@ env:
   # build against the CPython from setup-python, not a uv managed one, because
   # Nuitka does not support python-build-standalone interpreters
   UV_PYTHON_PREFERENCE: only-system
+  NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
 
 jobs:
   build:
@@ -38,14 +39,15 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # use ccache to speed up build time
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Restore nuitka cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          create-symlink: true
-          key: ${{ github.job }}-${{ matrix.os }}
+          path: ${{ env.NUITKA_CACHE_DIR }}
+          key: nuitka-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: nuitka-${{ matrix.target }}-
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -74,11 +76,17 @@ jobs:
 
       # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries.
       # libxcb-cursor0 has to be present at build time for Nuitka to bundle it.
+      # ccache is used to speed up builds
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends patchelf libxcb-cursor0
+          sudo apt-get install --yes --no-install-recommends ccache patchelf libxcb-cursor0
+
+      # ccache is used to speed up builds
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install ccache
 
       - name: Import signing certificate
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
