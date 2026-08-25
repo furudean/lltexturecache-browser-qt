@@ -27,7 +27,7 @@ macOS gets a `.app`, Windows a `.exe` and Linux a binary.
 ./scripts/build
 ```
 
-linux requires needs `patchelf` on the `PATH`.
+linux requires `patchelf` and `libxcb-cursor0` on the `PATH`.
 
 ## release
 
