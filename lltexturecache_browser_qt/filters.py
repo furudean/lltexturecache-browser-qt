@@ -1,7 +1,17 @@
 from functools import partial
 
-from PySide6.QtCore import QEvent, QPoint, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QEnterEvent, QIcon, QMouseEvent, QPainter, QPaintEvent, QPalette, QPen
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QEnterEvent,
+    QIcon,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QAbstractButton,
     QColorDialog,
@@ -19,7 +29,33 @@ SWATCH_RADIUS = 3
 BADGE_SIZE = 10
 BADGE_INSET = 3
 
-ADD_ICON_SIZE = 16
+# how heavy the ring a disabled color is left as
+OFF_WEIGHT = 2
+
+ADD_ICON_SIZE = 12
+
+# how far an arm of the plus reaches from the middle, as a share of the icon
+PLUS_ARM = 0.32
+PLUS_WEIGHT = 1.5
+
+
+def plus_icon(color: QColor, ratio: float) -> QIcon:
+    pixmap = QPixmap(round(ADD_ICON_SIZE * ratio), round(ADD_ICON_SIZE * ratio))
+    pixmap.setDevicePixelRatio(ratio)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(color, PLUS_WEIGHT, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+
+    middle = ADD_ICON_SIZE / 2
+    arm = ADD_ICON_SIZE * PLUS_ARM
+
+    painter.drawLine(QPointF(middle - arm, middle), QPointF(middle + arm, middle))
+    painter.drawLine(QPointF(middle, middle - arm), QPointF(middle, middle + arm))
+    painter.end()
+
+    return QIcon(pixmap)
 
 
 class Swatch(QAbstractButton):
@@ -35,7 +71,12 @@ class Swatch(QAbstractButton):
         self.setFixedSize(self.sizeHint())
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.menu_action)
-        self.clicked.connect(lambda _checked=False: self.recolored.emit())
+
+        # a click disables the color and enables it again, which is the one
+        # thing worth doing to a filter often enough to spend the click on
+        self.setCheckable(True)
+        self.setChecked(True)
+        self.toggled.connect(self.sync_tip)
 
         self.sync_tip()
 
@@ -55,7 +96,9 @@ class Swatch(QAbstractButton):
         return QSize(side, side)
 
     def sync_tip(self) -> None:
-        self.setToolTip(f"{self._color.name().upper()}\nClick to change")
+        action = "Click to disable" if self.isChecked() else "Click to enable"
+
+        self.setToolTip(f"{self._color.name().upper()}\n{action}\nRight-click to change")
 
     def badge(self) -> QRectF:
         return QRectF(self.width() - BADGE_SIZE, 0, BADGE_SIZE, BADGE_SIZE)
@@ -67,10 +110,17 @@ class Swatch(QAbstractButton):
         colors = self.palette()
         box = QRectF(self.rect()).adjusted(SWATCH_MARGIN, SWATCH_MARGIN, -SWATCH_MARGIN, -SWATCH_MARGIN)
 
-        # the outline is what a pale color has to show for itself against a
-        # pale background, so it goes on whatever the fill turns out to be
-        painter.setPen(QPen(colors.color(QPalette.ColorRole.Mid), 1))
-        painter.setBrush(self._color)
+        if self.isChecked():
+            # the outline is what a pale color has to show for itself against a
+            # pale background, so it goes on whatever the fill turns out to be
+            painter.setPen(QPen(colors.color(QPalette.ColorRole.Mid), 1))
+            painter.setBrush(self._color)
+        else:
+            # a disabled color keeps itself as a ring, so the strip still says
+            # which color it is while showing that none of it is being asked for
+            painter.setPen(QPen(self._color, OFF_WEIGHT))
+            painter.setBrush(colors.color(QPalette.ColorRole.Window))
+
         painter.drawRoundedRect(box, SWATCH_RADIUS, SWATCH_RADIUS)
 
         if self._hovered:
@@ -114,12 +164,15 @@ class Swatch(QAbstractButton):
     def menu_action(self, at: QPoint) -> None:
         menu = QMenu(self)
 
+        turn = menu.addAction("Disable" if self.isChecked() else "Enable")
+        turn.triggered.connect(lambda _checked=False: self.setChecked(not self.isChecked()))
+
         change = menu.addAction("Change Color...")
         change.triggered.connect(lambda _checked=False: self.recolored.emit())
 
         menu.addSeparator()
 
-        drop = menu.addAction("Remove")
+        drop = menu.addAction("Remove filter")
         drop.triggered.connect(lambda _checked=False: self.removed.emit())
 
         menu.exec(self.mapToGlobal(at))
@@ -144,11 +197,10 @@ class ColorFilterBar(QToolBar):
         row.setSpacing(6)
 
         self._add = QToolButton(body)
-        self._add.setText("Color Filter...")
-        self._add.setIcon(QIcon.fromTheme(QIcon.ThemeIcon.ListAdd))
+        self._add.setText("Color filter...")
         self._add.setIconSize(QSize(ADD_ICON_SIZE, ADD_ICON_SIZE))
         self._add.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._add.setStatusTip("Add a color to filter the textures by")
+        self._add.setStatusTip("Add a color to filter textures by")
         self._add.clicked.connect(self.add_action)
 
         self._chips = QHBoxLayout()
@@ -160,17 +212,29 @@ class ColorFilterBar(QToolBar):
         self._clear.setStatusTip("Clear all filters")
         self._clear.clicked.connect(self.clear_action)
 
-        row.addWidget(self._add)
         row.addLayout(self._chips)
+        row.addWidget(self._add)
         row.addStretch(1)
         row.addWidget(self._clear)
 
         self.addWidget(body)
 
+        self.sync_icon()
         self.sync()
 
+    def sync_icon(self) -> None:
+        color = self._add.palette().color(QPalette.ColorRole.ButtonText)
+
+        self._add.setIcon(plus_icon(color, self.devicePixelRatioF()))
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+
+        if event.type() == QEvent.Type.PaletteChange:
+            self.sync_icon()
+
     def colors(self) -> list[QColor]:
-        return [swatch.color for swatch in self._swatches]
+        return [swatch.color for swatch in self._swatches if swatch.isChecked()]
 
     def suggestion(self) -> QColor:
         # a second color is usually picked somewhere near the first, so the
@@ -184,14 +248,17 @@ class ColorFilterBar(QToolBar):
             self.add(picked)
 
     def add(self, color: QColor) -> None:
-        # a color already on the strip is already being applied, so picking it
-        # a second time asks for nothing that is not already the case
-        if any(swatch.color == color for swatch in self._swatches):
-            return
+        # a color already on the strip asks for nothing new, beyond enabling it
+        # again if it is one that had been disabled
+        for swatch in self._swatches:
+            if swatch.color == color:
+                swatch.setChecked(True)
+                return
 
         swatch = Swatch(color, self)
         swatch.removed.connect(partial(self.remove, swatch))
         swatch.recolored.connect(partial(self.recolor, swatch))
+        swatch.toggled.connect(self.changed_action)
 
         self._swatches.append(swatch)
         self._chips.addWidget(swatch)

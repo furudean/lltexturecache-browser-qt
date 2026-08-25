@@ -165,6 +165,7 @@ class MainWindow(QMainWindow):
 
         self._filters = ColorFilterBar(self)
         self._filters.changed.connect(self.filter_action)
+        self._filters.visibilityChanged.connect(self.filters_shown_action)
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._filters)
 
@@ -178,6 +179,7 @@ class MainWindow(QMainWindow):
         self._actions.exported.connect(self.export_action)
         self._actions.previewed.connect(self.preview_action)
         self._actions.inspected.connect(self.inspector_action)
+        self._actions.filtered.connect(self.filters_action)
         self._actions.abouted.connect(self.about_action)
 
         # how much is selected and how much is in the cache both move around
@@ -436,8 +438,21 @@ class MainWindow(QMainWindow):
         if written and not cancelled and not reveal(written_paths):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
 
+    def filters_action(self, shown: bool) -> None:
+        self.sync_filters()
+
+    def filters_shown_action(self, shown: bool) -> None:
+        # the bar can also be hidden from the context menu the window puts up
+        # over its toolbars, and the entry under the menu is what has to say so
+        # afterwards. a bar away because no cache is open is not that
+        if self._cache is not None:
+            self._actions.filters.setChecked(shown)
+
     def sync_filters(self) -> None:
-        self._filters.setVisible(self._cache is not None)
+        opened = self._cache is not None
+
+        self._actions.filters.setEnabled(opened)
+        self._filters.setVisible(opened and self._actions.filters.isChecked())
 
     def narrowed(self) -> bool:
         model = self._view.model()
@@ -472,9 +487,7 @@ class MainWindow(QMainWindow):
         if not isinstance(model, TextureModel) or not model.narrowed:
             return self._summary
 
-        return (
-            f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
-        )
+        return f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
 
     def sync_empty(self) -> None:
         model = self._view.model()

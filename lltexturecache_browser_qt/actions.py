@@ -15,6 +15,7 @@ from lltexturecache_browser_qt.suggested import paths as suggested_paths
 
 PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"
+FILTERS_KEY = "showColorFilters"
 
 
 def triggers(entry: QAction, call: Callable[[], object]) -> None:
@@ -38,6 +39,7 @@ class WindowActions(QObject):
     reloaded = Signal()
     exported = Signal(Format, bool)
     inspected = Signal(bool)
+    filtered = Signal(bool)
     previewed = Signal(bool)
     abouted = Signal()
 
@@ -130,13 +132,21 @@ class WindowActions(QObject):
         self.inspector.toggled.connect(self.store_inspector)
         self.inspector.toggled.connect(self.inspected)
 
-        app_menu = menu.addMenu("About")  # label doesn't matter on macOS
+        self.filters = QAction("Show &Filters", window)
+        self.filters.setStatusTip("Show the color filter bar")
+        self.filters.setCheckable(True)
+        self.filters.setChecked(bool(QSettings().value(FILTERS_KEY, True, type=bool)))
+        self.filters.toggled.connect(self.store_filters)
+        self.filters.toggled.connect(self.filtered)
+
+        app_menu = menu.addMenu("About")  # label doesn't matter on macOS, instead decided by role
         about_action = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
         about_action.setMenuRole(QAction.MenuRole.AboutRole)
         about_action.triggered.connect(self.abouted.emit)
 
         view_menu.addAction(self.preview)
         view_menu.addAction(self.inspector)
+        view_menu.addAction(self.filters)
 
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
@@ -203,6 +213,9 @@ class WindowActions(QObject):
 
     def store_inspector(self, shown: bool) -> None:
         QSettings().setValue(INSPECTOR_KEY, shown)
+
+    def store_filters(self, shown: bool) -> None:
+        QSettings().setValue(FILTERS_KEY, shown)
 
 
 def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:
