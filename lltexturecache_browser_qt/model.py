@@ -12,10 +12,11 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QIcon, QImage, QPixmap, QPixmapCache
+from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCacheError
 
 from lltexturecache_browser_qt.checkerboard import checkerboard_generation
+from lltexturecache_browser_qt.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
 from lltexturecache_browser_qt.formatting import format_time
 from lltexturecache_browser_qt.images import (
     THUMBNAIL_SIZE,
@@ -99,16 +100,19 @@ class DecodeTask(QRunnable):
 class TextureModel(QAbstractListModel):
     full_ready = Signal(str)
     preview_ready = Signal(str)
+    ranked = Signal()
 
     def __init__(self, textures: list[Texture], parent: QObject | None = None):
         super().__init__(parent)
 
-        self._textures = textures
-        self._rows = {texture.uuid: row for row, texture in enumerate(textures)}
+        self._textures = list(textures)
+        self._lookup = {texture.uuid: texture for texture in self._textures}
+        self._filtered_textures = self._textures
+        self._filtered_rows = {texture.uuid: row for row, texture in enumerate(self._filtered_textures)}
+        self._colors: list[QColor] = []
+        self._index: ColorIndex | None = None
         # the newest request is the one most likely to be on screen, so the
-        # queue is drained from the end. a dict is the ordered set python does
-        # not have: it keeps insertion order, pops from the end, and still
-        # answers "is this queued" in constant time
+        # queue is drained from the end
         self._queue: dict[str, None] = {}
         self._running: set[str] = set()
         self._failed: set[str] = set()
@@ -146,6 +150,13 @@ class TextureModel(QAbstractListModel):
         self._preview_signals = DecodeSignals(self)
         self._preview_signals.done.connect(self.preview_decoded)
 
+        self._scan_signals = ScanSignals(self)
+        self._scan_signals.done.connect(self.scanned)
+
+        self._scan = ColorScan(self._textures, self._thumbnails, self._scan_signals)
+
+        QThreadPool.globalInstance().start(self._scan)
+
     @property
     def reads(self) -> threading.Lock:
         """The turn a texture's bytes have to be read on
@@ -157,19 +168,30 @@ class TextureModel(QAbstractListModel):
         return self._reads
 
     def rowCount(self, parent: Index = ROOT) -> int:
-        return 0 if parent.isValid() else len(self._textures)
+        return 0 if parent.isValid() else len(self._filtered_textures)
+
+    def total(self) -> int:
+        return len(self._textures)
+
+    @property
+    def narrowed(self) -> bool:
+        return bool(self._colors) and self._index is not None
+
+    @property
+    def colors(self) -> list[QColor]:
+        return list(self._colors)
 
     def texture(self, row: int) -> Texture:
-        return self._textures[row]
+        return self._filtered_textures[row]
 
     def row(self, uuid: str) -> int | None:
-        return self._rows.get(uuid)
+        return self._filtered_rows.get(uuid)
 
     def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QIcon | str | None:
         if not index.isValid():
             return None
 
-        texture = self._textures[index.row()]
+        texture = self._filtered_textures[index.row()]
 
         if role == Qt.ItemDataRole.DecorationRole:
             return self.icon(texture)
@@ -314,6 +336,51 @@ class TextureModel(QAbstractListModel):
 
         return True
 
+    def set_filters(self, colors: list[QColor]) -> bool:
+        self._colors = list(colors)
+
+        return self.apply_filters()
+
+    def apply_filters(self) -> bool:
+        if not self._colors:
+            self.reorder(self._textures)
+
+            return True
+
+        if self._index is None:
+            return False
+
+        scores = self._index.scores(self._colors)
+
+        floor = MATCH_FLOOR / len(self._colors)
+
+        kept = [row for row, score in enumerate(scores) if score >= floor]
+        kept.sort(key=lambda row: -scores[row])
+
+        self.reorder([self._textures[row] for row in kept])
+
+        return True
+
+    def reorder(self, textures: list[Texture]) -> None:
+        if textures == self._filtered_textures:
+            return
+
+        self.beginResetModel()
+
+        self._filtered_textures = textures
+        self._filtered_rows = {texture.uuid: row for row, texture in enumerate(textures)}
+
+        self._queue.clear()
+
+        self.endResetModel()
+
+    @Slot(object)
+    def scanned(self, index: ColorIndex) -> None:
+        self._index = index
+
+        if self._colors and self.apply_filters():
+            self.ranked.emit()
+
     def request(self, texture: Texture) -> None:
         uuid = texture.uuid
 
@@ -328,13 +395,20 @@ class TextureModel(QAbstractListModel):
         while self._queue and len(self._running) < DECODES_IN_FLIGHT:
             uuid, _ = self._queue.popitem()
 
+            row = self._filtered_rows.get(uuid)
+
+            if row is None:
+                continue
+
             self._running.add(uuid)
 
-            self._pool.start(DecodeTask(self._textures[self._rows[uuid]], self._reads, self._signals))
+            self._pool.start(DecodeTask(self._filtered_textures[row], self._reads, self._signals))
 
     def drain(self, first_row: int, last_row: int) -> None:
         # the list is not just for show, it lets fromkeys size the dict up front
-        self._queue = dict.fromkeys([uuid for uuid in self._queue if first_row <= self._rows[uuid] <= last_row])
+        self._queue = dict.fromkeys(
+            [uuid for uuid in self._queue if first_row <= self._filtered_rows.get(uuid, -1) <= last_row]
+        )
 
     def learn(self, uuid: str, natural: QSize) -> None:
         if not natural.isEmpty():
@@ -349,11 +423,6 @@ class TextureModel(QAbstractListModel):
         self.learn(uuid, natural)
 
         self.pump()
-
-        row = self._rows.get(uuid)
-
-        if row is None:
-            return
 
         if uuid in self._stale:
             # nothing is kept from a decode that came back on the old board.
@@ -370,6 +439,11 @@ class TextureModel(QAbstractListModel):
             # the real texture is in now, so the sidebar is dead weight
             QPixmapCache.remove(sidebar_key(uuid))
 
+        row = self._filtered_rows.get(uuid)
+
+        if row is None:
+            return
+
         index = self.index(row, 0)
         self.dataChanged.emit(index, index, [Qt.ItemDataRole.DecorationRole])
 
@@ -385,10 +459,10 @@ class TextureModel(QAbstractListModel):
             # asked for again here rather than waiting to be asked for
             self._full_stale.discard(uuid)
 
-            row = self._rows.get(uuid)
+            texture = self._lookup.get(uuid)
 
-            if row is not None:
-                self.full(self._textures[row])
+            if texture is not None:
+                self.full(texture)
 
             return
 
@@ -426,6 +500,9 @@ class TextureModel(QAbstractListModel):
         self._signals.done.disconnect(self.decoded)
         self._full_signals.done.disconnect(self.full_decoded)
         self._preview_signals.done.disconnect(self.preview_decoded)
+
+        self._scan.cancel()
+        self._scan_signals.done.disconnect(self.scanned)
 
         self._queue.clear()
         self._full.clear()

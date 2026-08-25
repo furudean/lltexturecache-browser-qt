@@ -7,6 +7,7 @@ from typing import ClassVar, Self
 from PySide6.QtCore import (
     QByteArray,
     QEvent,
+    QItemSelection,
     QItemSelectionModel,
     QModelIndex,
     QPoint,
@@ -17,7 +18,7 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QPixmap, QPixmapCache
+from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QPixmap, QPixmapCache
 from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
@@ -32,6 +33,7 @@ from lltexturecache_browser_qt import APP_NAME, __version__
 from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
+from lltexturecache_browser_qt.filters import ColorFilterBar
 from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
@@ -58,6 +60,24 @@ def stored_blob(settings: QSettings, key: str) -> QByteArray:
     stored = settings.value(key)
 
     return stored if isinstance(stored, QByteArray) else QByteArray()
+
+
+def color_spans(model: TextureModel, rows: list[int]) -> QItemSelection:
+    selection = QItemSelection()
+    first = last = rows[0]
+
+    for row in rows[1:]:
+        if row == last + 1:
+            last = row
+            continue
+
+        selection.select(model.index(first, 0), model.index(last, 0))
+
+        first = last = row
+
+    selection.select(model.index(first, 0), model.index(last, 0))
+
+    return selection
 
 
 def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
@@ -93,8 +113,13 @@ class MainWindow(QMainWindow):
         self._stack: list[Texture] = []
         self._job: ExportJob | None = None
 
-        # a window of its own for the one texture, built the first time it is
-        # asked for and kept afterwards, since it is a keystroke away
+        self._summary = ""
+
+        # after filters
+        self._kept: list[str] = []
+        self._current: str | None = None
+
+        # preview window
         self._preview: PreviewWindow | None = None
 
         self._settle = QTimer(self)
@@ -136,6 +161,11 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(splitter)
 
+        self._filters = ColorFilterBar(self)
+        self._filters.changed.connect(self.filter_action)
+
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._filters)
+
         self._status = WindowStatus(self)
 
         self._actions = WindowActions(self)
@@ -157,6 +187,7 @@ class MainWindow(QMainWindow):
         # already says they are here
         self.sync_inspector()
         self.sync_preview()
+        self.sync_filters()
 
     @classmethod
     def session(cls) -> list[Path]:
@@ -286,7 +317,9 @@ class MainWindow(QMainWindow):
 
         if shown is not None:
             self.select_texture(shown.uuid)
-            self.scroll_to_end()
+
+            if not self.ranking():
+                self.scroll_to_end()
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._view.model()
@@ -393,6 +426,98 @@ class MainWindow(QMainWindow):
 
         if written and not cancelled and not reveal(written_paths):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
+
+    def sync_filters(self) -> None:
+        self._filters.setVisible(self._cache is not None)
+
+    def narrowed(self) -> bool:
+        model = self._view.model()
+
+        return isinstance(model, TextureModel) and model.narrowed
+
+    def ranking(self) -> bool:
+        return bool(self._filters.colors())
+
+    def filter_action(self, colors: list[QColor]) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        if model.set_filters(colors):
+            self.ranked_action()
+        else:
+            self._status.flash("Please wait...")
+
+    def ranked_action(self) -> None:
+        self.sync_empty()
+        self.sync_export()
+
+        self._status.set_summary(self.summary())
+
+        self.scroll_ranked()
+
+    def summary(self) -> str:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel) or not model.narrowed:
+            return self._summary
+
+        return (
+            f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
+        )
+
+    def sync_empty(self) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel) or not model.narrowed:
+            self._view.set_message("Cache is empty")
+            return
+
+    def scroll_ranked(self) -> None:
+        current = self._view.currentIndex()
+
+        if current.isValid():
+            self._view.scrollTo(current, QListView.ScrollHint.PositionAtCenter)
+        elif self.narrowed():
+            self._view.scrollToTop()
+        else:
+            self.scroll_to_end()
+
+    def keep_selection(self) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        selected = self._view.selectionModel().selectedIndexes()
+        current = self.selected_index()
+
+        self._kept = [model.texture(index.row()).uuid for index in selected]
+        self._current = model.texture(current.row()).uuid if current.isValid() else None
+
+    def restore_selection(self) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        kept, current = self._kept, self._current
+
+        self._kept, self._current = [], None
+
+        rows = sorted(row for uuid in kept if (row := model.row(uuid)) is not None)
+        selection = self._view.selectionModel()
+
+        if rows:
+            selection.select(color_spans(model, rows), QItemSelectionModel.SelectionFlag.ClearAndSelect)
+
+        standing = model.row(current) if current is not None else None
+
+        if standing is not None:
+            # the selection is already back, and this only says which of it the
+            # panes are on, so it is set without touching what is selected
+            selection.setCurrentIndex(model.index(standing, 0), QItemSelectionModel.SelectionFlag.NoUpdate)
 
     def inspector_action(self, shown: bool) -> None:
         self.sync_inspector()
@@ -632,6 +757,7 @@ class MainWindow(QMainWindow):
         self._actions.reload.setEnabled(True)
         self.sync_inspector()
         self.sync_preview()
+        self.sync_filters()
         self._status.set_opened(True)
 
         MainWindow.save_session()
@@ -664,6 +790,7 @@ class MainWindow(QMainWindow):
         model = TextureModel(textures, self)
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
+        model.ranked.connect(self.ranked_action)
 
         self._view.setModel(model)
 
@@ -674,6 +801,9 @@ class MainWindow(QMainWindow):
         selection.selectionChanged.connect(self.selection_action)
         selection.currentChanged.connect(self.selection_action)
 
+        model.modelAboutToBeReset.connect(self.keep_selection)
+        model.modelReset.connect(self.restore_selection)
+
         self._stack = []
         self._inspector.clear()
 
@@ -682,12 +812,18 @@ class MainWindow(QMainWindow):
         if self._preview is not None:
             self._preview.clear()
 
+        model.set_filters(self._filters.colors())
+
         self.sync_export()
-        self.scroll_to_end()
 
-        shown = f"Showing {format_count(len(textures))} textures of {format_count(len(self._cache))} entries in cache"
+        if not self.ranking():
+            self.scroll_to_end()
 
-        self._status.set_summary(note if note else shown)
+        self._summary = (
+            f"Showing {format_count(len(textures))} textures of {format_count(len(self._cache))} entries in cache"
+        )
+
+        self._status.set_summary(note if note else self.summary())
 
     def about_action(self) -> None:
         QMessageBox.about(
