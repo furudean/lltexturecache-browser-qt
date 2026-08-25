@@ -85,6 +85,7 @@ def main() -> None:
 
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_DISPLAY_NAME)
+    app.setDesktopFileName(APP_NAME)
     app.setOrganizationName("paisley softworks")
     app.setApplicationVersion(__version__)
 

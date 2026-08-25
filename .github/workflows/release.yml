@@ -68,12 +68,13 @@ jobs:
 
       # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries.
       # libxcb-cursor0 has to be present at build time for Nuitka to bundle it.
+      # desktop-file-utils is used by appimagetool to validate the desktop file.
       # ccache is used to speed up builds
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ccache patchelf libxcb-cursor0
+          sudo apt-get install --yes --no-install-recommends ccache patchelf libxcb-cursor0 desktop-file-utils
 
       # ccache is used to speed up builds
       - name: Install macOS build dependencies
@@ -123,6 +124,10 @@ jobs:
 
           bash scripts/build.sh
 
+      - name: Build AppImage
+        if: runner.os == 'Linux'
+        run: ./scripts/appimage.sh
+
       - name: Notarize
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
         run: |
@@ -138,32 +143,34 @@ jobs:
           xcrun stapler staple "dist/$APP_NAME.app"
 
       - name: Package
-        id: package
         run: |
           asset="$APP_NAME-$VERSION-${{ matrix.target }}"
 
+          mkdir staging
+
           case "$RUNNER_OS" in
             macOS)
-              ditto -c -k --keepParent "dist/$APP_NAME.app" "$asset.zip"
-              asset="$asset.zip"
+              ditto -c -k --keepParent "dist/$APP_NAME.app" "staging/$asset.zip"
               ;;
             Windows)
-              mv "dist/$APP_NAME.exe" "$asset.exe"
-              asset="$asset.exe"
+              mv "dist/$APP_NAME.exe" "staging/$asset.exe"
               ;;
             Linux)
-              mv "dist/$APP_NAME.bin" "$asset"
-              chmod +x "$asset"
+              # the AppImage is the one to install, the bare binary is there for
+              # systems without FUSE
+              mv "dist/$APP_NAME.AppImage" "staging/$asset.AppImage"
+              mv "dist/$APP_NAME.bin" "staging/$asset"
+              chmod +x "staging/$asset.AppImage" "staging/$asset"
               ;;
           esac
 
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          ls -l staging
 
       - name: Upload artifact to workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.target }}
-          path: ${{ steps.package.outputs.asset }}
+          path: staging
           if-no-files-found: error
 
       - name: Clean up keychain

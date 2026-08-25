@@ -32,14 +32,15 @@ uv run lltexturecache-browser-qt
 
 ## build
 
-use [uv](https://docs.astral.sh/uv/) to build the app for the host platform.
-macOS gets a `.app`, Windows a `.exe` and Linux a binary.
+Use the build script build the app for the host platform. macOS gets a `.app`
+ Windows a `.exe` and Linux a binary/AppImage.
 
 ```bash
-./scripts/build
+./scripts/build.sh
 ```
 
-linux requires `patchelf` and `libxcb-cursor0` on the `PATH`.
+uv is required to build. on linux, you will also need `patchelf` and 
+`libxcb-cursor0` on PATH.
 
 ## release
 

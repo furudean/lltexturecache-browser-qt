@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+"""write a native icon for the host platform and print where it went"""
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from PIL import Image
+
+SOURCE = Path(__file__).parent.parent / "packaging" / "icon.png"
+
+ICONSET = [
+    ("icon_16x16.png", 16),
+    ("icon_16x16@2x.png", 32),
+    ("icon_32x32.png", 32),
+    ("icon_32x32@2x.png", 64),
+    ("icon_128x128.png", 128),
+    ("icon_128x128@2x.png", 256),
+    ("icon_256x256.png", 256),
+    ("icon_256x256@2x.png", 512),
+    ("icon_512x512.png", 512),
+    ("icon_512x512@2x.png", 1024),
+]
+
+WINDOWS_SIZES = [16, 24, 32, 48, 64, 128, 256]
+
+
+def icns(source: Image.Image, out: Path) -> None:
+    with TemporaryDirectory() as tmp:
+        iconset = Path(tmp) / "icon.iconset"
+        iconset.mkdir()
+
+        for name, size in ICONSET:
+            if size > source.width:
+                continue
+
+            source.resize((size, size), Image.Resampling.LANCZOS).save(iconset / name)
+
+        subprocess.run(
+            ["iconutil", "--convert", "icns", "--output", str(out), str(iconset)],
+            check=True,
+        )
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        print(f"usage: {sys.argv[0]} <output directory>", file=sys.stderr)
+        raise SystemExit(2)
+
+    out_dir = Path(sys.argv[1])
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    source = Image.open(SOURCE).convert("RGBA")
+
+    if source.width != source.height:
+        print(f"err: {SOURCE} is not square", file=sys.stderr)
+        raise SystemExit(1)
+
+    if sys.platform == "darwin":
+        out = out_dir / "icon.icns"
+        icns(source, out)
+    elif sys.platform == "win32":
+        out = out_dir / "icon.ico"
+        sizes = [size for size in WINDOWS_SIZES if size <= source.width]
+        source.save(out, sizes=[(size, size) for size in sizes])
+    else:
+        out = out_dir / "icon.png"
+        shutil.copyfile(SOURCE, out)
+
+    # build.sh feeds this to awk, which would eat windows path separators
+    print(out.as_posix())
+
+
+if __name__ == "__main__":
+    main()

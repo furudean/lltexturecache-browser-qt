@@ -29,14 +29,19 @@ if [ "$(uname -s)" = Darwin ]; then
 	fi
 fi
 
-awk -v extra="$extra_args" '
+mkdir -p "$exec_directory"
+
+# nuitka wants .icns on mac, .ico on windows and .png everywhere else, so
+# the native icon is rendered from packaging/icon.png at build time
+icon="$(uv run python scripts/generate-icons "$exec_directory")"
+
+awk -v extra="$extra_args" -v icon="$icon" '
 	/^extra_args = / { print $0 " " extra; next }
+	/^icon = / { print "icon = " icon; next }
 	{ print }
 ' "$spec" > "$generated_spec"
 
 uv run python scripts/generate-metadata
-
-mkdir -p "$exec_directory"
 
 rm -rf "$exec_directory/$app_name.app" "$exec_directory/$app_name.exe" "$exec_directory/$app_name.bin"
 
