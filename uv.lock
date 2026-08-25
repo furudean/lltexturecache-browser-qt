@@ -213,7 +213,7 @@ requires-dist = [
     { name = "imagecodecs", specifier = ">=2026.8.16" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pyside6", specifier = ">=6.11.2" },
-    { name = "texture-courier", editable = "../texture-courier" },
+    { name = "texture-courier", specifier = ">=0.0.13" },
 ]
 
 [package.metadata.requires-dev]
@@ -506,25 +506,11 @@ wheels = [
 
 [[package]]
 name = "texture-courier"
-version = "0.0.12"
-source = { editable = "../texture-courier" }
-
-[package.metadata]
-requires-dist = [
-    { name = "texture-courier", extras = ["watcher"], marker = "extra == 'cli'" },
-    { name = "tqdm", marker = "extra == 'cli'", specifier = ">=4" },
-    { name = "watchdog", marker = "extra == 'watcher'", specifier = ">=6" },
-]
-provides-extras = ["watcher", "cli"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hypothesis", specifier = ">=6" },
-    { name = "mypy", specifier = ">=1" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff", specifier = ">=0.16.3" },
-    { name = "types-setuptools" },
-    { name = "types-tqdm", specifier = ">=4" },
+version = "0.0.13"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/2d/b0e2f8ea13ad85e9400ebca9f80cc7cedcbb443ba9f8ccea86e65f702d34/texture_courier-0.0.13.tar.gz", hash = "sha256:230b4ea3888b56d8ca7d4504b240b48b44e84954305c88c7e42fafb1788e343d", size = 22557, upload-time = "2026-08-25T00:07:21.151Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/0d/b101d676f4ea44b071d33f97cf243be525a00e6a39e5e45e424e1ff699b2/texture_courier-0.0.13-py3-none-any.whl", hash = "sha256:74ca83ed8870c2f32cbda5193e7320bf71062adec7b7df06de16518b1089e2a6", size = 20667, upload-time = "2026-08-25T00:07:20.185Z" },
 ]
 
 [[package]]

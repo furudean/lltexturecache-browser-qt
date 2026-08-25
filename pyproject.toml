@@ -8,7 +8,7 @@ dependencies = [
     "imagecodecs>=2026.8.16",
     "pillow>=12.3.0",
     "pyside6>=6.11.2",
-    "texture-courier>=0.0.12",
+    "texture-courier>=0.0.13",
 ]
 
 [dependency-groups]
@@ -33,6 +33,3 @@ strict = true
 [tool.ruff]
 target-version = "py313"
 line-length = 120
-
-[tool.uv.sources]
-texture-courier = { path = "../texture-courier", editable = true }
