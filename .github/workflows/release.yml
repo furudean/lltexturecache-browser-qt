@@ -129,7 +129,7 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
       - name: Build
-        run: ./scripts/build
+        run: ./scripts/build.sh
       - name: Notarize
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
         run: |
