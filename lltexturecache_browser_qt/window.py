@@ -6,6 +6,7 @@ from typing import ClassVar, Self
 
 from PySide6.QtCore import (
     QByteArray,
+    QDir,
     QEvent,
     QItemSelection,
     QItemSelectionModel,
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QProgressDialog,
     QSplitter,
 )
-from texture_courier import Texture, TextureCache, TextureCacheError
+from texture_courier import Texture, TextureCache, TextureCacheError, list_texture_caches
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
 from lltexturecache_browser_qt.actions import WindowActions
@@ -277,8 +278,15 @@ class MainWindow(QMainWindow):
         self._settle.start()
 
     def open_action(self) -> None:
-        dialog = QFileDialog(self)
+        dialog = QFileDialog(self, "Select a texturecache directory")
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
         dialog.setFileMode(QFileDialog.FileMode.Directory)
+        dialog.setOption(QFileDialog.Option.ShowDirsOnly)
+        dialog.setFilter(QDir.Filter.AllDirs | QDir.Filter.Hidden | QDir.Filter.NoDotAndDotDot)
+        dialog.setLabelText(QFileDialog.DialogLabel.Accept, "Open Cache")
+
+        cache_dirs = [QUrl.fromLocalFile(d.parent) for d in list_texture_caches()]
+        dialog.setSidebarUrls(cache_dirs)
 
         if dialog.exec():
             self.open_cache(Path(dialog.selectedFiles()[0]))
