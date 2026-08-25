@@ -199,10 +199,20 @@ jobs:
           ls -l artifacts
           gh release upload "$TAG" artifacts/* --clobber
 
+      # the release is published as a pre-release, promote it now that it has
+      # binaries on it
+      - name: Promote the release
+        if: "!contains(github.event.release.tag_name, '-')"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release edit "$TAG" --prerelease=false --latest
+
   homebrew:
     name: Update homebrew tap
     needs: upload
-    if: github.event_name == 'release' && !github.event.release.prerelease
+    if: github.event_name == 'release' && !contains(github.event.release.tag_name, '-')
     runs-on: ubuntu-latest
     steps:
       - name: Download the macOS build

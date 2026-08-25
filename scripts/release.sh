@@ -47,5 +47,4 @@ git tag "$tag"
 git push origin HEAD
 git push origin "$tag"
 
-# publishing the release is what builds the binaries for every platform
-gh release create "$tag" --generate-notes
+gh release create "$tag" --generate-notes --prerelease
