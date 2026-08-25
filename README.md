@@ -35,13 +35,10 @@ publishing a GitHub release builds for all platforms and attaches the binaries
 to it. it can be triggered like this:
 
 ```bash
-uv version --bump major|minor|patch
-git commit add pyproject.toml uv.lock
-VERSION="${uv version --short}"
-git commit -m "release v${VERSION}"
-git tag v${VERSION} && git push origin v${VERSION}
-gh release create v${VERSION}
+./scripts/release.sh major|minor|patch
 ```
+
+it bumps the version, commits the bump, tags it, pushes both and creates the release.
 
 if you want to sign and/or notarize the app, the following secrets should be set in the deployment pipeline:
 
