@@ -5,3 +5,7 @@
 - [x] Packaging
 - [ ] License (MIT ig)
 - [x] Automated releases
+- [ ] Full res decode not working on linux
+- [ ] Automated cache directory discovery
+- [ ] Enable hidden files in directory picker?
+- [ ] When cache is empty, the "Open..." button should not be shown
