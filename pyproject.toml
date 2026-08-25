@@ -1,6 +1,6 @@
 [project]
 name = "lltexturecache-browser-qt"
-version = "0.0.7"
+version = "0.0.8"
 description = "A cross-platform user interface for the Second Life texture cache"
 readme = "README.md"
 requires-python = ">=3.13"
