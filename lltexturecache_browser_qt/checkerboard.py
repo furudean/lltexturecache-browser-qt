@@ -68,13 +68,22 @@ def checkerboard_generation() -> int:
     return _generation
 
 
-def checker_tile(light: QColor, dark: QColor) -> QImage:
-    tile = QImage(CHECKEDBOARD_SIZE * 2, CHECKEDBOARD_SIZE * 2, QImage.Format.Format_RGB32)
+def checkerboard_at(square: int) -> QImage:
+    board = checkerboard()
+
+    if square == CHECKEDBOARD_SIZE or _checker_colors is None:
+        return board
+
+    return checker_tile(*_checker_colors, square)
+
+
+def checker_tile(light: QColor, dark: QColor, square: int = CHECKEDBOARD_SIZE) -> QImage:
+    tile = QImage(square * 2, square * 2, QImage.Format.Format_RGB32)
     tile.fill(light)
 
     painter = QPainter(tile)
-    painter.fillRect(0, 0, CHECKEDBOARD_SIZE, CHECKEDBOARD_SIZE, dark)
-    painter.fillRect(CHECKEDBOARD_SIZE, CHECKEDBOARD_SIZE, CHECKEDBOARD_SIZE, CHECKEDBOARD_SIZE, dark)
+    painter.fillRect(0, 0, square, square, dark)
+    painter.fillRect(square, square, square, square, dark)
     painter.end()
 
     return tile

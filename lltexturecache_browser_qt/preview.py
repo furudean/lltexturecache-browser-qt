@@ -45,6 +45,7 @@ class PreviewWindow(QWidget):
         self.resize(WINDOW_SIZE, WINDOW_SIZE)
 
         self._pixmap = QPixmap()
+        self._natural = QSize()
         self._message = ""
 
         self.setWindowTitle(WINDOW_TITLE)
@@ -60,7 +61,7 @@ class PreviewWindow(QWidget):
 
     def clear(self) -> None:
         self.setWindowTitle(WINDOW_TITLE)
-        self.set_image(QPixmap(), "No selection")
+        self.set_image(QPixmap(), QSize(), "No selection")
 
     def show_texture(
         self,
@@ -74,16 +75,19 @@ class PreviewWindow(QWidget):
 
         message = "Could not decode" if decoded is not None else "Decoding..."
 
-        self.set_image(pixmap, message)
+        self.set_image(pixmap, natural, message)
 
-    def set_image(self, pixmap: QPixmap, message: str) -> None:
+    def set_image(self, pixmap: QPixmap, natural: QSize, message: str) -> None:
         self._pixmap = pixmap
+        self._natural = natural
         self._message = message
 
         self.update()
 
     def image_rect(self) -> QRect:
-        fitted = self._pixmap.size().scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
+        shape = self._natural if not self._natural.isEmpty() else self._pixmap.size()
+
+        fitted = shape.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
 
         rect = QRect(0, 0, fitted.width(), fitted.height())
         rect.moveCenter(self.rect().center())

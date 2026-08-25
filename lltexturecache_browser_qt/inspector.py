@@ -62,6 +62,9 @@ class SidebarLabel(QLabel):
     def box(self, width: int) -> QSize:
         return QSize(width, self.maximumHeight()).boundedTo(self._source.size())
 
+    def room(self) -> QSize:
+        return QSize(self.width(), self.maximumHeight()) * self.devicePixelRatioF()
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
 
@@ -215,6 +218,9 @@ class InspectorPane(QWidget):
 
         # the caller follows with the image it has, which is not this one
         self.set_sidebar(QPixmap(), None)
+
+    def sidebar_room(self) -> QSize:
+        return self._sidebar.room()
 
     def set_sidebar(self, pixmap: QPixmap, natural: QSize | None) -> None:
         self._sidebar.set_source(pixmap)

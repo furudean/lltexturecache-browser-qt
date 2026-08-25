@@ -671,7 +671,10 @@ class MainWindow(QMainWindow):
             if ready is not None:
                 cards.append((texture.uuid, laid_card(*ready)))
 
-        self._inspector.set_sidebar(stack_pixmap(cards), self.shape(model, self._stack[-1]))
+        self._inspector.set_sidebar(
+            stack_pixmap(cards, self._inspector.sidebar_room()),
+            self.shape(model, self._stack[-1]),
+        )
 
     def shape(self, model: TextureModel, texture: Texture) -> QSize | None:
         natural = model.natural(texture)

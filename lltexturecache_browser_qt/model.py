@@ -50,6 +50,10 @@ def sidebar_key(uuid: str) -> str:
     return f"sidebar:{uuid}"
 
 
+def alpha_key(uuid: str) -> str:
+    return f"alpha:{uuid}"
+
+
 def full_size(natural: QSize) -> QSize:
     return natural.scaled(QSize(FULL_SIZE, FULL_SIZE).boundedTo(natural), Qt.AspectRatioMode.KeepAspectRatio)
 
@@ -120,10 +124,11 @@ class TextureModel(QAbstractListModel):
         self._natural: dict[str, QSize] = {}
         self._full: dict[str, tuple[QPixmap, QSize]] = {}
         self._full_running: set[str] = set()
-        # decodes that set out under the palette before this one, which is to
-        # say the ones whose results are already out of date on arrival
+        # cell decodes that set out under the palette before this one, which is
+        # to say the ones whose results are already out of date on arrival. a
+        # decode that keeps its opacity is not among them: it is painted over
+        # whatever board is down when it is drawn
         self._stale: set[str] = set()
-        self._full_stale: set[str] = set()
         # a preview window shows the one texture it is on, so the last one
         # asked for is the only one worth the room a full sized decode takes
         self._preview: tuple[str, QPixmap, QSize] | None = None
@@ -233,14 +238,14 @@ class TextureModel(QAbstractListModel):
 
         return pixmap
 
-    def thumbnail(self, texture: Texture) -> QImage:
+    def thumbnail(self, texture: Texture, *, board: bool = True) -> QImage:
         try:
             with self._thumbnails:
                 thumbnail = texture.thumbnail_png()
         except (TextureCacheError, OSError):
             thumbnail = None
 
-        return thumbnail_image(thumbnail) if thumbnail is not None else QImage()
+        return thumbnail_image(thumbnail, board=board) if thumbnail is not None else QImage()
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""
@@ -269,7 +274,7 @@ class TextureModel(QAbstractListModel):
 
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
-            task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False)
+            task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False, board=False)
 
             self._pool.start(task, FULL_PRIORITY)
 
@@ -282,15 +287,44 @@ class TextureModel(QAbstractListModel):
         """The best decode already in hand, and the size it came in at if known
 
         Nothing is started for it: this is only what a pane or a window can
-        put up on the spot while the decode it really wants is out.
+        put up on the spot while the decode it really wants is out. The shape
+        is handed over beside it, since a decode at any size knew what it was.
+
+        What comes back keeps its opacity wherever it can, since a stand-in is
+        drawn larger than it was kept and a board painted into it is drawn
+        larger with it, at squares several times the size of the ones the
+        decode it stands in for is laid over.
         """
+
+        uuid = texture.uuid
 
         if (ready := self.full(texture, decode=False)) is not None:
             return ready
 
-        # a cell is the grid's own decode, or the thumbnail the cache keeps
-        # alongside it, and is no record of what it was cut down from. the shape
-        # is asked for beside it, since a decode at any size knew what it was
+        kept = QPixmap()
+
+        if QPixmapCache.find(alpha_key(uuid), kept):
+            return kept, self.natural(texture)
+
+        # a texture with no thumbnail beside it in the cache falls back to the
+        # grid's cell, which has the board painted into it at the size a cell is
+        if uuid in self._no_sidebar:
+            return self.cell_standing(texture)
+
+        image = self.thumbnail(texture, board=False)
+
+        if image.isNull():
+            self._no_sidebar.add(uuid)
+
+            return self.cell_standing(texture)
+
+        pixmap = QPixmap.fromImage(image)
+
+        QPixmapCache.insert(alpha_key(uuid), pixmap)
+
+        return pixmap, self.natural(texture)
+
+    def cell_standing(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
         cell = self.cell(texture)
 
         return (cell, self.natural(texture)) if not cell.isNull() else None
@@ -313,11 +347,11 @@ class TextureModel(QAbstractListModel):
         return None
 
     def restyle(self) -> bool:
-        """Let go of everything drawn against a checkerboard that has since moved
+        """Take note of a checkerboard that has since moved
 
-        The images themselves are the grid's, and are dropped by whoever calls
-        this; what is here is the inspector's copies and the decodes still out.
-        Returns whether there was anything to let go of.
+        The cells are the grid's, and are dropped by whoever calls this; what is
+        here is the cell decodes still out, which are the only ones with a board
+        painted into what they bring back. Returns whether the board has moved.
         """
 
         generation = checkerboard_generation()
@@ -327,12 +361,9 @@ class TextureModel(QAbstractListModel):
 
         self._generation = generation
 
-        # a decode already running was handed the old board, so whatever it
-        # comes back with is painted on a background that is no longer there
+        # a cell decode already running was handed the old board, so whatever
+        # it comes back with is painted on a background that is no longer there
         self._stale = set(self._running)
-        self._full_stale = set(self._full_running)
-
-        self._full.clear()
 
         return True
 
@@ -452,19 +483,6 @@ class TextureModel(QAbstractListModel):
         self._full_running.discard(uuid)
 
         self.learn(uuid, natural)
-
-        if uuid in self._full_stale:
-            # the same as a cell decoded against the old board, except that
-            # nothing repaints the inspector on its own, so the texture is
-            # asked for again here rather than waiting to be asked for
-            self._full_stale.discard(uuid)
-
-            texture = self._lookup.get(uuid)
-
-            if texture is not None:
-                self.full(texture)
-
-            return
 
         # a texture that cannot be decoded caches its placeholder, or every
         # reselect would set the same doomed decode going again

@@ -30,8 +30,8 @@ def decode_image(codestream: bytes) -> QImage:
     return QImage(rgba, width, height, QImage.Format.Format_RGBA8888).copy()
 
 
-def thumbnail_image(png: bytes) -> QImage:
-    return fit_image(read_image(QByteArray(png)))
+def thumbnail_image(png: bytes, *, board: bool = True) -> QImage:
+    return fit_image(read_image(QByteArray(png)), board=board)
 
 
 def fit_image(image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:

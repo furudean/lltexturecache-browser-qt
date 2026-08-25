@@ -2,7 +2,9 @@ from math import sqrt
 from random import Random
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QPainter, QPixmap, QTransform
+from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap, QTransform
+
+from lltexturecache_browser_qt.checkerboard import CHECKEDBOARD_SIZE, checkerboard_at
 
 # how many of a selection are dealt out behind the one on top
 STACK_CARDS = 4
@@ -47,6 +49,16 @@ def dealt_card(card: QPixmap, box: QSize, span: int) -> QPixmap:
     )
 
 
+def checker_square_size(canvas: QSize, room: QSize | None) -> int:
+    if room is None or room.isEmpty() or canvas.isEmpty():
+        return CHECKEDBOARD_SIZE
+
+    seen = canvas.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+    scale = max(1.0, canvas.width() / seen.width())
+
+    return max(1, round(CHECKEDBOARD_SIZE * scale))
+
+
 def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
     """The card the rest of a stack is sized against
 
@@ -59,8 +71,12 @@ def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
     return max((card.size() for _, card in cards), key=lambda size: size.width() * size.height())
 
 
-def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
-    """Lay pixmaps out as a tilted stack, the last of them face up on top"""
+def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) -> QPixmap:
+    """Lay pixmaps out as a tilted stack, the last of them face up on top
+
+    `room` is the size the stack will be seen at, which is what the board
+    behind a card with any transparency to it is sized against.
+    """
 
     if not cards:
         return QPixmap()
@@ -98,6 +114,8 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
     canvas = QPixmap(laid.size())
     canvas.fill(Qt.GlobalColor.transparent)
 
+    board = QBrush(checkerboard_at(checker_square_size(laid.size(), room)))
+
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -115,6 +133,12 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]]) -> QPixmap:
             # cards rather than as one busy image
             painter.fillRect(rect, FRAME_FILL)
             painter.drawRect(rect)
+
+        if pixmap.hasAlphaChannel():
+            painter.fillRect(
+                QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height()),
+                board,
+            )
 
         painter.drawPixmap(QPointF(-pixmap.width() / 2, -pixmap.height() / 2), pixmap)
         painter.restore()
