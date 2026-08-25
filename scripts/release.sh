@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 set -eu
 
@@ -15,19 +15,30 @@ case "$bump" in
 esac
 
 if [ -n "$(git status --porcelain)" ]; then
-	echo "working tree is dirty" >&2
+	echo "err: working tree is dirty" >&2
 	exit 1
 fi
 
-uv version --bump "$bump"
-
-version="$(uv version --short)"
+version="$(uv version --bump "$bump" --dry-run --short)"
 tag="v$version"
 
 if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
-	echo "tag $tag already exists" >&2
+	echo "err: tag $tag already exists" >&2
 	exit 1
 fi
+
+printf 'you are about to release %s (from v%s) on branch %s. continue? [y/N] ' \
+	"$tag" "$(uv version --short)" "$(git rev-parse --abbrev-ref HEAD)"
+read -r reply </dev/tty
+case "$reply" in
+	y | Y | yes | YES) ;;
+	*)
+		echo "aborted" >&2
+		exit 1
+		;;
+esac
+
+uv version --bump "$bump"
 
 git add pyproject.toml uv.lock
 git commit -m "release $tag"
