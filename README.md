@@ -6,12 +6,15 @@ a cross-platform user interface for the Second Life texture cache.
 
 ## install
 
-```bash
-brew install --cask furudean/tap/lltexturecache-browser-qt
-```
 
 windows and linux builds are attached to
 [each release](https://github.com/furudean/lltexturecache-browser-qt/releases).
+
+on mac, you can install with homebrew:
+
+```bash
+brew install --cask furudean/tap/lltexturecache-browser-qt
+```
 
 ## goals
 
