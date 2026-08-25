@@ -1,7 +1,7 @@
 [app]
 
 # title of your application
-title = lltexturecache-browser-qt
+title = 
 
 # project root directory. default = The parent directory of input_file
 project_dir = .
@@ -16,12 +16,12 @@ exec_directory = dist
 project_file = 
 
 # application icon
-icon = .venv/lib/python3.13/site-packages/PySide6/scripts/deploy_lib/pyside_icon.icns
+icon = 
 
 [python]
 
 # python path
-python_path = .venv/bin/python
+python_path = 
 
 # python packages to install
 packages = 
@@ -68,7 +68,7 @@ macos.permissions =
 mode = onefile
 
 # specify any extra nuitka arguments
-extra_args = --quiet --noinclude-qt-translations --macos-app-name="lltexturecache-browser-qt" --include-package=imagecodecs --include-package-data=imagecodecs
+extra_args = --quiet --noinclude-qt-translations --include-package=imagecodecs --include-package-data=imagecodecs
 
 [buildozer]
 

@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt import APP_NAME, __version__
+from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
 from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
 
         settings = QSettings()
 
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(APP_DISPLAY_NAME)
 
         # default window size
         self.resize(800, 600)
@@ -762,7 +762,7 @@ class MainWindow(QMainWindow):
 
         MainWindow.save_session()
 
-        self.setWindowTitle(f"{cache.cache_dir} — {APP_NAME}")
+        self.setWindowTitle(f"{cache.cache_dir} — {APP_DISPLAY_NAME}")
         self.setWindowFilePath(str(cache.cache_dir))
         self.populate_grid()
 
@@ -828,6 +828,6 @@ class MainWindow(QMainWindow):
     def about_action(self) -> None:
         QMessageBox.about(
             self,
-            f"About {APP_NAME}",
-            f"{APP_NAME} v{__version__}\n\nA cross-platform user interface for the Second Life texture cache.",
+            f"About {APP_DISPLAY_NAME}",
+            f"{APP_DISPLAY_NAME} v{__version__}\n\nA cross-platform user interface for the Second Life texture cache.",
         )

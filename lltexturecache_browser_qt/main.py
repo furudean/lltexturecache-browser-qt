@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmapCache
 from PySide6.QtWidgets import QApplication, QMessageBox
 from texture_courier import TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt import APP_NAME, __version__
+from lltexturecache_browser_qt import APP_DISPLAY_NAME, APP_NAME, __version__
 from lltexturecache_browser_qt.actions import fallback_menu
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.model import PIXMAP_CACHE_KB
@@ -83,7 +83,7 @@ def main() -> None:
     app = QApplication(sys.argv)
 
     app.setApplicationName(APP_NAME)
-    app.setApplicationDisplayName(APP_NAME)
+    app.setApplicationDisplayName(APP_DISPLAY_NAME)
     app.setOrganizationName("paisley softworks")
     app.setApplicationVersion(__version__)
 

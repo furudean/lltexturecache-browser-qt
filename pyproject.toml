@@ -25,6 +25,9 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 
+[tool.app]
+display-name = "lltexturecache-browser-qt"
+
 [tool.mypy]
 python_version = "3.13"
 exclude = ["build", "dist"]
