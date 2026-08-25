@@ -73,12 +73,13 @@ jobs:
         with:
           enable-cache: true
 
-      # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries
+      # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries.
+      # libxcb-cursor0 has to be present at build time for Nuitka to bundle it.
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends patchelf
+          sudo apt-get install --yes --no-install-recommends patchelf libxcb-cursor0
 
       - name: Check for signing credentials
         id: signing
