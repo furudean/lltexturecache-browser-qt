@@ -318,6 +318,7 @@ class MainWindow(QMainWindow):
             QPixmapCache.remove(sidebar_key(texture.uuid))
 
         shown = self._inspector.texture
+        place = self._view.place()
 
         if added or rewritten:
             self.populate_grid(
@@ -329,8 +330,13 @@ class MainWindow(QMainWindow):
         if shown is not None:
             self.select_texture(shown.uuid)
 
-            if not self.ranking():
-                self.scroll_to_end()
+        if self.ranking():
+            return
+
+        if added:
+            self.scroll_to_end()
+        elif rewritten:
+            self._view.pin_to(place)
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._view.model()

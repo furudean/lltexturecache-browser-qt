@@ -89,7 +89,7 @@ class TextureGrid(QListView):
         super().__init__(parent)
 
         self._banding = False
-        self._pinned = False
+        self._pin: int | None = None
 
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it
@@ -133,16 +133,27 @@ class TextureGrid(QListView):
         self._empty.setVisible(self.is_empty())
 
     def pin_to_bottom(self) -> None:
-        self._pinned = True
+        self.pin_to(-1)
+
+    def pin_to(self, place: int) -> None:
+        self._pin = place
 
         self.apply_pin()
 
     def apply_pin(self) -> None:
-        if self._pinned:
+        if self._pin is None:
+            return
+
+        if self._pin == -1:
             self.scrollToBottom()
+        else:
+            self.verticalScrollBar().setValue(self._pin)
 
     def unpin(self) -> None:
-        self._pinned = False
+        self._pin = None
+
+    def place(self) -> int:
+        return self.verticalScrollBar().value()
 
     def scrollTo(self, index: Index, hint: QListView.ScrollHint = QListView.ScrollHint.EnsureVisible) -> None:
         # something has a particular texture it wants in view, which outranks
