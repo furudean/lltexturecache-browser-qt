@@ -88,6 +88,24 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ccache
 
+      # pyside6-deploy shells out to dumpbin to resolve the transitive Qt module
+      # dependencies. it ships with MSVC and is not on the PATH by default
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        run: |
+          vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+          install_path="$("$vswhere" -latest -products '*' -property installationPath)"
+          dumpbin="$(find "$(cygpath "$install_path")/VC/Tools/MSVC" \
+            -path '*/Hostx64/x64/dumpbin.exe' | sort | tail -1)"
+
+          if [ -z "$dumpbin" ]; then
+            echo "::error::could not find dumpbin under $install_path"
+            exit 1
+          fi
+
+          echo "using $dumpbin"
+          dirname "$dumpbin" >> "$GITHUB_PATH"
+
       - name: Import signing certificate
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
         run: |
