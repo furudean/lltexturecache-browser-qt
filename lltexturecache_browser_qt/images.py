@@ -2,10 +2,16 @@ from functools import cache
 
 from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader, QPixmap
-from texture_courier.encode import wrap_jp2
 
 from lltexturecache_browser_qt.checkerboard import over_checkerboard
-from lltexturecache_browser_qt.decode import decode_rgba, extra_components
+from lltexturecache_browser_qt.decode import GREYSCALE, RGB, RGBA, decode_texture
+
+# how a decoded texture's components are described to qt
+IMAGE_FORMATS = {
+    GREYSCALE: QImage.Format.Format_Grayscale8,
+    RGB: QImage.Format.Format_RGB888,
+    RGBA: QImage.Format.Format_RGBA8888,
+}
 
 # the box a cell's texture is fitted into, and the size everything that stands
 # in for one is drawn at
@@ -20,14 +26,21 @@ def read_image(data: QByteArray) -> QImage:
 
 
 def decode_image(codestream: bytes) -> QImage:
-    if not extra_components(codestream):
-        return read_image(QByteArray(wrap_jp2(codestream)))
+    decoded = decode_texture(codestream)
 
-    rgba, width, height = decode_rgba(codestream)
+    # the rows are packed tight, which is not the alignment QImage assumes when
+    # it is left to work the stride out for itself
+    image = QImage(
+        decoded.pixels,
+        decoded.width,
+        decoded.height,
+        decoded.stride,
+        IMAGE_FORMATS[decoded.components],
+    )
 
-    # QImage does not take a copy of what it is handed, and `rgba` goes out of
-    # scope with this call, so the image has to own its pixels before it leaves
-    return QImage(rgba, width, height, QImage.Format.Format_RGBA8888).copy()
+    # QImage does not take a copy of what it is handed, and the pixels go out of
+    # scope with this call, so the image has to own them before it leaves
+    return image.copy()
 
 
 def thumbnail_image(png: bytes, *, board: bool = True) -> QImage:

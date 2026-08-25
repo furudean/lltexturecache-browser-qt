@@ -1,53 +1,75 @@
+from dataclasses import dataclass
+
 import imagecodecs
 from texture_courier import TextureCacheError
-from texture_courier.encode import codestream_size
 
-# qt and pillow both stop at rgba, so this is the count past which a codestream
-# has to go the long way round
-MAX_READER_COMPONENTS = 4
-
-
-def extra_components(codestream: bytes) -> bool:
-    """Whether a codestream carries more components than an image reader takes"""
-
-    return codestream_size(codestream)[2] > MAX_READER_COMPONENTS
+GREYSCALE = 1
+RGB = 3
+RGBA = 4
 
 
-def decode_rgba(codestream: bytes) -> tuple[bytes, int, int]:
-    """Colour and opacity from a codestream, as tightly packed rgba rows"""
+@dataclass(frozen=True)
+class Decoded:
+    """A decoded texture, as tightly packed rows of 8 bit components"""
 
-    # The codestreams an image reader will not take can be decoded through
-    # openjpeg for compatibility
+    pixels: bytes
+    width: int
+    height: int
+    components: int
 
-    # Second life encodes some of its material textures with five components rather
-    # than the four an rgba image has, and tags them `LL_RGBHM`. Neither reader the
-    # rest of the app leans on will touch one: qt's jp2 plugin reports the file as
-    # readable and then fails on the data, and pillow only knows how to name 1-4
-    # component images, so it cannot even work out a mode. The codestream itself is
-    # fine, and openjpeg decodes it without complaint.
+    @property
+    def stride(self) -> int:
+        """Bytes a row of pixels takes up"""
 
-    # The viewer keeps a four component thumbnail for every one of these in its fast
-    # cache, so the extra components are not part of the picture it draws. The first
-    # three are colour and the fourth is opacity, exactly as in an rgba texture, and
-    # whatever follows is dropped the same way the viewer drops it.
+        return self.width * self.components
+
+
+def decode_texture(codestream: bytes) -> Decoded:
+    """Pixels from a codestream, in the nearest component count anything else understands"""
+
+    # Everything decodes through openjpeg because qt only reads jpeg 2000 on macOS,
+    # where it loads `qmacjp2` over Apple's ImageIO. Nothing equivalent ships in the qt
+    # builds the pyside6 wheels repackage, so a reader path would come back null on
+    # linux and windows.
+
+    # It also takes the codestreams nothing else will: second life tags some of its
+    # material textures `LL_RGBHM` and gives them five components, which pillow cannot
+    # even name a mode for. The first three are colour and the fourth is opacity, and
+    # the viewer drops whatever follows just as this does.
 
     try:
         # openjpeg lets go of the gil while it works, so this runs in the decode
-        # pool as happily as qt's reader does
+        # pool as happily as qt's reader did
         decoded = imagecodecs.jpeg2k_decode(codestream)
     except imagecodecs.Jpeg2kError as e:
         # a RuntimeError on the way out of a decode thread says nothing about
         # which texture stopped it, and none of the callers are watching for one
         raise TextureCacheError(f"openjpeg could not decode the codestream: {e}") from e
 
-    if decoded.ndim != 3 or decoded.shape[2] < MAX_READER_COMPONENTS:
-        raise TextureCacheError(f"expected at least {MAX_READER_COMPONENTS} components, decoded {decoded.shape}")
-
     if decoded.dtype != "uint8":
         raise TextureCacheError(f"expected 8 bit components, decoded {decoded.dtype}")
 
-    height, width, _ = decoded.shape
+    if decoded.ndim == 2:
+        # openjpeg leaves the component axis off a single component image
+        height, width = decoded.shape
+        components = GREYSCALE
+    elif decoded.ndim == 3:
+        height, width, components = decoded.shape
+    else:
+        raise TextureCacheError(f"expected a two or three axis image, decoded {decoded.shape}")
 
-    # a slice of the last axis is strided, and both consumers want the rows the way
-    # an rgba buffer has them, which is what tobytes gathers a strided slice into
-    return decoded[:, :, :MAX_READER_COMPONENTS].tobytes(), width, height
+    if components == GREYSCALE or components == RGB:
+        # already the shape a reader wants, and contiguous as openjpeg wrote it
+        return Decoded(decoded.tobytes(), width, height, components)
+
+    if components == 2:
+        # greyscale with opacity alongside, which only rgba can describe to both
+        # of the consumers, so the one colour component is spread over three
+        return Decoded(decoded[:, :, [0, 0, 0, 1]].tobytes(), width, height, RGBA)
+
+    if components >= RGBA:
+        # a slice of the last axis is strided, and every consumer wants the rows
+        # the way an rgba buffer has them, which is what tobytes gathers into
+        return Decoded(decoded[:, :, :RGBA].tobytes(), width, height, RGBA)
+
+    raise TextureCacheError(f"decoded {components} components, which is not a picture")

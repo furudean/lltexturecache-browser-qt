@@ -1,6 +1,5 @@
 import os
 from dataclasses import dataclass, field
-from io import BytesIO
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -8,14 +7,16 @@ from typing import Any
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from texture_courier import Texture, TextureCacheError
-from texture_courier.encode import wrap_jp2
 
-from lltexturecache_browser_qt.decode import decode_rgba, extra_components
+from lltexturecache_browser_qt.decode import GREYSCALE, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
 
 CONCURRENCY = 8
 
 PNG_MODES = frozenset({"1", "L", "LA", "I", "I;16", "P", "RGB", "RGBA"})
+
+# how a decoded texture's components are described to pillow
+IMAGE_MODES = {GREYSCALE: "L", RGB: "RGB", RGBA: "RGBA"}
 
 
 @dataclass(frozen=True)
@@ -45,12 +46,9 @@ def encodable(image: Image.Image, format: Format) -> Image.Image:
 
 
 def open_image(codestream: bytes) -> Image.Image:
-    if not extra_components(codestream):
-        return Image.open(BytesIO(wrap_jp2(codestream)))
+    decoded = decode_texture(codestream)
 
-    rgba, width, height = decode_rgba(codestream)
-
-    return Image.frombytes("RGBA", (width, height), rgba)
+    return Image.frombytes(IMAGE_MODES[decoded.components], (decoded.width, decoded.height), decoded.pixels)
 
 
 def export_path(out_dir: Path, uuid: str, format: Format) -> Path:
@@ -66,8 +64,8 @@ def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) ->
         path.write_bytes(jp2_bytes)
     else:
         with reads:
-            # pillow can natively understand the codestream, so this would be extra
-            # processing with loads_jp2()
+            # the codestream decodes as it is, so wrapping it in a container
+            # first would be work nothing downstream asks for
             codestream = texture.codestream()
         with open_image(codestream) as image:
             encodable(image, fmt).save(path, fmt.encoder, **fmt.options)
