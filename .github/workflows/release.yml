@@ -80,24 +80,6 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ccache
 
-      # pyside6-deploy shells out to dumpbin to resolve the transitive Qt module
-      # dependencies. it ships with MSVC and is not on the PATH by default
-      - name: Install Windows build dependencies
-        if: runner.os == 'Windows'
-        run: |
-          vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
-          install_path="$("$vswhere" -latest -products '*' -property installationPath)"
-          dumpbin="$(find "$(cygpath "$install_path")/VC/Tools/MSVC" \
-            -path '*/Hostx64/x64/dumpbin.exe' | sort | tail -1)"
-
-          if [ -z "$dumpbin" ]; then
-            echo "::error::could not find dumpbin under $install_path"
-            exit 1
-          fi
-
-          echo "using $dumpbin"
-          dirname "$dumpbin" >> "$GITHUB_PATH"
-
       - name: Import signing certificate
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
         run: |
@@ -121,7 +103,26 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
       - name: Build
+        if: runner.os != 'Windows'
         run: ./scripts/build.sh
+
+      # without this Nuitka falls back to a downloaded zig, which is slower
+      - name: Build
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          set "vswhere=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+          for /f "usebackq tokens=*" %%i in (`"%vswhere%" -latest -products * -property installationPath`) do (
+            call "%%i\VC\Auxiliary\Build\vcvars64.bat"
+          )
+
+          if not defined WindowsSDKVersion (
+            echo ::error::the Windows SDK is missing from the MSVC environment
+            exit /b 1
+          )
+
+          bash scripts/build.sh
+
       - name: Notarize
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
         run: |
