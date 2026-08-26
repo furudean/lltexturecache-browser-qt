@@ -53,8 +53,3 @@ uv run python scripts/generate-licences
 rm -rf "$exec_directory/$app_name.app" "$exec_directory/$app_name.exe" "$exec_directory/$app_name.bin"
 
 uv run pyside6-deploy --config-file "$generated_spec" --name "$app_name" --force
-
-# swap the flat .icns nuitka baked in for the layered Icon Composer icon
-if [ "$(uname -s)" = Darwin ]; then
-	./scripts/macos-icon.sh "$exec_directory/$app_name.app" packaging/slcachegirl.icon
-fi
