@@ -62,18 +62,16 @@ sed -e "s|@NAME@|$app_name|g" -e "s|@DISPLAY_NAME@|$display_name|g" \
 	packaging/app.desktop > "$appdir/$app_name.desktop"
 cp "$appdir/$app_name.desktop" "$appdir/usr/share/applications/$app_name.desktop"
 
-# the icon is needed at the root of the AppDir for the desktop file to resolve
-# and under hicolor for the menu entry once the AppImage is integrated
-cp packaging/icon.png "$appdir/$app_name.png"
+cp packaging/slcachegirl.png "$appdir/$app_name.png"
 ln -s "$app_name.png" "$appdir/.DirIcon"
 
-# the hicolor directory has to say what size the artwork actually is
-icon_size="$(uv run python -c 'from PIL import Image
-print(Image.open("packaging/icon.png").width)')"
+icon_size="$(uv run python -c 'import struct
+with open("packaging/slcachegirl.png", "rb") as png:
+    print(struct.unpack(">I", png.read(20)[16:])[0])')"
 
 icon_dir="$appdir/usr/share/icons/hicolor/${icon_size}x${icon_size}/apps"
 mkdir -p "$icon_dir"
-cp packaging/icon.png "$icon_dir/$app_name.png"
+cp packaging/slcachegirl.png "$icon_dir/$app_name.png"
 
 cat > "$appdir/AppRun" <<SH
 #!/usr/bin/env sh

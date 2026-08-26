@@ -31,9 +31,12 @@ fi
 
 mkdir -p "$exec_directory"
 
-# nuitka wants .icns on mac, .ico on windows and .png everywhere else, so
-# the native icon is rendered from packaging/icon.png at build time
-icon="$(uv run python scripts/generate-icons "$exec_directory")"
+# nuitka wants .icns on mac, .ico on windows and .png everywhere else
+case "$(uname -s)" in
+	Darwin) icon=packaging/slcachegirl.icns ;;
+	CYGWIN* | MINGW* | MSYS* | Windows_NT) icon=packaging/slcachegirl.ico ;;
+	*) icon=packaging/slcachegirl.png ;;
+esac
 
 awk -v extra="$extra_args" -v icon="$icon" '
 	/^extra_args = / { print $0 " " extra; next }
@@ -43,6 +46,15 @@ awk -v extra="$extra_args" -v icon="$icon" '
 
 uv run python scripts/generate-metadata
 
+# the licence of everything the build bundles, read out of the installed
+# packages rather than kept in the tree
+uv run python scripts/generate-licences
+
 rm -rf "$exec_directory/$app_name.app" "$exec_directory/$app_name.exe" "$exec_directory/$app_name.bin"
 
 uv run pyside6-deploy --config-file "$generated_spec" --name "$app_name" --force
+
+# swap the flat .icns nuitka baked in for the layered Icon Composer icon
+if [ "$(uname -s)" = Darwin ]; then
+	./scripts/macos-icon.sh "$exec_directory/$app_name.app" packaging/slcachegirl.icon
+fi

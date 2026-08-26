@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+
+import json
+import re
+import tomllib
+from importlib.metadata import Distribution, PackageNotFoundError
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+OUT = ROOT / "lltexturecache_browser_qt" / "assets" / "licences"
+VENDORED = ROOT / "packaging" / "licences"
+
+INDEX = "index.json"
+
+# the lgpl is written as a set of additional permissions on top of the gpl, so
+# it takes both texts to read it
+GNU = ["lgpl-3.0.txt", "gpl-3.0.txt"]
+
+# licences a distribution can name without shipping, read from a copy kept in
+# the project instead. keyed by the identifier a distribution declares, so a
+# distribution that ships no licence file of its own needs no entry here
+VENDOR = {
+    "LGPL-3.0-only": GNU,
+    "LGPL-3.0-or-later": GNU,
+}
+
+# a declared licence longer than this is the licence itself rather than a name
+# for one, and belongs in the text pane instead of the heading
+NAME_LENGTH = 80
+
+SEPARATOR = "\n\n" + "-" * 72 + "\n\n"
+
+REQUIREMENT = re.compile(r"[A-Za-z0-9._-]+")
+
+IDENTIFIER = re.compile(r"[A-Za-z0-9.+-]+")
+
+OPERATOR = {"AND", "OR", "WITH"}
+
+
+def canonical(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def required(lines: list[str]) -> list[str]:
+    """The distributions a list of requirements asks for, extras aside"""
+
+    found = []
+
+    for line in lines:
+        requirement, _, marker = line.partition(";")
+
+        # an extra is asked for by name, and nothing here asks for one
+        if "extra" in marker:
+            continue
+
+        name = REQUIREMENT.match(requirement.strip())
+
+        if name is not None:
+            found.append(name.group())
+
+    return found
+
+
+def closure(roots: list[str]) -> dict[str, Distribution]:
+    direct = {canonical(name) for name in roots}
+
+    found: dict[str, Distribution] = {}
+    queue = list(roots)
+
+    while queue:
+        name = canonical(queue.pop())
+
+        if name in found:
+            continue
+
+        try:
+            dist = Distribution.from_name(name)
+        except PackageNotFoundError:
+            # something the app asks for outright is missing because the script
+            # is running outside the environment the app is installed in
+            if name in direct:
+                raise SystemExit(f"{name} is not installed, run this under the project environment") from None
+
+            # a requirement held back by a marker this interpreter does not meet
+            # is not installed, and so is not shipped either
+            continue
+
+        found[name] = dist
+        queue.extend(required(dist.requires or []))
+
+    return found
+
+
+def licence(dist: Distribution) -> str:
+    expression = dist.metadata.get("License-Expression")
+
+    if expression:
+        return expression
+
+    classifiers = [
+        entry.rsplit("::", 1)[-1].strip()
+        for entry in dist.metadata.get_all("Classifier", [])
+        if entry.startswith("License ::")
+    ]
+
+    if classifiers:
+        return ", ".join(classifiers)
+
+    declared = dist.metadata.get("License", "").strip()
+
+    return declared if "\n" not in declared and len(declared) <= NAME_LENGTH else ""
+
+
+def homepage(dist: Distribution) -> str:
+    urls: dict[str, str] = {}
+
+    for entry in dist.metadata.get_all("Project-URL", []):
+        label, _, url = entry.partition(",")
+        urls[label.strip().lower()] = url.strip()
+
+    for label in ("homepage", "home-page", "source", "repository", "documentation"):
+        if label in urls:
+            return urls[label]
+
+    return dist.metadata.get("Home-page", "")
+
+
+def offered(expression: str) -> list[str]:
+    return [term for term in IDENTIFIER.findall(expression) if term.upper() not in OPERATOR]
+
+
+def text(name: str, dist: Distribution) -> str:
+    files = [file for file in dist.files or [] if "licenses" in file.parts]
+
+    if files:
+        return SEPARATOR.join(file.read_text() for file in sorted(files, key=str))
+
+    # nothing to copy out, so go by the licence the distribution declares. an
+    # expression offering a choice is read as offering its first term, which is
+    # the one the app is written against
+    for term in offered(licence(dist)):
+        if term in VENDOR:
+            return SEPARATOR.join((VENDORED / file).read_text() for file in VENDOR[term])
+
+    raise SystemExit(f"{name} ships no licence file and names none this project keeps, add its licence to VENDOR")
+
+
+def main() -> None:
+    # read from the project rather than from its dist-info, so the script does
+    # not need the app itself installed to say what the app ships
+    with open(ROOT / "pyproject.toml", "rb") as project:
+        roots = required(tomllib.load(project)["project"]["dependencies"])
+
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    for stale in OUT.iterdir():
+        stale.unlink()
+
+    index = []
+
+    for name, dist in sorted(closure(roots).items()):
+        file = f"{name}.txt"
+
+        (OUT / file).write_text(text(name, dist).strip() + "\n")
+
+        index.append(
+            {
+                "name": dist.metadata["Name"],
+                "licence": licence(dist),
+                "homepage": homepage(dist),
+                "file": file,
+            }
+        )
+
+        print(OUT / file)
+
+    (OUT / INDEX).write_text(json.dumps(index, indent=2) + "\n")
+
+    print(OUT / INDEX)
+
+
+if __name__ == "__main__":
+    main()

@@ -2,7 +2,7 @@ from bisect import bisect_left, bisect_right
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import ClassVar, Self
+from typing import ClassVar
 
 from PySide6.QtCore import (
     QByteArray,
@@ -24,13 +24,13 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
     QMainWindow,
-    QMessageBox,
     QProgressDialog,
     QSplitter,
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
+from lltexturecache_browser_qt import APP_DISPLAY_NAME
+from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
@@ -94,8 +94,9 @@ def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
 
 
 class MainWindow(QMainWindow):
-    _windows: ClassVar[list[Self]] = []
+    _windows: ClassVar[list["MainWindow"]] = []
     _quitting: ClassVar[bool] = False
+    _about: ClassVar["AboutDialog | None"] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -772,7 +773,7 @@ class MainWindow(QMainWindow):
         else:
             self.new_window(cache)
 
-    def new_window(self, cache: TextureCache | None = None) -> Self:
+    def new_window(self, cache: TextureCache | None = None) -> "MainWindow":
         window = MainWindow()
 
         window.move(self.pos() + NEW_WINDOW_OFFSET)
@@ -859,8 +860,9 @@ class MainWindow(QMainWindow):
         self._status.set_summary(note if note else self.summary())
 
     def about_action(self) -> None:
-        QMessageBox.about(
-            self,
-            f"About {APP_DISPLAY_NAME}",
-            f"{APP_DISPLAY_NAME} v{__version__}\n\nA cross-platform user interface for the Second Life texture cache.",
-        )
+        if MainWindow._about is None:
+            MainWindow._about = AboutDialog()
+
+        MainWindow._about.show()
+        MainWindow._about.raise_()
+        MainWindow._about.activateWindow()

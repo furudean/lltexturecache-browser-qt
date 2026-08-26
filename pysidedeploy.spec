@@ -68,7 +68,7 @@ macos.permissions =
 mode = onefile
 
 # specify any extra nuitka arguments
-extra_args = --quiet --noinclude-qt-translations --include-package=imagecodecs --include-package-data=imagecodecs
+extra_args = --quiet --noinclude-qt-translations --include-package=imagecodecs --include-package-data=imagecodecs --include-package-data=lltexturecache_browser_qt
 
 [buildozer]
 

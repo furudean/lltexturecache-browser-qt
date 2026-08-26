@@ -41,6 +41,15 @@ def height_for_width[W: QWidget](widget: W) -> W:
     return widget
 
 
+def linked(label: QLabel) -> QLabel:
+    label.setOpenExternalLinks(True)
+    label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextBrowserInteraction | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+    )
+
+    return label
+
+
 def copyable(label: QLabel) -> QLabel:
     label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 

@@ -2,7 +2,7 @@
 
 ![a screenshot of lltexturecache-browser-qt with a cache open](preview.png)
 
-a tool to browse and export textures from the Second Life texture cache
+a cross-platform tool to browse and export textures from the second life texture cache
 
 ## install
 
@@ -66,3 +66,7 @@ to sign and/or notarize the app for mac, the following secrets should be set in 
 | `APPLE_ID`                   | Apple ID the app-specific password belongs to                   | notarization |
 | `APPLE_APP_PASSWORD`         | [app-specific password](https://support.apple.com/en-us/102654) | notarization |
 | `APPLE_TEAM_ID`              | ten character team ID                                           | notarization |
+
+## attribution
+
+the icon was made by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
