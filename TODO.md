@@ -8,4 +8,4 @@
 - [x] Full res decode not working on linux
 - [x] Automated cache directory discovery
 - [x] Enable hidden files in directory picker?
-- [ ] When cache is empty, the "Open..." button should not be shown
+- [x] When cache is empty, the "Open..." button should not be shown

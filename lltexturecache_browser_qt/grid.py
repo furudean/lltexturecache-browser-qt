@@ -68,8 +68,10 @@ class EmptyState(QWidget):
         layout.addWidget(self._message, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self._open, 0, Qt.AlignmentFlag.AlignHCenter)
 
-    def set_message(self, message: str) -> None:
+    def set_message(self, message: str, may_open: bool = False) -> None:
         self._message.setText(message)
+
+        self._open.setVisible(may_open)
 
         self._message.setWordWrap(False)
 
@@ -100,8 +102,8 @@ class TextureGrid(QListView):
 
         self.sync_empty()
 
-    def set_message(self, message: str) -> None:
-        self._empty.set_message(message)
+    def set_message(self, message: str, may_open: bool = False) -> None:
+        self._empty.set_message(message, may_open)
 
         self.centre_empty()
 

@@ -142,7 +142,7 @@ class MainWindow(QMainWindow):
         self._view.setUniformItemSizes(True)
         self._view.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
         self._view.setSelectionRectVisible(True)
-        self._view.set_message("No texture cache selected")
+        self._view.set_message("No texture cache selected", may_open=True)
         self._view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._view.opened.connect(self.open_action)
         self._view.customContextMenuRequested.connect(self.context_action)
@@ -501,7 +501,8 @@ class MainWindow(QMainWindow):
 
         if not isinstance(model, TextureModel) or not model.narrowed:
             self._view.set_message("Cache is empty")
-            return
+        else:
+            self._view.set_message("No textures match filters")
 
     def scroll_ranked(self) -> None:
         current = self._view.currentIndex()
