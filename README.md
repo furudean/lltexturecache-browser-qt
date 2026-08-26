@@ -2,10 +2,9 @@
 
 ![a screenshot of lltexturecache-browser-qt with a cache open](preview.png)
 
-a cross-platform user interface for the Second Life texture cache.
+a tool to browse and export textures from the Second Life texture cache
 
 ## install
-
 
 windows and linux builds are attached to
 [each release](https://github.com/furudean/lltexturecache-browser-qt/releases).
@@ -16,11 +15,12 @@ on mac, you can install with homebrew:
 brew install --cask furudean/tap/lltexturecache-browser-qt
 ```
 
-## goals
+## features
 
-- browse, sort and filter through a large amount of textures in a cache
-- save textures to disk in a commonly-used image format
+- browse and filter through a large amount of textures in a cache
+- save textures to disk in commonly-used image formats
 - be fast and out of the way
+- it's not an electron app
 
 ## develop
 
@@ -44,16 +44,18 @@ uv is required to build. on linux, you will also need `patchelf` and
 
 ## release
 
-publishing a GitHub release builds for all platforms and attaches the binaries
+publishing a github release builds for all platforms and attaches the binaries
 to it. it can be triggered like this:
 
 ```bash
 ./scripts/release.sh major|minor|patch
 ```
 
-it bumps the version, commits the bump, tags it, pushes both and creates the release.
+it bumps the version, commits the bump, tags it, pushes both and creates the release. the release triggers a 
+github workflow. which does the rest
 
-if you want to sign and/or notarize the app, the following secrets should be set in the deployment pipeline:
+
+to sign and/or notarize the app for mac, the following secrets should be set in the deployment pipeline:
 
 | secret                       | is a                                                            | used for     |
 | ---------------------------- | --------------------------------------------------------------- | ------------ |
