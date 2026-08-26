@@ -4,32 +4,23 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+info="$(uv run python scripts/app-info)"
+eval "$info"
+
 spec=pysidedeploy.spec
 generated_spec=pysidedeploy.generated.spec
-
-names="$(uv run python -c 'import tomllib
-config = tomllib.load(open("pyproject.toml", "rb"))
-name = config["project"]["name"]
-print(name)
-print(config["tool"].get("app", {}).get("display-name", name))')"
-
-# the slug names the files, the display name is what macOS puts in the menu bar
-app_name="$(printf %s "$names" | sed -n 1p)"
-display_name="$(printf %s "$names" | sed -n 2p)"
-
-exec_directory="$(awk -F ' = ' '/^exec_directory = /{print $2}' "$spec")"
 
 extra_args="--assume-yes-for-downloads"
 
 if [ "$(uname -s)" = Darwin ]; then
-	extra_args="$extra_args '--macos-app-name=$display_name'"
+	extra_args="$extra_args '--macos-app-name=$DISPLAY_NAME'"
 
 	if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
 		extra_args="$extra_args '--macos-sign-identity=$MACOS_SIGN_IDENTITY' --macos-sign-notarization"
 	fi
 fi
 
-mkdir -p "$exec_directory"
+mkdir -p "$EXEC_DIRECTORY"
 
 # nuitka wants .icns on mac, .ico on windows and .png everywhere else
 case "$(uname -s)" in
@@ -50,6 +41,10 @@ uv run python scripts/generate-metadata
 # packages rather than kept in the tree
 uv run python scripts/generate-licences
 
-rm -rf "$exec_directory/$app_name.app" "$exec_directory/$app_name.exe" "$exec_directory/$app_name.bin"
+rm -rf "$EXEC_DIRECTORY/$NAME.app" "$EXEC_DIRECTORY/$NAME.exe" "$EXEC_DIRECTORY/$NAME.bin"
 
-uv run pyside6-deploy --config-file "$generated_spec" --name "$app_name" --force
+uv run pyside6-deploy --config-file "$generated_spec" --name "$NAME" --force
+
+if [ "$(uname -s)" = Linux ]; then
+	./scripts/appimage.sh
+fi

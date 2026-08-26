@@ -2,12 +2,18 @@
 
 import json
 import re
-import tomllib
+import runpy
 from importlib.metadata import Distribution, PackageNotFoundError
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-OUT = ROOT / "lltexturecache_browser_qt" / "assets" / "licences"
+# app-info carries no extension, to match the other commands here, so it is
+# loaded by path rather than imported
+app_info = runpy.run_path(str(Path(__file__).parent / "app-info"))
+
+ROOT: Path = app_info["ROOT"]
+pyproject = app_info["pyproject"]
+
+OUT = ROOT / app_info["read"]().package / "assets" / "licences"
 VENDORED = ROOT / "packaging" / "licences"
 
 INDEX = "index.json"
@@ -148,8 +154,7 @@ def text(name: str, dist: Distribution) -> str:
 def main() -> None:
     # read from the project rather than from its dist-info, so the script does
     # not need the app itself installed to say what the app ships
-    with open(ROOT / "pyproject.toml", "rb") as project:
-        roots = required(tomllib.load(project)["project"]["dependencies"])
+    roots = required(pyproject()["project"]["dependencies"])
 
     OUT.mkdir(parents=True, exist_ok=True)
 

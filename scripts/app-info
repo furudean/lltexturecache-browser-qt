@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+
+import configparser
+import shlex
+import tomllib
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).parent.parent
+
+PYPROJECT = ROOT / "pyproject.toml"
+SPEC = ROOT / "pysidedeploy.spec"
+
+
+@dataclass(frozen=True)
+class AppInfo:
+    # the slug names the files, the display name is what macOS puts in the menu bar
+    name: str
+    display_name: str
+    version: str
+    # the importable package, which is the slug with the dashes swapped out
+    package: str
+    # where pyside6-deploy leaves the built executable
+    exec_directory: str
+
+
+def pyproject() -> dict[str, Any]:
+    with open(PYPROJECT, "rb") as f:
+        config: dict[str, Any] = tomllib.load(f)
+
+    return config
+
+
+def read() -> AppInfo:
+    config = pyproject()
+    project = config["project"]
+    name = project["name"]
+
+    # interpolation off because a nuitka argument is free to contain a percent
+    spec = configparser.ConfigParser(interpolation=None)
+    spec.read(SPEC)
+
+    return AppInfo(
+        name=name,
+        display_name=config["tool"].get("app", {}).get("display-name", name),
+        version=project["version"],
+        package=name.replace("-", "_"),
+        exec_directory=spec["app"]["exec_directory"],
+    )
+
+
+def main() -> None:
+    for field, value in asdict(read()).items():
+        print(f"{field.upper()}={shlex.quote(value)}")
+
+
+if __name__ == "__main__":
+    main()

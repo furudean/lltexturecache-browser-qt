@@ -20,20 +20,12 @@ case "$(uname -m)" in
 		;;
 esac
 
-names="$(uv run python -c 'import tomllib
-config = tomllib.load(open("pyproject.toml", "rb"))
-name = config["project"]["name"]
-print(name)
-print(config["tool"].get("app", {}).get("display-name", name))')"
+info="$(uv run python scripts/app-info)"
+eval "$info"
 
-app_name="$(printf %s "$names" | sed -n 1p)"
-display_name="$(printf %s "$names" | sed -n 2p)"
-
-exec_directory="$(awk -F ' = ' '/^exec_directory = /{print $2}' pysidedeploy.spec)"
-
-binary="$exec_directory/$app_name.bin"
-appdir="$exec_directory/$app_name.AppDir"
-output="$exec_directory/$app_name.AppImage"
+binary="$EXEC_DIRECTORY/$NAME.bin"
+appdir="$EXEC_DIRECTORY/$NAME.AppDir"
+output="$EXEC_DIRECTORY/$NAME.AppImage"
 
 if [ ! -f "$binary" ]; then
 	echo "err: $binary does not exist, run scripts/build.sh first" >&2
@@ -55,15 +47,15 @@ rm -rf "$appdir" "$output"
 
 mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications"
 
-cp "$binary" "$appdir/usr/bin/$app_name"
-chmod +x "$appdir/usr/bin/$app_name"
+cp "$binary" "$appdir/usr/bin/$NAME"
+chmod +x "$appdir/usr/bin/$NAME"
 
-sed -e "s|@NAME@|$app_name|g" -e "s|@DISPLAY_NAME@|$display_name|g" \
-	packaging/app.desktop > "$appdir/$app_name.desktop"
-cp "$appdir/$app_name.desktop" "$appdir/usr/share/applications/$app_name.desktop"
+sed -e "s|@NAME@|$NAME|g" -e "s|@DISPLAY_NAME@|$DISPLAY_NAME|g" \
+	packaging/app.desktop > "$appdir/$NAME.desktop"
+cp "$appdir/$NAME.desktop" "$appdir/usr/share/applications/$NAME.desktop"
 
-cp packaging/slcachegirl.png "$appdir/$app_name.png"
-ln -s "$app_name.png" "$appdir/.DirIcon"
+cp packaging/slcachegirl.png "$appdir/$NAME.png"
+ln -s "$NAME.png" "$appdir/.DirIcon"
 
 icon_size="$(uv run python -c 'import struct
 with open("packaging/slcachegirl.png", "rb") as png:
@@ -71,13 +63,13 @@ with open("packaging/slcachegirl.png", "rb") as png:
 
 icon_dir="$appdir/usr/share/icons/hicolor/${icon_size}x${icon_size}/apps"
 mkdir -p "$icon_dir"
-cp packaging/slcachegirl.png "$icon_dir/$app_name.png"
+cp packaging/slcachegirl.png "$icon_dir/$NAME.png"
 
-cat > "$appdir/AppRun" <<SH
+cat > "$appdir/AppRun" <<SHIM
 #!/usr/bin/env sh
 here="\$(dirname "\$(readlink -f "\$0")")"
-exec "\$here/usr/bin/$app_name" "\$@"
-SH
+exec "\$here/usr/bin/$NAME" "\$@"
+SHIM
 
 chmod +x "$appdir/AppRun"
 

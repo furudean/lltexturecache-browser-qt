@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
+import runpy
 import subprocess
-import tomllib
 from pathlib import Path
+
+app_info = runpy.run_path(str(Path(__file__).parent / "app-info"))
+
+ROOT: Path = app_info["ROOT"]
+read = app_info["read"]
 
 
 def is_dirty(root: Path) -> bool:
@@ -24,22 +29,16 @@ def is_dirty(root: Path) -> bool:
 
 
 def main() -> None:
-    root = Path(__file__).parent.parent
-    with open(root / "pyproject.toml", "rb") as f:
-        config = tomllib.load(f)
+    info = read()
+    version = info.version
 
-    name = config["project"]["name"]
-    version = config["project"]["version"]
-    display_name = config["tool"].get("app", {}).get("display-name", name)
-
-    if is_dirty(root):
+    if is_dirty(ROOT):
         version += "-dirty"
 
-    out = root / name.replace("-", "_") / "_meta.py"
-    out.write_text(
-        f'APP_NAME = "{name}"\nAPP_DISPLAY_NAME = "{display_name}"\n__version__ = "{version}"\n'
-    )
-    print(f"wrote {display_name} {version} to {out}")
+    out = ROOT / info.package / "_meta.py"
+    out.write_text(f'APP_NAME = "{info.name}"\nAPP_DISPLAY_NAME = "{info.display_name}"\n__version__ = "{version}"\n')
+    print(f"wrote {info.display_name} {version} to {out}")
+
 
 if __name__ == "__main__":
     main()

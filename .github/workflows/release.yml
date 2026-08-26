@@ -8,18 +8,58 @@ on:
 permissions:
   contents: read
 
-env:
-  # build against the CPython from setup-python, not a uv managed one, because
-  # Nuitka does not support python-build-standalone interpreters
-  UV_PYTHON_PREFERENCE: only-system
+defaults:
+  run:
+    shell: bash
 
 jobs:
+  meta:
+    name: Read app metadata
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.info.outputs.name }}
+      version: ${{ steps.info.outputs.version }}
+      stable: ${{ steps.info.outputs.stable }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Read name and version from pyproject.toml
+        id: info
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          info="$(python scripts/app-info)"
+          eval "$info"
+
+          echo "$NAME is version $VERSION"
+
+          if [ -n "$TAG" ] && [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::release tag $TAG does not match pyproject.toml version $VERSION"
+            exit 1
+          fi
+
+          # a tag with a suffix, v1.2.3-rc1, stays a pre-release
+          case "$TAG" in
+            *-*) stable=false ;;
+            *) stable=true ;;
+          esac
+
+          {
+            echo "name=$NAME"
+            echo "version=$VERSION"
+            echo "stable=$stable"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.target }}
+    needs: meta
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +71,9 @@ jobs:
           - os: ubuntu-22.04
             target: linux-x86_64
     env:
+      # build against the CPython from setup-python, not a uv managed one,
+      # because Nuitka does not support python-build-standalone interpreters
+      UV_PYTHON_PREFERENCE: only-system
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
@@ -51,21 +94,6 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Read name and version from pyproject.toml
-        env:
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          read -r name version <<<"$(uv version)"
-          echo "$name is version $version"
-
-          if [ -n "$TAG" ] && [ "$TAG" != "v$version" ]; then
-            echo "::error::release tag $TAG does not match pyproject.toml version $version"
-            exit 1
-          fi
-
-          echo "APP_NAME=$name" >> "$GITHUB_ENV"
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-
       # Nuitka needs patchelf to fix up the rpaths of the bundled Qt libraries.
       # libxcb-cursor0 has to be present at build time for Nuitka to bundle it.
       # desktop-file-utils is used by appimagetool to validate the desktop file.
@@ -81,34 +109,8 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ccache
 
-      - name: Import signing certificate
-        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
-        run: |
-          keychain="$RUNNER_TEMP/build.keychain-db"
-          keychain_password="$(openssl rand -base64 24)"
-          certificate="$RUNNER_TEMP/certificate.p12"
-
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 3600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-
-          echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"
-          security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
-          rm "$certificate"
-
-          # let codesign use the key without an interactive prompt
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
-
-          # keep the login keychain searchable, the runner needs it elsewhere
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-
-      - name: Build
-        if: runner.os != 'Windows'
-        run: ./scripts/build.sh
-
       # without this Nuitka falls back to a downloaded zig, which is slower
-      - name: Build
+      - name: Set up MSVC
         if: runner.os == 'Windows'
         shell: cmd
         run: |
@@ -122,49 +124,21 @@ jobs:
             exit /b 1
           )
 
-          bash scripts/build.sh
+          set | findstr /v /b "=" >> "%GITHUB_ENV%"
 
-      - name: Build AppImage
-        if: runner.os == 'Linux'
-        run: ./scripts/appimage.sh
+      - name: Import signing certificate
+        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
+        run: ./scripts/macos-keychain.sh import
+
+      - name: Build
+        run: ./scripts/build.sh
 
       - name: Notarize
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
-        run: |
-          ditto -c -k --keepParent "dist/$APP_NAME.app" "$RUNNER_TEMP/notarize.zip"
-
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --wait
-
-          # so the app opens on a machine that is offline or behind a firewall
-          xcrun stapler staple "dist/$APP_NAME.app"
+        run: ./scripts/notarize.sh
 
       - name: Package
-        run: |
-          asset="$APP_NAME-$VERSION-${{ matrix.target }}"
-
-          mkdir staging
-
-          case "$RUNNER_OS" in
-            macOS)
-              ditto -c -k --keepParent "dist/$APP_NAME.app" "staging/$asset.zip"
-              ;;
-            Windows)
-              mv "dist/$APP_NAME.exe" "staging/$asset.exe"
-              ;;
-            Linux)
-              # the AppImage is the one to install, the bare binary is there for
-              # systems without FUSE
-              mv "dist/$APP_NAME.AppImage" "staging/$asset.AppImage"
-              mv "dist/$APP_NAME.bin" "staging/$asset"
-              chmod +x "staging/$asset.AppImage" "staging/$asset"
-              ;;
-          esac
-
-          ls -l staging
+        run: ./scripts/package.sh "${{ matrix.target }}"
 
       - name: Upload artifact to workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -175,15 +149,19 @@ jobs:
 
       - name: Clean up keychain
         if: always() && runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
-        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+        run: ./scripts/macos-keychain.sh delete
 
   upload:
     name: Attach binaries to the release
-    needs: build
+    needs: [meta, build]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -191,10 +169,6 @@ jobs:
           merge-multiple: true
 
       - name: Upload binaries
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
         run: |
           ls -l artifacts
           gh release upload "$TAG" artifacts/* --clobber
@@ -202,17 +176,13 @@ jobs:
       # the release is published as a pre-release, promote it now that it has
       # binaries on it
       - name: Promote the release
-        if: "!contains(github.event.release.tag_name, '-')"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
+        if: needs.meta.outputs.stable == 'true'
         run: gh release edit "$TAG" --prerelease=false --latest
 
   homebrew:
     name: Update homebrew tap
-    needs: upload
-    if: github.event_name == 'release' && !contains(github.event.release.tag_name, '-')
+    needs: [meta, upload]
+    if: github.event_name == 'release' && needs.meta.outputs.stable == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download the macOS build
@@ -228,18 +198,18 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
 
-      - name: Bump the cask
+      - name: Bump cask version
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          NAME: ${{ needs.meta.outputs.name }}
+          VERSION: ${{ needs.meta.outputs.version }}
         run: |
-          version="${TAG#v}"
-          asset="artifacts/lltexturecache-browser-qt-$version-macos-arm64.zip"
+          asset="artifacts/$NAME-$VERSION-macos-arm64.zip"
           sha256="$(sha256sum "$asset" | cut -d' ' -f1)"
-          cask="tap/Casks/lltexturecache-browser-qt.rb"
+          cask="tap/Casks/$NAME.rb"
 
           echo "$asset is $sha256"
 
-          sed -i -E "s|^  version \".*\"|  version \"$version\"|" "$cask"
+          sed -i -E "s|^  version \".*\"|  version \"$VERSION\"|" "$cask"
           sed -i -E "s|^  sha256 \".*\"|  sha256 \"$sha256\"|" "$cask"
 
           if git -C tap diff --quiet; then
@@ -249,5 +219,5 @@ jobs:
 
           git -C tap config user.name "github-actions[bot]"
           git -C tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C tap commit --all --message "lltexturecache-browser-qt $version"
+          git -C tap commit --all --message "$NAME $VERSION"
           git -C tap push
