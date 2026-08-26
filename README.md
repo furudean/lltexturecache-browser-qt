@@ -2,7 +2,8 @@
 
 ![a screenshot of lltexturecache-browser-qt with a cache open](preview.png)
 
-a cross-platform tool to browse and export textures from the second life texture cache
+a cross-platform tool to browse and export textures from the second life texture
+cache
 
 ## install
 
@@ -32,9 +33,8 @@ uv run lltexturecache-browser-qt
 
 ## build
 
-build script makes the app for the host platform. mac gets a `.app`
-windows `.exe` and linux a binary/AppImage. cross-compiling is not
-supported
+build script makes the app for the host platform. mac gets a `.app` windows
+`.exe` and linux a binary/AppImage. cross-compiling is not supported
 
 ```bash
 ./scripts/build.sh
@@ -52,11 +52,12 @@ to it. it can be triggered like this:
 ./scripts/release.sh major|minor|patch
 ```
 
-it bumps the version, commits the bump, tags it, pushes both and creates the release. the release triggers a 
-github workflow. which does the rest
+it bumps the version, commits the bump, tags it, pushes both and creates the
+release. the release triggers a github workflow. which does the rest
 
 
-to sign and/or notarize the app for mac, the following secrets should be set in the deployment pipeline:
+to sign and/or notarize the app for mac, the following secrets should be set in
+the deployment pipeline:
 
 | secret                       | is a                                                            | used for     |
 | ---------------------------- | --------------------------------------------------------------- | ------------ |
