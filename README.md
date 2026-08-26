@@ -32,8 +32,9 @@ uv run lltexturecache-browser-qt
 
 ## build
 
-Use the build script build the app for the host platform. macOS gets a `.app`
- Windows a `.exe` and Linux a binary/AppImage.
+build script makes the app for the host platform. mac gets a `.app`
+windows `.exe` and linux a binary/AppImage. cross-compiling is not
+supported
 
 ```bash
 ./scripts/build.sh
