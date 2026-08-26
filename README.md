@@ -1,6 +1,9 @@
 # lltexturecache-browser-qt
 
-![a screenshot of lltexturecache-browser-qt with a cache open](preview.png)
+<p align="center">
+  <img src="preview.png" width="600"
+    alt="a screenshot of lltexturecache-browser-qt with a cache open">
+</p>
 
 a cross-platform tool to browse and export textures from the second life texture
 cache
