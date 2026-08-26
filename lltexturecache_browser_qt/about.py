@@ -60,7 +60,7 @@ class AboutDialog(QDialog):
 
         link = wrapped(linked(QLabel(f'<a href="{HOMEPAGE}">{HOMEPAGE}</a>', self)))
 
-        licences = QPushButton("Licencing Information...", self)
+        licences = QPushButton("Open Source Licenses...", self)
         licences.setAutoDefault(False)
         licences.clicked.connect(self.show_licences)
 
