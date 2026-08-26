@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
 import imagecodecs
+
+# imagecodecs reaches its codecs through a module level __getattr__ that imports
+# them by name. it is referenced so its included in the build by static analysis
+from imagecodecs import _jpeg2k, _shared_cython  # noqa: F401
 from texture_courier import TextureCacheError
 
 GREYSCALE = 1
