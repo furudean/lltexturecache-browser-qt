@@ -20,3 +20,5 @@ lltexturecache_browser_qt/deployment
 pysidedeploy.generated.spec
 nuitka-crash-report.xml
 staging/
+
+.env

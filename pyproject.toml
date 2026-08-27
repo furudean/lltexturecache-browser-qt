@@ -35,6 +35,7 @@ lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 
 [tool.app]
 display-name = "lltexturecache-browser-qt"
+bundle-id = "com.furudean.lltexturecache-browser-qt"
 
 [tool.mypy]
 python_version = "3.13"

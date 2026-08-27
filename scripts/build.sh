@@ -14,10 +14,8 @@ extra_args="--assume-yes-for-downloads"
 
 if [ "$(uname -s)" = Darwin ]; then
 	extra_args="$extra_args '--macos-app-name=$DISPLAY_NAME'"
-
-	if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
-		extra_args="$extra_args '--macos-sign-identity=$MACOS_SIGN_IDENTITY' --macos-sign-notarization"
-	fi
+	extra_args="$extra_args '--macos-signed-app-name=$BUNDLE_ID'"
+	extra_args="$extra_args '--macos-app-version=$VERSION'"
 fi
 
 mkdir -p "$EXEC_DIRECTORY"

@@ -2,37 +2,35 @@
 
 set -eu
 
+: "${MACOS_CERTIFICATE:?the base64 encoded .p12 to sign with}"
+: "${MACOS_CERTIFICATE_PASSWORD:?the password the .p12 was exported with, macos will not import one without}"
+
 keychain="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/build.keychain-db"
+keychain_password="$(openssl rand -base64 24)"
+certificate="$(dirname "$keychain")/certificate.p12"
 
-case "${1:-}" in
-	import)
-		: "${MACOS_CERTIFICATE:?the base64 encoded .p12 to sign with}"
-		: "${MACOS_CERTIFICATE_PASSWORD:?the password the .p12 was exported with}"
+security create-keychain -p "$keychain_password" "$keychain"
+security set-keychain-settings -lut 3600 "$keychain"
+security unlock-keychain -p "$keychain_password" "$keychain"
 
-		keychain_password="$(openssl rand -base64 24)"
-		certificate="$(dirname "$keychain")/certificate.p12"
+echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"
+security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" \
+	-T /usr/bin/codesign -T /usr/bin/security
+rm "$certificate"
 
-		security create-keychain -p "$keychain_password" "$keychain"
-		security set-keychain-settings -lut 3600 "$keychain"
-		security unlock-keychain -p "$keychain_password" "$keychain"
+# let codesign use the key without an interactive prompt
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
 
-		echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"
-		security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" \
-			-T /usr/bin/codesign -T /usr/bin/security
-		rm "$certificate"
+# keep the login keychain searchable, the runner needs it elsewhere.
+# unquoted on purpose, the existing list has to split into arguments
+security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
-		# let codesign use the key without an interactive prompt
-		security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+identities="$(security find-identity -v -p codesigning "$keychain")"
+echo "$identities"
 
-		# keep the login keychain searchable, the runner needs it elsewhere.
-		# unquoted on purpose, the existing list has to split into arguments
-		security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-		;;
-	delete)
-		security delete-keychain "$keychain" || true
-		;;
-	*)
-		echo "usage: $0 import|delete" >&2
-		exit 2
-		;;
-esac
+# fail here rather than a thousand lines into the nuitka build, which is
+# where a name that does not match anything in the keychain would show up
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ] && ! echo "$identities" | grep -qF "$MACOS_SIGN_IDENTITY"; then
+	echo "err: no identity matching MACOS_SIGN_IDENTITY in the keychain" >&2
+	exit 1
+fi

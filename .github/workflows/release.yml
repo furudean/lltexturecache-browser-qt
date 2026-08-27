@@ -128,14 +128,14 @@ jobs:
 
       - name: Import signing certificate
         if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
-        run: ./scripts/macos-keychain.sh import
+        run: ./scripts/macos-keychain.sh
 
       - name: Build
         run: ./scripts/build.sh
 
-      - name: Notarize
-        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != '' && env.APPLE_ID != ''
-        run: ./scripts/notarize.sh
+      - name: Sign and notarize
+        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
+        run: ./scripts/macos-sign.sh
 
       - name: Package
         run: ./scripts/package.sh "${{ matrix.target }}"
@@ -146,10 +146,6 @@ jobs:
           name: ${{ matrix.target }}
           path: staging
           if-no-files-found: error
-
-      - name: Clean up keychain
-        if: always() && runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
-        run: ./scripts/macos-keychain.sh delete
 
   upload:
     name: Attach binaries to the release

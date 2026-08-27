@@ -21,6 +21,8 @@ class AppInfo:
     version: str
     # the importable package, which is the slug with the dashes swapped out
     package: str
+    # reverse dns identifier for the macos bundle and its signature
+    bundle_id: str
     # where pyside6-deploy leaves the built executable
     exec_directory: str
 
@@ -46,6 +48,7 @@ def read() -> AppInfo:
         display_name=config["tool"].get("app", {}).get("display-name", name),
         version=project["version"],
         package=name.replace("-", "_"),
+        bundle_id=config["tool"].get("app", {}).get("bundle-id", name),
         exec_directory=spec["app"]["exec_directory"],
     )
 
