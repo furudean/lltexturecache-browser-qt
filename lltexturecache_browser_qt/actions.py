@@ -255,7 +255,8 @@ class WindowActions(QObject):
             entry.setStatusTip(f"Open {path}")
             triggers(entry, partial(self.reopened.emit, path))
 
-    def store_preview(self, shown: bool) -> None:
+    @staticmethod
+    def store_preview(shown: bool) -> None:
         QSettings().setValue(PREVIEW_KEY, shown)
 
     def store_inspector(self, shown: bool) -> None:

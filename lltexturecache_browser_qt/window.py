@@ -120,6 +120,8 @@ class MainWindow(QMainWindow):
     _windows: ClassVar[list["MainWindow"]] = []
     _quitting: ClassVar[bool] = False
     _about: ClassVar["AboutDialog | None"] = None
+    _preview: ClassVar["PreviewWindow | None"] = None
+    _previewing: ClassVar["MainWindow | None"] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -147,9 +149,6 @@ class MainWindow(QMainWindow):
         # after filters
         self._kept: list[str] = []
         self._current: str | None = None
-
-        # preview window
-        self._preview: PreviewWindow | None = None
 
         # the texture the panes are showing, which is what says whether a click on
         # one of them is still about what is in front of the user
@@ -273,6 +272,69 @@ class MainWindow(QMainWindow):
 
         cls._quitting = True
 
+    @classmethod
+    def shared_preview(cls) -> "PreviewWindow":
+        """The one preview window, which belongs to the app rather than a window"""
+
+        if cls._preview is None:
+            cls._preview = PreviewWindow()
+            cls._preview.closed.connect(cls.preview_closed_action)
+            cls._preview.restoreGeometry(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
+
+        return cls._preview
+
+    @classmethod
+    def set_preview_shown(cls, shown: bool) -> None:
+        """Say across the app whether the shared preview is up"""
+
+        # the menus are moved without being listened to, so what they say the
+        # preview is doing is put away here instead
+        WindowActions.store_preview(shown)
+
+        for window in cls._windows:
+            action = window._actions.preview
+
+            if action.isChecked() == shown:
+                continue
+
+            was = action.blockSignals(True)
+            action.setChecked(shown)
+            action.blockSignals(was)
+
+    @classmethod
+    def follow_preview(cls, window: "MainWindow | None" = None) -> None:
+        """Point the shared preview at a window, or at whichever one is left to take it"""
+
+        if window is not None and not window.showing_preview():
+            # the window asking has nothing to put there, so the preview stays
+            # where it is unless where it is happens to be that same window
+            window = None if window is cls._previewing else cls._previewing
+
+        if window is None:
+            window = next((other for other in cls._windows if other.showing_preview()), None)
+
+        cls._previewing = window
+
+        if window is None:
+            if cls._preview is not None:
+                cls._preview.hide()
+
+            return
+
+        preview = cls.shared_preview()
+
+        # the window it follows changes as windows are clicked between, which is
+        # no reason to keep pulling the preview back in front of them
+        if not preview.isVisible():
+            preview.present()
+
+        window.fill_preview()
+
+    @classmethod
+    def preview_closed_action(cls) -> None:
+        cls._previewing = None
+        cls.set_preview_shown(False)
+
     def save_layout(self) -> None:
         settings = QSettings()
 
@@ -280,14 +342,11 @@ class MainWindow(QMainWindow):
         settings.setValue(SPLITTER_KEY, self._splitter.saveState())
         settings.setValue(FILTERS_KEY, self._filters.state())
 
-        if self._preview is not None:
-            settings.setValue(PREVIEW_GEOMETRY_KEY, self._preview.saveGeometry())
+        if MainWindow._preview is not None:
+            settings.setValue(PREVIEW_GEOMETRY_KEY, MainWindow._preview.saveGeometry())
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_layout()
-
-        if self._preview is not None:
-            self._preview.hide()
 
         self._actions.shutdown()
 
@@ -304,6 +363,11 @@ class MainWindow(QMainWindow):
         if self in MainWindow._windows:
             MainWindow._windows.remove(self)
 
+        # the preview is left with whichever window is still open to take it
+        if MainWindow._previewing is self:
+            MainWindow._previewing = None
+            MainWindow.follow_preview()
+
         if not MainWindow._quitting:
             MainWindow.save_session()
 
@@ -315,6 +379,10 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.PaletteChange:
             self.restyle()
 
+        # the shared preview follows the window being worked in
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            MainWindow.follow_preview(self)
+
     def restyle(self) -> None:
         sync_checkerboard()
 
@@ -322,8 +390,8 @@ class MainWindow(QMainWindow):
         # behind it, so a new checkerboard is a repaint rather than a fresh
         # decode. the checkerboard they draw is their own, and moves without the
         # cells' checkerboard moving with it
-        if self._preview is not None:
-            self._preview.update()
+        if MainWindow._preview is not None:
+            MainWindow._preview.update()
 
         self.paint_inspector()
 
@@ -707,47 +775,39 @@ class MainWindow(QMainWindow):
         self._inspector.setVisible(opened and self._actions.inspector.isChecked())
 
     def preview_action(self, shown: bool) -> None:
+        # one window's menu says whether the shared window is up, so the rest of
+        # them are put where it says without being asked to do this again
+        MainWindow.set_preview_shown(shown)
+
         self.sync_preview()
 
-        if shown:
-            self.fill_preview()
-
-    def preview_closed_action(self) -> None:
-        self._actions.preview.setChecked(False)
+    def showing_preview(self) -> bool:
+        return self._cache is not None and self._actions.preview.isChecked()
 
     def sync_preview(self) -> None:
-        opened = self._cache is not None
+        self._actions.preview.setEnabled(self._cache is not None)
 
-        self._actions.preview.setEnabled(opened)
-
-        if not (opened and self._actions.preview.isChecked()):
-            if self._preview is not None:
-                self._preview.hide()
-
-            return
-
-        if self._preview is None:
-            self._preview = PreviewWindow(self)
-            self._preview.closed.connect(self.preview_closed_action)
-            self._preview.restoreGeometry(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
-
-        self._preview.present()
+        MainWindow.follow_preview(self)
 
     def preview_ready_action(self, _uuid: str) -> None:
         self.fill_preview()
 
     def fill_preview(self) -> None:
-        """Show whatever is selected in the preview window, if one is up"""
+        """Show whatever is selected in the preview window, if it is following this one"""
 
         model = self._view.model()
+        preview = MainWindow._preview
 
-        if self._preview is None or not self._preview.isVisible() or not isinstance(model, TextureModel):
+        if MainWindow._previewing is not self or preview is None or not preview.isVisible():
+            return
+
+        if not isinstance(model, TextureModel):
             return
 
         index = self.selected_index()
 
         if not index.isValid():
-            self._preview.clear()
+            preview.clear()
             return
 
         texture = model.texture(index.row())
@@ -756,7 +816,7 @@ class MainWindow(QMainWindow):
         # the selection has already been walked past is dropped when it lands.
         # the grid and the pane read smaller and sooner, and whichever of them
         # has already been through this texture stands in until it lands
-        self._preview.show_texture(texture, model.preview(texture), model.standing(texture))
+        preview.show_texture(texture, model.preview(texture), model.standing(texture))
 
     def selection_action(self, *_: object) -> None:
         self.sync_pane_tone()
@@ -1097,8 +1157,8 @@ class MainWindow(QMainWindow):
 
         # the window was showing a texture out of the model just retired, and
         # is filled again by whatever selection lands in the new one
-        if self._preview is not None:
-            self._preview.clear()
+        if MainWindow._preview is not None and MainWindow._previewing is self:
+            MainWindow._preview.clear()
 
         model.set_filters(self._filters.colors())
 
