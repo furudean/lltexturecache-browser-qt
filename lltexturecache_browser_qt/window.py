@@ -19,7 +19,19 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QDrag, QGuiApplication, QPixmap, QPixmapCache
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QDesktopServices,
+    QDrag,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QGuiApplication,
+    QPixmap,
+    QPixmapCache,
+)
 from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
@@ -34,6 +46,7 @@ from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, sync_checkerboard
 from lltexturecache_browser_qt.drag import DRAG_LIMIT, drag_data, staged
+from lltexturecache_browser_qt.dropzone import DropZone
 from lltexturecache_browser_qt.export import ExportJob, Format
 from lltexturecache_browser_qt.filters import ColorFilterBar
 from lltexturecache_browser_qt.formatting import format_count
@@ -109,6 +122,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(APP_DISPLAY_NAME)
 
+        # a directory dropped anywhere on the window is opened in it
+        self.setAcceptDrops(True)
+
         # default window size
         self.resize(800, 600)
 
@@ -168,6 +184,9 @@ class MainWindow(QMainWindow):
         self._splitter = splitter
 
         self.setCentralWidget(splitter)
+
+        # laid over the central widget while a cache is held over the window
+        self._zone = DropZone(self)
 
         self._filters = ColorFilterBar(self)
 
@@ -870,7 +889,7 @@ class MainWindow(QMainWindow):
     def scroll_to_end(self) -> None:
         self._view.pin_to_bottom()
 
-    def open_cache(self, cache_dir: Path) -> None:
+    def open_cache(self, cache_dir: Path, *, replace: bool = False) -> None:
         try:
             cache = TextureCache(cache_dir)
         except (FileNotFoundError, TextureCacheError) as e:
@@ -879,10 +898,62 @@ class MainWindow(QMainWindow):
 
         RecentCaches.shared().remember(cache.cache_dir)
 
-        if self._cache is None:
+        if replace or self._cache is None:
             self.set_cache(cache)
         else:
             self.new_window(cache)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        self.dragMoveEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        urls = event.mimeData().urls()
+
+        if self._job is not None or len(urls) != 1:
+            return
+
+        cache_dir = Path(urls[0].toLocalFile())
+
+        if not cache_dir.is_dir():
+            return
+
+        actions = event.possibleActions()
+
+        if actions & Qt.DropAction.LinkAction:
+            event.setDropAction(Qt.DropAction.LinkAction)
+        elif actions & Qt.DropAction.CopyAction:
+            event.setDropAction(Qt.DropAction.CopyAction)
+        else:
+            return
+
+        event.accept()
+
+        central = self.centralWidget()
+
+        if central is not None:
+            self._zone.offer(f"Drop to open {cache_dir.name}", central.geometry())
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self._zone.withdraw()
+
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        self._zone.withdraw()
+
+        urls = event.mimeData().urls()
+
+        if self._job is not None or len(urls) != 1:
+            return
+
+        cache_dir = Path(urls[0].toLocalFile())
+
+        if not cache_dir.is_dir():
+            return
+
+        event.accept()
+
+        self.open_cache(cache_dir, replace=True)
 
     def new_window(self, cache: TextureCache | None = None) -> "MainWindow":
         window = MainWindow()
