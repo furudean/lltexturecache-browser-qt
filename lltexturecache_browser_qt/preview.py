@@ -12,7 +12,12 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.checkerboard import cycle_pane_tone, pane_checkerboard, pixmap_lightness
+from lltexturecache_browser_qt.checkerboard import (
+    cycle_pane_tone,
+    pane_checkerboard,
+    pixmap_lightness,
+    set_picked_lightness,
+)
 from lltexturecache_browser_qt.formatting import format_count, format_size
 
 WINDOW_SIZE = 480
@@ -94,6 +99,8 @@ class PreviewWindow(QWidget):
         self._natural = natural
         self._message = message
         self._lightness = pixmap_lightness(pixmap)
+
+        set_picked_lightness(self._lightness)
 
         self.update()
 

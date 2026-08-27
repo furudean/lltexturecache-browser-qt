@@ -63,6 +63,11 @@ _grid_tone: CheckerTone | None = None
 # every run opens on the checkerboard the scheme would have drawn anyway
 _pane_tone = CheckerTone.AUTO
 
+# the checkerboard the automatic one picked for what is selected now. it is the only
+# tone that reads the texture rather than the settings, so it moves with the
+# selection, and it is what a click on a pane carries on from
+_picked_tone: CheckerTone | None = None
+
 # how many checkerboards the cells have been through
 _generation = 0
 
@@ -223,6 +228,19 @@ def pane_tone() -> CheckerTone:
     return _pane_tone
 
 
+def set_picked_lightness(lightness: float | None) -> None:
+    global _picked_tone
+
+    _picked_tone = opposing_tone(lightness)
+
+
+def standing_tone() -> CheckerTone:
+    if _pane_tone is CheckerTone.AUTO and _picked_tone is not None:
+        return _picked_tone
+
+    return resolved_tone(_pane_tone)
+
+
 def set_pane_tone(tone: CheckerTone) -> None:
     global _pane_tone
 
@@ -236,8 +254,12 @@ def set_pane_tone(tone: CheckerTone) -> None:
     CheckerboardChanges.shared().changed.emit()
 
 
+def reset_pane_tone() -> None:
+    set_pane_tone(grid_tone())
+
+
 def cycle_pane_tone() -> None:
-    at = TONE_CYCLE.index(resolved_tone(_pane_tone))
+    at = TONE_CYCLE.index(standing_tone())
 
     set_pane_tone(TONE_CYCLE[(at + 1) % len(TONE_CYCLE)])
 

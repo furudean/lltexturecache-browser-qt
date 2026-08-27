@@ -44,7 +44,13 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
-from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, sync_checkerboard
+from lltexturecache_browser_qt.checkerboard import (
+    CheckerboardChanges,
+    pixmap_lightness,
+    reset_pane_tone,
+    set_picked_lightness,
+    sync_checkerboard,
+)
 from lltexturecache_browser_qt.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.dropzone import DropZone
 from lltexturecache_browser_qt.export import ExportJob, Format
@@ -142,6 +148,10 @@ class MainWindow(QMainWindow):
 
         # preview window
         self._preview: PreviewWindow | None = None
+
+        # the texture the panes are showing, which is what says whether a click on
+        # one of them is still about what is in front of the user
+        self._standing = ""
 
         self._settle = QTimer(self)
         self._settle.setSingleShot(True)
@@ -744,10 +754,26 @@ class MainWindow(QMainWindow):
         self._preview.show_texture(texture, model.preview(texture), model.standing(texture))
 
     def selection_action(self, *_: object) -> None:
+        self.sync_pane_tone()
         self.fill_inspector()
         self.fill_preview()
         self.sync_export()
         self.sync_selection()
+
+    def sync_pane_tone(self) -> None:
+        model = self._view.model()
+        index = self.selected_index()
+
+        standing = model.texture(index.row()).uuid if isinstance(model, TextureModel) and index.isValid() else ""
+
+        # growing a selection, or walking the current index around inside one, is
+        # still the same texture in the panes
+        if standing == self._standing:
+            return
+
+        self._standing = standing
+
+        reset_pane_tone()
 
     def ready_action(self, uuid: str) -> None:
         if any(texture.uuid == uuid for texture in self._stack):
@@ -775,6 +801,10 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             self._stack = []
             self._inspector.clear()
+
+            # with nothing shown there is nothing for the automatic checkerboard to
+            # have been measured against
+            set_picked_lightness(None)
             return
 
         selected = self._view.selectionModel().selectedIndexes()
@@ -821,6 +851,13 @@ class MainWindow(QMainWindow):
 
             if ready is not None:
                 cards.append((texture.uuid, laid_card(*ready)))
+
+        # a hidden pane is repainted with whatever the last visible one was left on,
+        # which is not what the preview beside it is showing
+        if cards and self._inspector.isVisible():
+            # the card on top is the one the pane is really about, so the automatic
+            # checkerboard behind that one is where a click in the pane carries on from
+            set_picked_lightness(pixmap_lightness(cards[-1][1]))
 
         self._inspector.set_sidebar(
             stack_pixmap(cards, self._inspector.sidebar_room()),
