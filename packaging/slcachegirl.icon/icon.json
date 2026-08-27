@@ -1,5 +1,7 @@
 {
-  "fill" : "automatic",
+  "fill" : {
+    "automatic-gradient" : "srgb:1.00000,0.40030,0.73014,1.00000"
+  },
   "groups" : [
     {
       "layers" : [
@@ -11,10 +13,10 @@
           "image-name" : "slcachegirl.png",
           "name" : "slcachegirl",
           "position" : {
-            "scale" : 0.9,
+            "scale" : 0.95,
             "translation-in-points" : [
-              -3.1499999999999773,
-              13.049999999999955
+              0.47500000000002274,
+              27.075000000000045
             ]
           }
         }
