@@ -78,7 +78,7 @@ NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 DELAY_MESSAGE_DURATION_MS = 250
 
-PREFETCH_SCREENS = 4
+PREFETCH_SCREENS = 2
 
 
 def stored_blob(settings: QSettings, key: str) -> QByteArray:
