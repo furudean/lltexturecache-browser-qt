@@ -124,17 +124,21 @@ def predominant_lightness(image: QImage) -> float | None:
     total = 0.0
     weight = 0.0
 
-    for y in range(sample.height()):
-        for x in range(sample.width()):
-            # read as an integer rather than as a colour, since building a colour
-            # per pixel is the expensive half of a loop this shape
-            pixel = sample.pixel(x, y)
-            alpha = pixel >> 24
+    # the whole sample is taken in one go rather than a pixel at a time. every
+    # call across into qt lets the interpreter go and has to take it back, and a
+    # square of them adds up to hundreds of those on the thread that paints,
+    # which is the thread least able to stand waiting its turn for one
+    stride = sample.bytesPerLine()
+    raw = sample.constBits()
+    width = sample.width()
 
+    for y in range(sample.height()):
+        row = raw[y * stride : y * stride + width * 4]
+
+        # argb32 is laid down little endian, so a pixel reads back the other way
+        for blue, green, red, alpha in zip(row[0::4], row[1::4], row[2::4], row[3::4]):
             if not alpha:
                 continue
-
-            red, green, blue = (pixel >> 16) & 0xFF, (pixel >> 8) & 0xFF, pixel & 0xFF
 
             # the lightness hsl reports, which is what the threshold above is held
             # against everywhere else in here
