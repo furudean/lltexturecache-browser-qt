@@ -1,14 +1,12 @@
 {
-  "fill" : {
-    "automatic-gradient" : "display-p3:0.40014,0.53402,1.00000,1.00000"
-  },
+  "fill" : "automatic",
   "groups" : [
     {
       "layers" : [
         {
           "blend-mode" : "normal",
           "fill" : "none",
-          "glass" : false,
+          "glass" : true,
           "hidden" : false,
           "image-name" : "slcachegirl.png",
           "name" : "slcachegirl",
@@ -32,9 +30,6 @@
     }
   ],
   "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
     "squares" : "shared"
   }
 }
