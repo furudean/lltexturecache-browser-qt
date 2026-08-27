@@ -13,8 +13,23 @@ security create-keychain -p "$keychain_password" "$keychain"
 security set-keychain-settings -lut 3600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
 
-echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"
-security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" \
+if ! echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"; then
+	echo "err: MACOS_CERTIFICATE is not valid base64" >&2
+	exit 1
+fi
+
+# be loud about errors!!!
+if ! openssl pkcs12 -in "$certificate" -info -noout \
+	-passin env:MACOS_CERTIFICATE_PASSWORD 2>/dev/null; then
+	echo "err: the decoded MACOS_CERTIFICATE is not a .p12 openssl can open" >&2
+	echo "     $(wc -c < "$certificate") bytes decoded, check the secret was" >&2
+	echo "     set from the full base64 and MACOS_CERTIFICATE_PASSWORD matches" >&2
+	rm -f "$certificate"
+	exit 1
+fi
+
+security import "$certificate" -k "$keychain" -f pkcs12 \
+	-P "$MACOS_CERTIFICATE_PASSWORD" \
 	-T /usr/bin/codesign -T /usr/bin/security
 rm "$certificate"
 
