@@ -16,6 +16,7 @@ from lltexturecache_browser_qt.suggested import paths as suggested_paths
 PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"
 FILTERS_KEY = "showColorFilters"
+INCOMPLETE_KEY = "showIncomplete"
 
 
 def triggers(entry: QAction, call: Callable[[], object]) -> None:
@@ -41,6 +42,7 @@ class WindowActions(QObject):
     inspected = Signal(bool)
     filtered = Signal(bool)
     previewed = Signal(bool)
+    incompleted = Signal(bool)
     abouted = Signal()
 
     def __init__(self, window: QMainWindow) -> None:
@@ -139,6 +141,13 @@ class WindowActions(QObject):
         self.filters.toggled.connect(self.store_filters)
         self.filters.toggled.connect(self.filtered)
 
+        self.incomplete = QAction("Show &Incomplete Textures", window)
+        self.incomplete.setStatusTip("List entries the cache never finished downloading")
+        self.incomplete.setCheckable(True)
+        self.incomplete.setChecked(bool(QSettings().value(INCOMPLETE_KEY, False, type=bool)))
+        self.incomplete.toggled.connect(self.store_incomplete)
+        self.incomplete.toggled.connect(self.incompleted)
+
         app_menu = menu.addMenu("About")  # label doesn't matter on macOS, instead decided by role
         about_action = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
         about_action.setMenuRole(QAction.MenuRole.AboutRole)
@@ -147,6 +156,11 @@ class WindowActions(QObject):
         view_menu.addAction(self.preview)
         view_menu.addAction(self.inspector)
         view_menu.addAction(self.filters)
+
+        # what the grid holds rather than which panes are up, so it sits apart
+        # from the three entries above it
+        view_menu.addSeparator()
+        view_menu.addAction(self.incomplete)
 
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
@@ -216,6 +230,9 @@ class WindowActions(QObject):
 
     def store_filters(self, shown: bool) -> None:
         QSettings().setValue(FILTERS_KEY, shown)
+
+    def store_incomplete(self, shown: bool) -> None:
+        QSettings().setValue(INCOMPLETE_KEY, shown)
 
 
 def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:

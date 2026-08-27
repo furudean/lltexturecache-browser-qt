@@ -25,7 +25,13 @@ def preview_title(texture: Texture, natural: QSize) -> str:
 
     # the shape of a texture is not known until it has been decoded
     about = ", ".join(
-        part for part in (dimensions if not natural.isEmpty() else "", format_size(texture.image_size)) if part
+        part
+        for part in (
+            dimensions if not natural.isEmpty() else "",
+            format_size(texture.image_size),
+            "" if texture.whole() else "incomplete",
+        )
+        if part
     )
 
     return f"{texture.uuid} ({about})"
@@ -73,7 +79,10 @@ class PreviewWindow(QWidget):
 
         self.setWindowTitle(preview_title(texture, natural))
 
-        message = "Could not decode" if decoded is not None else "Decoding..."
+        if not texture.whole():
+            message = "Texture incomplete"
+        else:
+            message = "Could not decode" if decoded is not None else "Decoding..."
 
         self.set_image(pixmap, natural, message)
 

@@ -17,7 +17,7 @@ from texture_courier import Texture, TextureCacheError
 
 from lltexturecache_browser_qt.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
-from lltexturecache_browser_qt.formatting import format_time
+from lltexturecache_browser_qt.formatting import format_size, format_time
 from lltexturecache_browser_qt.images import (
     THUMBNAIL_SIZE,
     decode_image,
@@ -44,6 +44,10 @@ DECODES_IN_FLIGHT = DECODE_THREADS * 2
 ROOT = QModelIndex()
 
 type Index = QModelIndex | QPersistentModelIndex
+
+# whether the row's entry is one the cache never finished downloading, which the
+# grid marks and nothing else has a way of asking about
+INCOMPLETE_ROLE = Qt.ItemDataRole.UserRole
 
 
 def sidebar_key(uuid: str) -> str:
@@ -192,7 +196,7 @@ class TextureModel(QAbstractListModel):
     def row(self, uuid: str) -> int | None:
         return self._filtered_rows.get(uuid)
 
-    def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QIcon | str | None:
+    def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QIcon | str | bool | None:
         if not index.isValid():
             return None
 
@@ -201,8 +205,16 @@ class TextureModel(QAbstractListModel):
         if role == Qt.ItemDataRole.DecorationRole:
             return self.icon(texture)
 
+        if role == INCOMPLETE_ROLE:
+            return not texture.whole()
+
         if role == Qt.ItemDataRole.ToolTipRole:
-            return f"{texture.uuid}\n{format_time(texture.time)}"
+            lines = [texture.uuid, format_time(texture.time)]
+
+            if not texture.whole():
+                lines.append(f"Incomplete — {format_size(texture.cached_size)} of {format_size(texture.image_size)}")
+
+            return "\n".join(lines)
 
         return None
 
@@ -269,7 +281,7 @@ class TextureModel(QAbstractListModel):
         if (ready := self._full.get(uuid)) is not None:
             return ready
 
-        if decode and uuid not in self._full_running:
+        if decode and texture.whole() and uuid not in self._full_running:
             self._full_running.add(uuid)
 
             # the selection is what the user is looking at, so this goes in
@@ -337,7 +349,7 @@ class TextureModel(QAbstractListModel):
         if self._preview is not None and self._preview[0] == uuid:
             return self._preview[1], self._preview[2]
 
-        if uuid not in self._preview_running:
+        if texture.whole() and uuid not in self._preview_running:
             self._preview_running.add(uuid)
 
             task = DecodeTask(texture, self._reads, self._preview_signals, None, board=False)
@@ -414,6 +426,11 @@ class TextureModel(QAbstractListModel):
 
     def request(self, texture: Texture) -> None:
         uuid = texture.uuid
+
+        # an entry the cache never finished downloading has no codestream to
+        # decode, so the thumbnail beside it in the cache is all there ever is
+        if not texture.whole():
+            return
 
         if uuid in self._queue or uuid in self._running or uuid in self._failed:
             return

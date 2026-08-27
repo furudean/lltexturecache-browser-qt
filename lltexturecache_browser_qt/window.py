@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
         self._actions.previewed.connect(self.preview_action)
         self._actions.inspected.connect(self.inspector_action)
         self._actions.filtered.connect(self.filters_action)
+        self._actions.incompleted.connect(self.incomplete_action)
         self._actions.abouted.connect(self.about_action)
 
         # how much is selected and how much is in the cache both move around
@@ -199,6 +200,7 @@ class MainWindow(QMainWindow):
         self.sync_inspector()
         self.sync_preview()
         self.sync_filters()
+        self.sync_incomplete()
 
     @classmethod
     def session(cls) -> list[Path]:
@@ -324,6 +326,12 @@ class MainWindow(QMainWindow):
         for texture in rewritten:
             QPixmapCache.remove(texture.uuid)
             QPixmapCache.remove(sidebar_key(texture.uuid))
+
+        # an entry the grid is not showing is neither news to report nor a row
+        # to scroll to, however much of it the viewer wrote since the last read
+        if not self.showing_incomplete():
+            added = [texture for texture in added if texture.whole()]
+            rewritten = [texture for texture in rewritten if texture.whole()]
 
         shown = self._inspector.texture
         place = self._view.place()
@@ -467,6 +475,34 @@ class MainWindow(QMainWindow):
 
         self._actions.filters.setEnabled(opened)
         self._filters.setVisible(opened and self._actions.filters.isChecked())
+
+    def incomplete_action(self, shown: bool) -> None:
+        if self._cache is None:
+            return
+
+        standing = self._inspector.texture
+        place = self._view.place()
+
+        self.populate_grid()
+
+        if standing is not None:
+            self.select_texture(standing.uuid)
+
+        if self.ranking():
+            return
+
+        # letting the rest of the cache in moves every row after the first of
+        # them, so there is no place to come back to
+        if shown:
+            self.scroll_to_end()
+        else:
+            self._view.pin_to(place)
+
+    def sync_incomplete(self) -> None:
+        self._actions.incomplete.setEnabled(self._cache is not None)
+
+    def showing_incomplete(self) -> bool:
+        return self._actions.incomplete.isChecked()
 
     def narrowed(self) -> bool:
         model = self._view.model()
@@ -800,6 +836,7 @@ class MainWindow(QMainWindow):
         self.sync_inspector()
         self.sync_preview()
         self.sync_filters()
+        self.sync_incomplete()
         self._status.set_opened(True)
 
         MainWindow.save_session()
@@ -820,7 +857,8 @@ class MainWindow(QMainWindow):
         if self._cache is None:
             return
 
-        textures = [texture for texture in self._cache if texture.whole()]
+        incomplete = self.showing_incomplete()
+        textures = [texture for texture in self._cache if incomplete or texture.whole()]
 
         self._view.set_message("Cache is empty")
 
@@ -864,6 +902,11 @@ class MainWindow(QMainWindow):
         self._summary = (
             f"Showing {format_count(len(textures))} textures of {format_count(len(self._cache))} entries in cache"
         )
+
+        unfinished = sum(1 for texture in textures if not texture.whole()) if incomplete else 0
+
+        if unfinished:
+            self._summary += f", {format_count(unfinished)} incomplete"
 
         self._status.set_summary(note if note else self.summary())
 

@@ -1,5 +1,16 @@
-from PySide6.QtCore import QAbstractItemModel, QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QIcon, QKeyEvent, QMouseEvent, QPainter, QPalette, QResizeEvent, QShowEvent, QWheelEvent
+from PySide6.QtCore import QAbstractItemModel, QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPalette,
+    QPen,
+    QResizeEvent,
+    QShowEvent,
+    QWheelEvent,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -13,13 +24,19 @@ from PySide6.QtWidgets import (
 )
 
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
-from lltexturecache_browser_qt.model import Index
+from lltexturecache_browser_qt.model import INCOMPLETE_ROLE, Index
 
 CELL_PADDING = 14
 
 # how far the empty grid's message may run before it wraps, so a window dragged
 # wide reads as a line of text in the middle of it rather than as a banner
 MESSAGE_WIDTH = 320
+
+# the ring an entry the cache never finished downloading is picked out with. an
+# amber saturated enough to hold its own against a texture of any lightness,
+# since it is drawn over the image rather than over the background
+INCOMPLETE_COLOR = QColor(0xEF, 0x7C, 0x14)
+INCOMPLETE_WEIGHT = 2
 
 
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
@@ -42,6 +59,27 @@ class CellDelegate(QStyledItemDelegate):
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, cell, painter, cell.widget)
 
         icon.paint(painter, option.rect, Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
+
+        if index.data(INCOMPLETE_ROLE):
+            self.mark(painter, icon, option.rect)
+
+    def mark(self, painter: QPainter, icon: QIcon, rect: QRect) -> None:
+        """Ring the image of an entry the cache never finished downloading"""
+
+        drawn = QRect(QPoint(), icon.actualSize(rect.size()))
+
+        if drawn.isEmpty():
+            return
+
+        drawn.moveCenter(rect.center())
+
+        inset = INCOMPLETE_WEIGHT / 2
+
+        painter.save()
+        painter.setPen(QPen(INCOMPLETE_COLOR, INCOMPLETE_WEIGHT))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(QRectF(drawn).adjusted(inset, inset, -inset, -inset))
+        painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: Index) -> QSize:
         return QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)

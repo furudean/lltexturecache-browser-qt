@@ -372,8 +372,15 @@ class ColorScan(QRunnable):
             if colors is not None:
                 index.add(row, colors)
 
-        if not self._stopped.is_set():
+        if self._stopped.is_set():
+            return
+
+        try:
             self._signals.done.emit(index)
+        except RuntimeError:
+            # the model this was reading for went out from under it between the
+            # check above and here, taking the signals it reports through along
+            pass
 
     def read(self, texture: Texture) -> list[tuple[Lab, float]] | None:
         try:
