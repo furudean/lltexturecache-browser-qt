@@ -52,6 +52,7 @@ SESSION_KEY = "openCaches"
 GEOMETRY_KEY = "windowGeometry"
 SPLITTER_KEY = "windowSplitter"
 PREVIEW_GEOMETRY_KEY = "previewGeometry"
+FILTERS_KEY = "colorFilters"
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
@@ -165,6 +166,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
 
         self._filters = ColorFilterBar(self)
+
+        # the strip comes back up as it was left, before anything is listening,
+        # so the colors are already on it when a cache arrives to be ranked
+        self._filters.revive(settings.value(FILTERS_KEY))
+
         self._filters.changed.connect(self.filter_action)
         self._filters.visibilityChanged.connect(self.filters_shown_action)
 
@@ -229,6 +235,7 @@ class MainWindow(QMainWindow):
 
         settings.setValue(GEOMETRY_KEY, self.saveGeometry())
         settings.setValue(SPLITTER_KEY, self._splitter.saveState())
+        settings.setValue(FILTERS_KEY, self._filters.state())
 
         if self._preview is not None:
             settings.setValue(PREVIEW_GEOMETRY_KEY, self._preview.saveGeometry())

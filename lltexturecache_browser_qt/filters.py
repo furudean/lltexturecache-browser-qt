@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from functools import partial
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, Signal
@@ -22,20 +23,41 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+DEFAULT_COLORS = (
+    "#c0392b",  # red
+    "#3f9d3f",  # green
+    "#2f6fd0",  # blue
+    "#f2f2f2",  # white
+    "#8a8a8a",  # grey
+    "#1a1a1a",  # black
+)
+
+ON_MARK = "+"
+OFF_MARK = "-"
+
 SWATCH_SIZE = 16
 SWATCH_MARGIN = 4
 SWATCH_RADIUS = 3
 
+# what one swatch stands off the next, on top of the margin each of them carries
+SWATCH_GAP = 2
+
 BADGE_SIZE = 10
 BADGE_INSET = 3
 
-# how heavy the ring a disabled color is left as
+# how heavy the ring a disabled color is left as, and how near in lightness
+# that ring has to be to the background before it is lost in it and needs an
+# outline of its own to be seen at all. a color picked out of the dialog is
+# rarely that pale, but the strip comes up with a white on it every time
 OFF_WEIGHT = 2
+OFF_FAINT = 32
 
 ADD_ICON_SIZE = 12
 
-# how far an arm of the plus reaches from the middle, as a share of the icon
-PLUS_ARM = 0.32
+# how far an arm of the plus reaches from the middle, as a share of the icon.
+# near enough the whole of it, since room left empty inside the icon is room
+# the button carries around and cannot be trimmed of afterwards
+PLUS_ARM = 0.42
 PLUS_WEIGHT = 1.5
 
 
@@ -62,7 +84,7 @@ class Swatch(QAbstractButton):
     removed = Signal()
     recolored = Signal()
 
-    def __init__(self, color: QColor, parent: QWidget | None = None) -> None:
+    def __init__(self, color: QColor, parent: QWidget | None = None, *, on: bool = True) -> None:
         super().__init__(parent)
 
         self._color = color
@@ -75,7 +97,7 @@ class Swatch(QAbstractButton):
         # a click disables the color and enables it again, which is the one
         # thing worth doing to a filter often enough to spend the click on
         self.setCheckable(True)
-        self.setChecked(True)
+        self.setChecked(on)
         self.toggled.connect(self.sync_tip)
 
         self.sync_tip()
@@ -123,8 +145,24 @@ class Swatch(QAbstractButton):
 
         painter.drawRoundedRect(box, SWATCH_RADIUS, SWATCH_RADIUS)
 
+        if not self.isChecked() and self.faint():
+            self.paint_edge(painter, box)
+
         if self._hovered:
             self.paint_badge(painter)
+
+    def faint(self) -> bool:
+        window = self.palette().color(QPalette.ColorRole.Window)
+
+        return abs(self._color.lightness() - window.lightness()) < OFF_FAINT
+
+    def paint_edge(self, painter: QPainter, box: QRectF) -> None:
+        reach = OFF_WEIGHT / 2
+        edge = box.adjusted(-reach, -reach, reach, reach)
+
+        painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Mid), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(edge, SWATCH_RADIUS + reach, SWATCH_RADIUS + reach)
 
     def paint_badge(self, painter: QPainter) -> None:
         colors = self.palette()
@@ -189,37 +227,40 @@ class ColorFilterBar(QToolBar):
         self.setFloatable(False)
 
         self._swatches: list[Swatch] = []
+        self._quiet = False
 
         body = QWidget(self)
 
         row = QHBoxLayout(body)
         row.setContentsMargins(6, 2, 6, 2)
-        row.setSpacing(6)
+
+        row.setSpacing(SWATCH_GAP)
 
         self._add = QToolButton(body)
-        self._add.setText("Color filter...")
         self._add.setIconSize(QSize(ADD_ICON_SIZE, ADD_ICON_SIZE))
-        self._add.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+
+        self._add.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._add.setStatusTip("Add a color to filter textures by")
         self._add.clicked.connect(self.add_action)
 
         self._chips = QHBoxLayout()
         self._chips.setContentsMargins(0, 0, 0, 0)
-        self._chips.setSpacing(2)
+        self._chips.setSpacing(SWATCH_GAP)
 
-        self._clear = QToolButton(body)
-        self._clear.setText("Clear filters")
-        self._clear.setStatusTip("Clear all filters")
-        self._clear.clicked.connect(self.clear_action)
+        self._off = QToolButton(body)
+        self._off.setText("Disable filters")
+        self._off.setStatusTip("Disable active filters")
+        self._off.clicked.connect(self.disable_action)
 
         row.addLayout(self._chips)
         row.addWidget(self._add)
         row.addStretch(1)
-        row.addWidget(self._clear)
+        row.addWidget(self._off)
 
         self.addWidget(body)
 
         self.sync_icon()
+        self.restore()
         self.sync()
 
     def sync_icon(self) -> None:
@@ -238,8 +279,12 @@ class ColorFilterBar(QToolBar):
 
     def suggestion(self) -> QColor:
         # a second color is usually picked somewhere near the first, so the
-        # picker opens on the last one rather than on wherever it was left
-        return self._swatches[-1].color if self._swatches else QColor(Qt.GlobalColor.white)
+        # picker opens on the last one asked for rather than on wherever it was
+        # left. the strip is never empty, but until something on it is enabled
+        # none of it has been asked for and there is nothing to open near
+        asked = self.colors()
+
+        return asked[-1] if asked else QColor(Qt.GlobalColor.white)
 
     def add_action(self) -> None:
         picked = QColorDialog.getColor(self.suggestion(), self, "Filter by Color")
@@ -255,7 +300,12 @@ class ColorFilterBar(QToolBar):
                 swatch.setChecked(True)
                 return
 
-        swatch = Swatch(color, self)
+        self.attach(color, on=True)
+
+        self.changed_action()
+
+    def attach(self, color: QColor, *, on: bool) -> None:
+        swatch = Swatch(color, self, on=on)
         swatch.removed.connect(partial(self.remove, swatch))
         swatch.recolored.connect(partial(self.recolor, swatch))
         swatch.toggled.connect(self.changed_action)
@@ -263,7 +313,44 @@ class ColorFilterBar(QToolBar):
         self._swatches.append(swatch)
         self._chips.addWidget(swatch)
 
-        self.changed_action()
+    def replace(self, swatches: Iterable[tuple[QColor, bool]]) -> None:
+        for swatch in self._swatches:
+            self.retire(swatch)
+
+        self._swatches = []
+
+        for color, on in swatches:
+            self.attach(color, on=on)
+
+    def restore(self) -> None:
+        self.replace((QColor(color), False) for color in DEFAULT_COLORS)
+
+    def state(self) -> list[str]:
+        return [f"{ON_MARK if swatch.isChecked() else OFF_MARK}{swatch.color.name()}" for swatch in self._swatches]
+
+    def revive(self, stored: object) -> None:
+        # a list of one comes back out of the store as the string it held
+        if isinstance(stored, str):
+            stored = [stored]
+
+        remembered: list[tuple[QColor, bool]] = []
+
+        if isinstance(stored, list):
+            for entry in stored:
+                if not isinstance(entry, str) or entry[:1] not in (ON_MARK, OFF_MARK):
+                    continue
+
+                color = QColor(entry[1:])
+
+                if color.isValid():
+                    remembered.append((color, entry[0] == ON_MARK))
+
+        if not remembered:
+            self.restore()
+        else:
+            self.replace(remembered)
+
+        self.sync()
 
     def remove(self, swatch: Swatch) -> None:
         self._swatches.remove(swatch)
@@ -281,14 +368,14 @@ class ColorFilterBar(QToolBar):
 
         self.changed_action()
 
-    def clear_action(self) -> None:
-        if not self._swatches:
-            return
+    def disable_action(self) -> None:
+        self._quiet = True
 
-        for swatch in self._swatches:
-            self.retire(swatch)
-
-        self._swatches = []
+        try:
+            for swatch in self._swatches:
+                swatch.setChecked(False)
+        finally:
+            self._quiet = False
 
         self.changed_action()
 
@@ -299,9 +386,19 @@ class ColorFilterBar(QToolBar):
         swatch.deleteLater()
 
     def changed_action(self) -> None:
+        if self._quiet:
+            return
+
         self.sync()
 
         self.changed.emit(self.colors())
 
+    def asking(self) -> bool:
+        """Whether anything on the strip is enabled, which is when there is something to turn off"""
+
+        return bool(self.colors())
+
     def sync(self) -> None:
-        self._clear.setVisible(bool(self._swatches))
+        # the button stays where it is once the strip is off, greyed rather
+        # than gone, so nothing else on the bar shifts under the pointer
+        self._off.setEnabled(self.asking())
