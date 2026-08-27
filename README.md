@@ -11,7 +11,7 @@ cache
 ## install
 
 windows and linux builds are attached to
-[each release](https://github.com/furudean/lltexturecache-browser-qt/releases).
+[each release](https://github.com/furudean/lltexturecache-viewer-gui/releases).
 
 on mac, you can install with homebrew:
 
