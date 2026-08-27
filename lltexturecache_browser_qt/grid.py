@@ -124,12 +124,13 @@ class EmptyState(QWidget):
 
 class TextureGrid(QListView):
     opened = Signal()
+    dragged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self._banding = False
         self._pin: int | None = None
+        self._dragged = False
 
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it
@@ -224,11 +225,25 @@ class TextureGrid(QListView):
         self._empty.setGeometry(box)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._banding = not self.indexAt(event.position().toPoint()).isValid()
+        self._dragged = False
 
         self.unpin()
 
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._dragged and event.buttons() != Qt.MouseButton.NoButton:
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        dragged, self._dragged = self._dragged, False
+
+        if dragged:
+            return
+
+        super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         self.unpin()
@@ -240,8 +255,7 @@ class TextureGrid(QListView):
 
         super().keyPressEvent(event)
 
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if not self._banding:
-            return
+    def startDrag(self, actions: Qt.DropAction) -> None:
+        self._dragged = True
 
-        super().mouseMoveEvent(event)
+        self.dragged.emit()

@@ -19,7 +19,7 @@ from PySide6.QtCore import (
     QTimer,
     QUrl,
 )
-from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QPixmap, QPixmapCache
+from PySide6.QtGui import QCloseEvent, QColor, QDesktopServices, QDrag, QGuiApplication, QPixmap, QPixmapCache
 from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
@@ -33,6 +33,7 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, sync_checkerboard
+from lltexturecache_browser_qt.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.export import ExportJob, Format
 from lltexturecache_browser_qt.filters import ColorFilterBar
 from lltexturecache_browser_qt.formatting import format_count
@@ -138,14 +139,17 @@ class MainWindow(QMainWindow):
         self._view.setItemDelegate(CellDelegate(self._view))
         self._view.setResizeMode(QListView.ResizeMode.Adjust)
         self._view.setMovement(QListView.Movement.Static)
-        # disable drag action on icons. only valid on bg
-        self._view.setDragDropMode(QListView.DragDropMode.NoDragDrop)
+        # a texture is dragged out of the window as a file, and nothing is
+        # ever dropped into the grid
+        self._view.setDragDropMode(QListView.DragDropMode.DragOnly)
+        self._view.setDefaultDropAction(Qt.DropAction.CopyAction)
         self._view.setUniformItemSizes(True)
         self._view.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
         self._view.setSelectionRectVisible(True)
         self._view.set_message("No texture cache selected", may_open=True)
         self._view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._view.opened.connect(self.open_action)
+        self._view.dragged.connect(self.drag_action)
         self._view.customContextMenuRequested.connect(self.context_action)
         self._view.verticalScrollBar().valueChanged.connect(self.drain_action)
 
@@ -381,6 +385,59 @@ class MainWindow(QMainWindow):
 
         if dialog.exec():
             self.export(textures, Path(dialog.selectedFiles()[0]), format, model.reads)
+
+    def drag_action(self) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        textures = self.export_textures(model, everything=False)
+
+        if not textures:
+            return
+
+        if len(textures) > DRAG_LIMIT:
+            self._status.flash("Can't drag that many; export them instead")
+            return
+
+        QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+
+        try:
+            paths = staged(textures, model.reads)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+
+        if not paths:
+            return
+
+        pixmap = self.drag_pixmap(model)
+
+        drag = QDrag(self._view)
+        drag.setMimeData(drag_data(paths))
+
+        if not pixmap.isNull():
+            drag.setPixmap(pixmap)
+            drag.setHotSpot(QPoint(pixmap.width() // 2, pixmap.height() // 2))
+
+        drag.exec(Qt.DropAction.CopyAction)
+
+    def drag_pixmap(self, model: TextureModel) -> QPixmap:
+        index = self.selected_index()
+
+        if not index.isValid():
+            return QPixmap()
+
+        stack = self.stack_textures(model, index, self._view.selectionModel().selectedIndexes())
+
+        cards = []
+
+        for texture in stack:
+            cell = model.cell(texture)
+
+            cards.append((texture.uuid, model.sidebar(texture) if cell.isNull() else cell))
+
+        return stack_pixmap([(uuid, card) for uuid, card in cards if not card.isNull()])
 
     def context_action(self, at: QPoint) -> None:
         model = self._view.model()

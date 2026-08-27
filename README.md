@@ -23,6 +23,7 @@ brew install --cask furudean/tap/lltexturecache-browser-qt
 
 - browse and filter through a large amount of textures
 - save textures to disk in commonly-used image formats
+- drag and drop support
 - it's fast and out of your way
 - it's not an electron app
 

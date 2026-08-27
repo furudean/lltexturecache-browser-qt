@@ -196,6 +196,14 @@ class TextureModel(QAbstractListModel):
     def row(self, uuid: str) -> int | None:
         return self._filtered_rows.get(uuid)
 
+    def flags(self, index: Index) -> Qt.ItemFlag:
+        flags = super().flags(index)
+
+        if not index.isValid():
+            return flags
+
+        return flags | Qt.ItemFlag.ItemIsDragEnabled
+
     def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QIcon | str | bool | None:
         if not index.isValid():
             return None
