@@ -4,7 +4,7 @@ from random import Random
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap, QTransform
 
-from lltexturecache_browser_qt.checkerboard import CHECKEDBOARD_SIZE, checkerboard_at
+from lltexturecache_browser_qt.checkerboard import CHECKERBOARD_SIZE, pane_checkerboard_at, pane_lightness
 
 # how many of a selection are dealt out behind the one on top
 STACK_CARDS = 4
@@ -51,12 +51,12 @@ def dealt_card(card: QPixmap, box: QSize, span: int) -> QPixmap:
 
 def checker_square_size(canvas: QSize, room: QSize | None) -> int:
     if room is None or room.isEmpty() or canvas.isEmpty():
-        return CHECKEDBOARD_SIZE
+        return CHECKERBOARD_SIZE
 
     seen = canvas.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
     scale = max(1.0, canvas.width() / seen.width())
 
-    return max(1, round(CHECKEDBOARD_SIZE * scale))
+    return max(1, round(CHECKERBOARD_SIZE * scale))
 
 
 def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
@@ -74,7 +74,7 @@ def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
 def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) -> QPixmap:
     """Lay pixmaps out as a tilted stack, the last of them face up on top
 
-    `room` is the size the stack will be seen at, which is what the board
+    `room` is the size the stack will be seen at, which is what the checkerboard
     behind a card with any transparency to it is sized against.
     """
 
@@ -114,7 +114,9 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) ->
     canvas = QPixmap(laid.size())
     canvas.fill(Qt.GlobalColor.transparent)
 
-    board = QBrush(checkerboard_at(checker_square_size(laid.size(), room)))
+    # the automatic checkerboard is measured against the card it goes behind, so each
+    # of them is asked for separately, at the one size they are all seen at
+    square = checker_square_size(laid.size(), room)
 
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -134,10 +136,14 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) ->
             painter.fillRect(rect, FRAME_FILL)
             painter.drawRect(rect)
 
-        if pixmap.hasAlphaChannel():
+        # with no checkerboard a card keeps its transparency, and what shows through is
+        # the paper behind it in a pile or the pane itself for a single card
+        checkerboard = pane_checkerboard_at(square, pane_lightness(pixmap)) if pixmap.hasAlphaChannel() else None
+
+        if checkerboard is not None:
             painter.fillRect(
                 QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height()),
-                board,
+                QBrush(checkerboard),
             )
 
         painter.drawPixmap(QPointF(-pixmap.width() / 2, -pixmap.height() / 2), pixmap)

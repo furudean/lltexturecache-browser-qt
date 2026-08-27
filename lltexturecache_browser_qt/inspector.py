@@ -1,5 +1,6 @@
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (
+    QMouseEvent,
     QPixmap,
     QResizeEvent,
 )
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture
 
+from lltexturecache_browser_qt.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.formatting import format_count, format_size, format_time
 from lltexturecache_browser_qt.widgets import bold, copyable, dim, height_for_width, wrapped
 
@@ -29,10 +31,13 @@ ROW_SPACING = 4
 
 
 class SidebarLabel(QLabel):
+    clicked = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._source = QPixmap()
+        self._pressed = False
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -48,8 +53,28 @@ class SidebarLabel(QLabel):
     def set_source(self, pixmap: QPixmap) -> None:
         self._source = pixmap
 
+        self.setToolTip("" if pixmap.isNull() else "Click to change the transparency mode")
+
         self.updateGeometry()
         self.refit()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._source.isNull()
+
+        if self._pressed:
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        pressed, self._pressed = self._pressed, False
+
+        if pressed and event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+            return
+
+        super().mouseReleaseEvent(event)
 
     def heightForWidth(self, width: int) -> int:
         if self._source.isNull():
@@ -103,6 +128,9 @@ class InspectorPane(QWidget):
         self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._sidebar = SidebarLabel()
+        # which checkerboard goes behind a texture in here and in the preview window,
+        # the two places one is shown big enough to see through
+        self._sidebar.clicked.connect(cycle_pane_tone)
 
         self._name = wrapped(copyable(bold(QLabel())))
 

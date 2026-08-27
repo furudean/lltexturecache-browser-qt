@@ -3,6 +3,7 @@ from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
     QKeyEvent,
+    QMouseEvent,
     QPainter,
     QPaintEvent,
     QPalette,
@@ -11,7 +12,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.checkerboard import checkerboard
+from lltexturecache_browser_qt.checkerboard import cycle_pane_tone, pane_checkerboard, pixmap_lightness
 from lltexturecache_browser_qt.formatting import format_count, format_size
 
 WINDOW_SIZE = 480
@@ -53,6 +54,8 @@ class PreviewWindow(QWidget):
         self._pixmap = QPixmap()
         self._natural = QSize()
         self._message = ""
+        self._lightness: float | None = None
+        self._pressed = False
 
         self.setWindowTitle(WINDOW_TITLE)
 
@@ -90,6 +93,7 @@ class PreviewWindow(QWidget):
         self._pixmap = pixmap
         self._natural = natural
         self._message = message
+        self._lightness = pixmap_lightness(pixmap)
 
         self.update()
 
@@ -112,13 +116,33 @@ class PreviewWindow(QWidget):
         else:
             target = self.image_rect()
 
-            if self._pixmap.hasAlphaChannel():
-                painter.fillRect(target, QBrush(checkerboard()))
+            checkerboard = pane_checkerboard(self._lightness) if self._pixmap.hasAlphaChannel() else None
+
+            if checkerboard is not None:
+                painter.fillRect(target, QBrush(checkerboard))
 
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             painter.drawPixmap(target, self._pixmap)
 
         painter.end()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._pixmap.isNull()
+
+        if self._pressed:
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        pressed, self._pressed = self._pressed, False
+
+        if pressed and event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            cycle_pane_tone()
+            return
+
+        super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Escape):

@@ -32,7 +32,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
-from lltexturecache_browser_qt.checkerboard import sync_checkerboard
+from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, sync_checkerboard
 from lltexturecache_browser_qt.export import ExportJob, Format
 from lltexturecache_browser_qt.filters import ColorFilterBar
 from lltexturecache_browser_qt.formatting import format_count
@@ -194,6 +194,10 @@ class MainWindow(QMainWindow):
         # under the menu, and only this end knows either of them
         self._actions.exports.aboutToShow.connect(self.sync_export)
 
+        # the checkerboard is the app's rather than this window's, and a click in one
+        # window is a repaint in every one of them
+        CheckerboardChanges.shared().changed.connect(self.restyle)
+
         # both entries come up out of their stored settings, before anything is
         # listening to them, so the pane and the window are put where the menu
         # already says they are here
@@ -250,6 +254,8 @@ class MainWindow(QMainWindow):
 
         self._actions.shutdown()
 
+        CheckerboardChanges.shared().changed.disconnect(self.restyle)
+
         if self._job is not None:
             self._job.shutdown()
 
@@ -275,19 +281,23 @@ class MainWindow(QMainWindow):
     def restyle(self) -> None:
         sync_checkerboard()
 
-        # the preview window keeps the texture's alpha and lays the board down
-        # behind it, so a new board is a repaint rather than a fresh decode
+        # both panes keep the texture's alpha and lay the checkerboard down
+        # behind it, so a new checkerboard is a repaint rather than a fresh
+        # decode. the checkerboard they draw is their own, and moves without the
+        # cells' checkerboard moving with it
         if self._preview is not None:
             self._preview.update()
+
+        self.paint_inspector()
 
         model = self._view.model()
 
         if not isinstance(model, TextureModel) or not model.restyle():
             return
 
+        # a cell has the checkerboard painted into it, so it is decoded again
         self._view.viewport().update()
 
-        self.paint_inspector()
         self._settle.start()
 
     def open_action(self) -> None:

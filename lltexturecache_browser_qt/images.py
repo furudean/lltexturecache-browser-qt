@@ -43,12 +43,14 @@ def decode_image(codestream: bytes) -> QImage:
     return image.copy()
 
 
-def thumbnail_image(png: bytes, *, board: bool = True) -> QImage:
-    return fit_image(read_image(QByteArray(png)), board=board)
+def thumbnail_image(png: bytes, *, checkerboard: bool = True) -> QImage:
+    return fit_image(read_image(QByteArray(png)), checkerboard=checkerboard)
 
 
-def fit_image(image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool = True, board: bool = True) -> QImage:
-    """Fit an image to a square box, over the board if transparent"""
+def fit_image(
+    image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool = True, checkerboard: bool = True
+) -> QImage:
+    """Fit an image to a square box, over the checkerboard if transparent"""
 
     if image.isNull():
         return image
@@ -70,9 +72,9 @@ def fit_image(image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool
             Qt.TransformationMode.SmoothTransformation,
         )
 
-    # a caller that draws its own board underneath wants the alpha kept, since
-    # a board painted into an image is scaled along with it
-    return over_checkerboard(scaled) if board else scaled
+    # a caller that draws its own checkerboard underneath wants the alpha kept, since
+    # a checkerboard painted into an image is scaled along with it
+    return over_checkerboard(scaled) if checkerboard else scaled
 
 
 @cache

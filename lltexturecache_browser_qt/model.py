@@ -75,7 +75,7 @@ class DecodeTask(QRunnable):
         size: int | None = THUMBNAIL_SIZE,
         *,
         upscale: bool = True,
-        board: bool = True,
+        checkerboard: bool = True,
     ):
         super().__init__()
 
@@ -84,7 +84,7 @@ class DecodeTask(QRunnable):
         self._signals = signals
         self._size = size
         self._upscale = upscale
-        self._board = board
+        self._board = checkerboard
 
     @Slot()
     def run(self) -> None:
@@ -102,7 +102,7 @@ class DecodeTask(QRunnable):
         except (TextureCacheError, OSError):
             return QImage(), QSize()
 
-        return fit_image(image, self._size, upscale=self._upscale, board=self._board), image.size()
+        return fit_image(image, self._size, upscale=self._upscale, checkerboard=self._board), image.size()
 
 
 class TextureModel(QAbstractListModel):
@@ -131,7 +131,7 @@ class TextureModel(QAbstractListModel):
         # cell decodes that set out under the palette before this one, which is
         # to say the ones whose results are already out of date on arrival. a
         # decode that keeps its opacity is not among them: it is painted over
-        # whatever board is down when it is drawn
+        # whatever checkerboard is down when it is drawn
         self._stale: set[str] = set()
         # a preview window shows the one texture it is on, so the last one
         # asked for is the only one worth the room a full sized decode takes
@@ -154,7 +154,7 @@ class TextureModel(QAbstractListModel):
         self._full_signals.done.connect(self.full_decoded)
 
         # the preview window decodes at whatever size the texture is and keeps
-        # its alpha, since it lays the board down behind the image rather than
+        # its alpha, since it lays the checkerboard down behind the image rather than
         # into it
         self._preview_signals = DecodeSignals(self)
         self._preview_signals.done.connect(self.preview_decoded)
@@ -250,14 +250,14 @@ class TextureModel(QAbstractListModel):
 
         return pixmap
 
-    def thumbnail(self, texture: Texture, *, board: bool = True) -> QImage:
+    def thumbnail(self, texture: Texture, *, checkerboard: bool = True) -> QImage:
         try:
             with self._thumbnails:
                 thumbnail = texture.thumbnail_png()
         except (TextureCacheError, OSError):
             thumbnail = None
 
-        return thumbnail_image(thumbnail, board=board) if thumbnail is not None else QImage()
+        return thumbnail_image(thumbnail, checkerboard=checkerboard) if thumbnail is not None else QImage()
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""
@@ -286,7 +286,7 @@ class TextureModel(QAbstractListModel):
 
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
-            task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False, board=False)
+            task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False, checkerboard=False)
 
             self._pool.start(task, FULL_PRIORITY)
 
@@ -303,7 +303,7 @@ class TextureModel(QAbstractListModel):
         is handed over beside it, since a decode at any size knew what it was.
 
         What comes back keeps its opacity wherever it can, since a stand-in is
-        drawn larger than it was kept and a board painted into it is drawn
+        drawn larger than it was kept and a checkerboard painted into it is drawn
         larger with it, at squares several times the size of the ones the
         decode it stands in for is laid over.
         """
@@ -319,11 +319,11 @@ class TextureModel(QAbstractListModel):
             return kept, self.natural(texture)
 
         # a texture with no thumbnail beside it in the cache falls back to the
-        # grid's cell, which has the board painted into it at the size a cell is
+        # grid's cell, which has the checkerboard painted into it at the size a cell is
         if uuid in self._no_sidebar:
             return self.cell_standing(texture)
 
-        image = self.thumbnail(texture, board=False)
+        image = self.thumbnail(texture, checkerboard=False)
 
         if image.isNull():
             self._no_sidebar.add(uuid)
@@ -352,7 +352,7 @@ class TextureModel(QAbstractListModel):
         if texture.whole() and uuid not in self._preview_running:
             self._preview_running.add(uuid)
 
-            task = DecodeTask(texture, self._reads, self._preview_signals, None, board=False)
+            task = DecodeTask(texture, self._reads, self._preview_signals, None, checkerboard=False)
 
             self._pool.start(task, PREVIEW_PRIORITY)
 
@@ -362,8 +362,8 @@ class TextureModel(QAbstractListModel):
         """Take note of a checkerboard that has since moved
 
         The cells are the grid's, and are dropped by whoever calls this; what is
-        here is the cell decodes still out, which are the only ones with a board
-        painted into what they bring back. Returns whether the board has moved.
+        here is the cell decodes still out, which are the only ones with a checkerboard
+        painted into what they bring back. Returns whether the checkerboard has moved.
         """
 
         generation = checkerboard_generation()
@@ -373,7 +373,7 @@ class TextureModel(QAbstractListModel):
 
         self._generation = generation
 
-        # a cell decode already running was handed the old board, so whatever
+        # a cell decode already running was handed the old checkerboard, so whatever
         # it comes back with is painted on a background that is no longer there
         self._stale = set(self._running)
 
@@ -473,9 +473,9 @@ class TextureModel(QAbstractListModel):
         self.pump()
 
         if uuid in self._stale:
-            # nothing is kept from a decode that came back on the old board.
+            # nothing is kept from a decode that came back on the old checkerboard.
             # the repaint below asks for the texture again, and the second time
-            # around it is decoded against the board the system is now on
+            # around it is decoded against the checkerboard the system is now on
             self._stale.discard(uuid)
         elif image.isNull():
             # nothing goes in the pixmap cache, so without this the repaint

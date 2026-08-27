@@ -4,10 +4,11 @@ from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QSettings, Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
+from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, CheckerTone, grid_tone, set_grid_tone
 from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS, Format
 from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.recents import RecentCaches
@@ -17,6 +18,13 @@ PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"
 FILTERS_KEY = "showColorFilters"
 INCOMPLETE_KEY = "showIncomplete"
+
+TONES = {
+    CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
+    CheckerTone.LIGHT: ("&Light", "Draw a light checkerboard behind the transparent parts of a texture"),
+    CheckerTone.DARK: ("&Dark", "Draw a dark checkerboard behind the transparent parts of a texture"),
+    CheckerTone.NONE: ("&None", "Leave the transparent parts of a texture as they are"),
+}
 
 
 def triggers(entry: QAction, call: Callable[[], object]) -> None:
@@ -148,6 +156,24 @@ class WindowActions(QObject):
         self.incomplete.toggled.connect(self.store_incomplete)
         self.incomplete.toggled.connect(self.incompleted)
 
+        self._tones: dict[CheckerTone, QAction] = {}
+
+        tones = QActionGroup(window)
+        tones.setExclusive(True)
+
+        for tone, (label, tip) in TONES.items():
+            entry = QAction(label, window)
+            entry.setStatusTip(tip)
+            entry.setCheckable(True)
+            entry.setActionGroup(tones)
+            triggers(entry, partial(set_grid_tone, tone))
+
+            self._tones[tone] = entry
+
+        CheckerboardChanges.shared().changed.connect(self.sync_checkerboard)
+
+        self.sync_checkerboard()
+
         app_menu = menu.addMenu("About")  # label doesn't matter on macOS, instead decided by role
         about_action = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
         about_action.setMenuRole(QAction.MenuRole.AboutRole)
@@ -162,8 +188,15 @@ class WindowActions(QObject):
         view_menu.addSeparator()
         view_menu.addAction(self.incomplete)
 
+        checkerboard = view_menu.addMenu("&Transparency")
+        checkerboard.addActions(list(self._tones.values()))
+
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
+        CheckerboardChanges.shared().changed.disconnect(self.sync_checkerboard)
+
+    def sync_checkerboard(self) -> None:
+        self._tones[grid_tone()].setChecked(True)
 
     def format_menu(self, parent: QMenu, title: str, *, everything: bool) -> QMenu:
         menu = parent.addMenu(title)
