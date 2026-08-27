@@ -78,6 +78,8 @@ NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 DELAY_MESSAGE_DURATION_MS = 250
 
+PREFETCH_SCREENS = 4
+
 
 def stored_blob(settings: QSettings, key: str) -> QByteArray:
     stored = settings.value(key)
@@ -176,7 +178,10 @@ class MainWindow(QMainWindow):
         self._view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._view.dragged.connect(self.drag_action)
         self._view.customContextMenuRequested.connect(self.context_action)
-        self._view.verticalScrollBar().valueChanged.connect(self.drain_action)
+        self._view.verticalScrollBar().valueChanged.connect(self.prefetch_action)
+        # a grid that has been resized, filtered or filled has a new band under
+        # it without anything having scrolled
+        self._view.verticalScrollBar().rangeChanged.connect(self.prefetch_action)
 
         self._inspector = InspectorPane()
 
@@ -883,26 +888,55 @@ class MainWindow(QMainWindow):
 
         return selected[-1] if selected else QModelIndex()
 
-    def drain_action(self) -> None:
+    def prefetch_action(self) -> None:
         model = self._view.model()
 
         if not isinstance(model, TextureModel):
             return
 
-        rows = self.visible_rows(model)
+        visible = self.visible_rows(model)
+        band = self.rows_within(model, self.reach())
 
-        if rows is not None:
-            model.drain(*rows)
+        if visible is None or band is None:
+            return
+
+        model.prefetch(self.outward(band, visible))
+
+    def reach(self) -> int:
+        """How far past the viewport, in pixels, cells are decoded ahead"""
+
+        return round(self._view.viewport().height() * PREFETCH_SCREENS)
+
+    def outward(self, band: tuple[int, int], visible: tuple[int, int]) -> list[int]:
+        """The rows of the band, the furthest from what is on screen first
+
+        The model decodes the last of these first, so the order runs backwards.
+        Sorting on the distance from the middle of the viewport puts every row
+        that is on screen after every row that is not, since none of the ones
+        on screen can be further from its middle than its own edges are: what
+        the user is looking at is decoded first, from the middle out, and only
+        then does the band either side of it get a turn.
+        """
+
+        first, last = band
+        middle = sum(visible) / 2
+
+        return sorted(range(first, last + 1), key=lambda row: -abs(row - middle))
 
     def visible_rows(self, model: TextureModel) -> tuple[int, int] | None:
+        return self.rows_within(model, 0)
+
+    def rows_within(self, model: TextureModel, margin: int) -> tuple[int, int] | None:
+        """The rows of the band the viewport sits in the middle of"""
+
         count = model.rowCount()
         height = self._view.viewport().height()
 
         def cell(row: int) -> QRect:
             return self._view.visualRect(model.index(row, 0))
 
-        first = bisect_left(range(count), 0, key=lambda row: cell(row).bottom())
-        last = bisect_right(range(count), height, key=lambda row: cell(row).top()) - 1
+        first = bisect_left(range(count), -margin, key=lambda row: cell(row).bottom())
+        last = bisect_right(range(count), height + margin, key=lambda row: cell(row).top()) - 1
 
         return (first, last) if first <= last < count else None
 

@@ -1,4 +1,5 @@
 import threading
+from collections.abc import Iterable
 
 from PySide6.QtCore import (
     QAbstractListModel,
@@ -33,7 +34,7 @@ PREVIEW_PRIORITY = 2
 
 FULL_CACHE = 12
 
-# a decoded cell is 64x64x4 bytes, or 16 KB, so this holds about 64k textures
+# a decoded cell is 100x100 at 32 bits, or 39 KB, so this holds about 27k textures
 PIXMAP_CACHE_KB = 1024 * 1024
 
 DECODE_THREADS = 4
@@ -119,8 +120,8 @@ class TextureModel(QAbstractListModel):
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(self._filtered_textures)}
         self._colors: list[QColor] = []
         self._index: ColorIndex | None = None
-        # the newest request is the one most likely to be on screen, so the
-        # queue is drained from the end
+        # drained from the end, so whatever fills it puts the rows wanted
+        # soonest last
         self._queue: dict[str, None] = {}
         self._running: set[str] = set()
         self._failed: set[str] = set()
@@ -433,17 +434,34 @@ class TextureModel(QAbstractListModel):
             self.ranked.emit()
 
     def request(self, texture: Texture) -> None:
+        if self.enqueue(texture):
+            self.pump()
+
+    def enqueue(self, texture: Texture) -> bool:
+        uuid = texture.uuid
+
+        if uuid in self._queue or not self.wanted(texture):
+            return False
+
+        self._queue[uuid] = None
+
+        return True
+
+    def wanted(self, texture: Texture) -> bool:
         uuid = texture.uuid
 
         # an entry the cache never finished downloading has no codestream to
         # decode, so the thumbnail beside it in the cache is all there ever is
         if not texture.whole():
-            return
+            return False
 
-        if uuid in self._queue or uuid in self._running or uuid in self._failed:
-            return
+        if uuid in self._running or uuid in self._failed:
+            return False
 
-        self._queue[uuid] = None
+        return not QPixmapCache.find(uuid, QPixmap())
+
+    def prefetch(self, rows: Iterable[int]) -> None:
+        self._queue = dict.fromkeys([texture.uuid for texture in map(self.texture, rows) if self.wanted(texture)])
 
         self.pump()
 
@@ -459,12 +477,6 @@ class TextureModel(QAbstractListModel):
             self._running.add(uuid)
 
             self._pool.start(DecodeTask(self._filtered_textures[row], self._reads, self._signals))
-
-    def drain(self, first_row: int, last_row: int) -> None:
-        # the list is not just for show, it lets fromkeys size the dict up front
-        self._queue = dict.fromkeys(
-            [uuid for uuid in self._queue if first_row <= self._filtered_rows.get(uuid, -1) <= last_row]
-        )
 
     def learn(self, uuid: str, natural: QSize) -> None:
         if not natural.isEmpty():
