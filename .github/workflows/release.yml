@@ -61,7 +61,7 @@ jobs:
     needs: meta
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: macos-15
