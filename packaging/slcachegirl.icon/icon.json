@@ -1,6 +1,6 @@
 {
   "fill" : {
-    "automatic-gradient" : "srgb:1.00000,0.40030,0.73014,1.00000"
+    "automatic-gradient" : "display-p3:0.11047,0.00707,0.08948,1.00000"
   },
   "groups" : [
     {
@@ -13,14 +13,15 @@
           "image-name" : "slcachegirl.png",
           "name" : "slcachegirl",
           "position" : {
-            "scale" : 0.95,
+            "scale" : 1.01,
             "translation-in-points" : [
-              0.47500000000002274,
-              27.075000000000045
+              40.402784406383375,
+              28.785000000000082
             ]
           }
         }
       ],
+      "name" : "Group",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
