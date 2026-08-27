@@ -13,6 +13,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
     QLabel,
     QListView,
     QStyle,
@@ -113,6 +114,10 @@ class TextureGrid(QListView):
 
         self._pin: int | None = None
         self._dragged = False
+
+        # the splitter the grid sits in makes it draw its frame, which on macOS
+        # lands as a hard line across the top of the window under the title bar
+        self.setFrameShape(QFrame.Shape.NoFrame)
 
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it
