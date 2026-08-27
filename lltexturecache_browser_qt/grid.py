@@ -15,11 +15,9 @@ from PySide6.QtWidgets import (
     QApplication,
     QLabel,
     QListView,
-    QPushButton,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -85,45 +83,29 @@ class CellDelegate(QStyledItemDelegate):
         return QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
 
 
-class EmptyState(QWidget):
-    opened = Signal()
-
+class EmptyState(QLabel):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self._message = QLabel()
-        self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self._message.setForegroundRole(QPalette.ColorRole.Text)
+        self.setForegroundRole(QPalette.ColorRole.Text)
 
-        self._open = QPushButton("Open...")
-        self._open.clicked.connect(self.opened)
+    def set_message(self, message: str) -> None:
+        self.setText(message)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        self.setWordWrap(False)
 
-        layout.addWidget(self._message, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(self._open, 0, Qt.AlignmentFlag.AlignHCenter)
-
-    def set_message(self, message: str, may_open: bool = False) -> None:
-        self._message.setText(message)
-
-        self._open.setVisible(may_open)
-
-        self._message.setWordWrap(False)
-
-        width = self._message.sizeHint().width()
+        width = self.sizeHint().width()
         wraps = width > MESSAGE_WIDTH
 
-        self._message.setWordWrap(wraps)
-        self._message.setFixedWidth(MESSAGE_WIDTH if wraps else width)
+        self.setWordWrap(wraps)
+        self.setFixedWidth(MESSAGE_WIDTH if wraps else width)
 
         self.adjustSize()
 
 
 class TextureGrid(QListView):
-    opened = Signal()
     dragged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -135,14 +117,13 @@ class TextureGrid(QListView):
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it
         self._empty = EmptyState(self.viewport())
-        self._empty.opened.connect(self.opened)
         self.verticalScrollBar().rangeChanged.connect(self.apply_pin)
         self.verticalScrollBar().actionTriggered.connect(self.unpin)
 
         self.sync_empty()
 
-    def set_message(self, message: str, may_open: bool = False) -> None:
-        self._empty.set_message(message, may_open)
+    def set_message(self, message: str) -> None:
+        self._empty.set_message(message)
 
         self.centre_empty()
 
