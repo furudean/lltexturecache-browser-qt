@@ -51,6 +51,7 @@ class WindowActions(QObject):
     inspected = Signal(bool)
     filtered = Signal(bool)
     previewed = Signal(bool)
+    preview_toggled = Signal()
     incompleted = Signal(bool)
     simple_shown = Signal(bool)
     abouted = Signal()
@@ -125,8 +126,7 @@ class WindowActions(QObject):
 
         view_menu = menu.addMenu("&View")
 
-        self.preview = QAction("Show &Preview", window)
-        self.preview.setShortcut(QKeySequence(Qt.Key.Key_Space))
+        self.preview = QAction("Show &Preview Pane", window)
         self.preview.setStatusTip("Show the selected texture in a window of its own")
         self.preview.setCheckable(True)
         self.preview.setChecked(bool(QSettings().value(PREVIEW_KEY, False, type=bool)))
@@ -223,8 +223,18 @@ class WindowActions(QObject):
 
         return menu
 
-    def context_menu(self, parent: QWidget, selected: int, *, idle: bool) -> QMenu:
+    def context_menu(self, parent: QWidget, selected: int, *, idle: bool, previewing: bool) -> QMenu:
         menu = QMenu(parent)
+
+        preview = menu.addAction("Hide Preview" if previewing else "Preview")
+
+        preview.setShortcut(QKeySequence(Qt.Key.Key_Space))
+        preview.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        preview.setShortcutVisibleInContextMenu(True)
+
+        triggers(preview, self.preview_toggled.emit)
+
+        menu.addSeparator()
 
         entries = self.format_menu(menu, export_title(selected, everything=False), everything=False)
         entries.setEnabled(idle)

@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
         self._view.set_message("No texture cache selected")
         self._view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._view.dragged.connect(self.drag_action)
+        self._view.previewed.connect(self.toggle_preview_action)
         self._view.customContextMenuRequested.connect(self.context_action)
         self._view.verticalScrollBar().valueChanged.connect(self.prefetch_action)
         # a grid that has been resized, filtered or filled has a new band under
@@ -221,6 +222,7 @@ class MainWindow(QMainWindow):
         self._actions.reloaded.connect(self.refresh_action)
         self._actions.exported.connect(self.export_action)
         self._actions.previewed.connect(self.preview_action)
+        self._actions.preview_toggled.connect(self.toggle_preview_action)
         self._actions.inspected.connect(self.inspector_action)
         self._actions.filtered.connect(self.filters_action)
         self._actions.incompleted.connect(self.incomplete_action)
@@ -307,13 +309,13 @@ class MainWindow(QMainWindow):
     def follow_preview(cls, window: "MainWindow | None" = None) -> None:
         """Point the shared preview at a window, or at whichever one is left to take it"""
 
-        if window is not None and not window.showing_preview():
+        if window is not None and not window.wants_preview():
             # the window asking has nothing to put there, so the preview stays
             # where it is unless where it is happens to be that same window
             window = None if window is cls._previewing else cls._previewing
 
         if window is None:
-            window = next((other for other in cls._windows if other.showing_preview()), None)
+            window = next((other for other in cls._windows if other.wants_preview()), None)
 
         cls._previewing = window
 
@@ -559,7 +561,12 @@ class MainWindow(QMainWindow):
         if not selected:
             return
 
-        menu = self._actions.context_menu(self._view, selected, idle=self._job is None)
+        menu = self._actions.context_menu(
+            self._view,
+            selected,
+            idle=self._job is None,
+            previewing=self.holds_preview(),
+        )
 
         menu.exec(self._view.viewport().mapToGlobal(at))
         menu.deleteLater()
@@ -847,8 +854,29 @@ class MainWindow(QMainWindow):
 
         self.sync_preview()
 
-    def showing_preview(self) -> bool:
+    def toggle_preview_action(self) -> None:
+        if self.holds_preview():
+            self._actions.preview.setChecked(False)
+            return
+
+        if not self._view.has_selection():
+            return
+
+        self.open_preview_action()
+
+    def open_preview_action(self) -> None:
+        self._actions.preview.setChecked(True)
+
+        MainWindow.follow_preview(self)
+
+        if MainWindow._preview is not None:
+            MainWindow._preview.present()
+
+    def wants_preview(self) -> bool:
         return self._cache is not None and self._actions.preview.isChecked()
+
+    def holds_preview(self) -> bool:
+        return self.wants_preview() and MainWindow._previewing is self
 
     def sync_preview(self) -> None:
         self._actions.preview.setEnabled(self._cache is not None)

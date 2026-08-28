@@ -146,6 +146,7 @@ class EmptyState(QLabel):
 
 class TextureGrid(QListView):
     dragged = Signal()
+    previewed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -277,7 +278,16 @@ class TextureGrid(QListView):
     def keyPressEvent(self, event: QKeyEvent) -> None:
         self.unpin()
 
+        if event.key() == Qt.Key.Key_Space:
+            self.previewed.emit()
+            return
+
         super().keyPressEvent(event)
+
+    def has_selection(self) -> bool:
+        selection = self.selectionModel()
+
+        return selection is not None and bool(selection.selectedIndexes())
 
     def startDrag(self, actions: Qt.DropAction) -> None:
         self._dragged = True
