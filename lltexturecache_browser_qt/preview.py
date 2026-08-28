@@ -1,4 +1,4 @@
-from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
@@ -57,7 +57,6 @@ class PreviewWindow(QWidget):
         self.resize(WINDOW_SIZE, WINDOW_SIZE)
 
         self._pixmap = QPixmap()
-        self._natural = QSize()
         self._message = ""
         self._lightness: float | None = None
         self._pressed = False
@@ -75,7 +74,7 @@ class PreviewWindow(QWidget):
 
     def clear(self) -> None:
         self.setWindowTitle(WINDOW_TITLE)
-        self.set_image(QPixmap(), QSize(), "No selection")
+        self.set_image(QPixmap(), "No selection")
 
     def show_texture(
         self,
@@ -92,27 +91,16 @@ class PreviewWindow(QWidget):
         else:
             message = "Could not decode" if decoded is not None else "Decoding..."
 
-        self.set_image(pixmap, natural, message)
+        self.set_image(pixmap, message)
 
-    def set_image(self, pixmap: QPixmap, natural: QSize, message: str) -> None:
+    def set_image(self, pixmap: QPixmap, message: str) -> None:
         self._pixmap = pixmap
-        self._natural = natural
         self._message = message
         self._lightness = pixmap_lightness(pixmap)
 
         set_picked_lightness(self._lightness)
 
         self.update()
-
-    def image_rect(self) -> QRect:
-        shape = self._natural if not self._natural.isEmpty() else self._pixmap.size()
-
-        fitted = shape.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
-
-        rect = QRect(0, 0, fitted.width(), fitted.height())
-        rect.moveCenter(self.rect().center())
-
-        return rect
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
@@ -121,7 +109,7 @@ class PreviewWindow(QWidget):
             painter.setPen(self.palette().placeholderText().color())
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._message)
         else:
-            target = self.image_rect()
+            target = self.rect()
 
             checkerboard = pane_checkerboard(self._lightness) if self._pixmap.hasAlphaChannel() else None
 
