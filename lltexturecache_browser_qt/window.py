@@ -960,7 +960,7 @@ class MainWindow(QMainWindow):
         if visible is None or band is None:
             return
 
-        model.prefetch(self.outward(band, visible))
+        model.prefetch(self.outward(band, visible), range(visible[0], visible[1] + 1))
 
     def reach(self) -> int:
         """How far past the viewport, in pixels, cells are decoded ahead"""

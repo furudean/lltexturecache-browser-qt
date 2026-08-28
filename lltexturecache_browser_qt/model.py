@@ -32,6 +32,9 @@ FULL_SIZE = 800
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
 
+CELL_PRIORITY = 0
+AHEAD_PRIORITY = -1
+
 FULL_CACHE = 12
 
 # a decoded cell is 100x100 at 32 bits, or 39 KB, so this holds about 27k textures
@@ -121,8 +124,9 @@ class TextureModel(QAbstractListModel):
         self._colors: list[QColor] = []
         self._index: ColorIndex | None = None
         # drained from the end, so whatever fills it puts the rows wanted
-        # soonest last
-        self._queue: dict[str, None] = {}
+        # soonest last. what is kept against each row is the priority it goes to
+        # the pool at, since the pool takes work back off nobody
+        self._queue: dict[str, int] = {}
         self._running: set[str] = set()
         self._failed: set[str] = set()
         self._no_sidebar: set[str] = set()
@@ -434,16 +438,21 @@ class TextureModel(QAbstractListModel):
             self.ranked.emit()
 
     def request(self, texture: Texture) -> None:
-        if self.enqueue(texture):
+        if self.enqueue(texture, CELL_PRIORITY):
             self.pump()
 
-    def enqueue(self, texture: Texture) -> bool:
+    def enqueue(self, texture: Texture, priority: int) -> bool:
         uuid = texture.uuid
 
-        if uuid in self._queue or not self.wanted(texture):
+        if uuid in self._queue:
+            if priority <= self._queue[uuid]:
+                return False
+
+            del self._queue[uuid]
+        elif not self.wanted(texture):
             return False
 
-        self._queue[uuid] = None
+        self._queue[uuid] = priority
 
         return True
 
@@ -460,14 +469,20 @@ class TextureModel(QAbstractListModel):
 
         return not QPixmapCache.find(uuid, QPixmap())
 
-    def prefetch(self, rows: Iterable[int]) -> None:
-        self._queue = dict.fromkeys([texture.uuid for texture in map(self.texture, rows) if self.wanted(texture)])
+    def prefetch(self, rows: Iterable[int], showing: Iterable[int]) -> None:
+        on_screen = {self.texture(row).uuid for row in showing}
+
+        self._queue = {
+            texture.uuid: CELL_PRIORITY if texture.uuid in on_screen else AHEAD_PRIORITY
+            for texture in map(self.texture, rows)
+            if self.wanted(texture)
+        }
 
         self.pump()
 
     def pump(self) -> None:
         while self._queue and len(self._running) < DECODES_IN_FLIGHT:
-            uuid, _ = self._queue.popitem()
+            uuid, priority = self._queue.popitem()
 
             row = self._filtered_rows.get(uuid)
 
@@ -476,7 +491,7 @@ class TextureModel(QAbstractListModel):
 
             self._running.add(uuid)
 
-            self._pool.start(DecodeTask(self._filtered_textures[row], self._reads, self._signals))
+            self._pool.start(DecodeTask(self._filtered_textures[row], self._reads, self._signals), priority)
 
     def learn(self, uuid: str, natural: QSize) -> None:
         if not natural.isEmpty():
