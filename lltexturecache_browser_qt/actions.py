@@ -18,6 +18,7 @@ PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"
 FILTERS_KEY = "showColorFilters"
 INCOMPLETE_KEY = "showIncomplete"
+SIMPLE_KEY = "showSimple"
 
 TONES = {
     CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
@@ -51,6 +52,7 @@ class WindowActions(QObject):
     filtered = Signal(bool)
     previewed = Signal(bool)
     incompleted = Signal(bool)
+    simple_shown = Signal(bool)
     abouted = Signal()
 
     def __init__(self, window: QMainWindow) -> None:
@@ -156,6 +158,13 @@ class WindowActions(QObject):
         self.incomplete.toggled.connect(self.store_incomplete)
         self.incomplete.toggled.connect(self.incompleted)
 
+        self.simple = QAction("Show &Simple Textures", window)
+        self.simple.setStatusTip("List textures that are one solid color or fully transparent")
+        self.simple.setCheckable(True)
+        self.simple.setChecked(bool(QSettings().value(SIMPLE_KEY, False, type=bool)))
+        self.simple.toggled.connect(self.store_simple)
+        self.simple.toggled.connect(self.simple_shown)
+
         self._tones: dict[CheckerTone, QAction] = {}
 
         tones = QActionGroup(window)
@@ -187,6 +196,7 @@ class WindowActions(QObject):
         # from the three entries above it
         view_menu.addSeparator()
         view_menu.addAction(self.incomplete)
+        view_menu.addAction(self.simple)
 
         checkerboard = view_menu.addMenu("&Transparency")
         checkerboard.addActions(list(self._tones.values()))
@@ -267,6 +277,9 @@ class WindowActions(QObject):
 
     def store_incomplete(self, shown: bool) -> None:
         QSettings().setValue(INCOMPLETE_KEY, shown)
+
+    def store_simple(self, shown: bool) -> None:
+        QSettings().setValue(SIMPLE_KEY, shown)
 
 
 def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:

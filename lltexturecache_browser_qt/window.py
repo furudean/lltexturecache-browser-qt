@@ -224,6 +224,7 @@ class MainWindow(QMainWindow):
         self._actions.inspected.connect(self.inspector_action)
         self._actions.filtered.connect(self.filters_action)
         self._actions.incompleted.connect(self.incomplete_action)
+        self._actions.simple_shown.connect(self.simple_action)
         self._actions.abouted.connect(self.about_action)
 
         # how much is selected and how much is in the cache both move around
@@ -241,6 +242,7 @@ class MainWindow(QMainWindow):
         self.sync_preview()
         self.sync_filters()
         self.sync_incomplete()
+        self.sync_simple()
 
     @classmethod
     def session(cls) -> list[Path]:
@@ -672,6 +674,39 @@ class MainWindow(QMainWindow):
     def showing_incomplete(self) -> bool:
         return self._actions.incomplete.isChecked()
 
+    def simple_action(self, shown: bool) -> None:
+        model = self._view.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        place = self._view.place()
+
+        if not model.set_simple_hidden(not shown):
+            # the scan that says which textures hold a picture is still out, and
+            # what was asked for here is applied the moment it lands
+            self._status.flash("Please wait...")
+            return
+
+        self.sync_empty()
+        self.sync_export()
+
+        self._status.set_summary(self.summary())
+
+        if self.ranking():
+            self.scroll_ranked()
+        else:
+            # the rows go from all through the grid rather than off one end of
+            # it, so where the view already was is the nearest thing to where
+            # it should be left
+            self._view.pin_to(place)
+
+    def sync_simple(self) -> None:
+        self._actions.simple.setEnabled(self._cache is not None)
+
+    def showing_simple(self) -> bool:
+        return self._actions.simple.isChecked()
+
     def narrowed(self) -> bool:
         model = self._view.model()
 
@@ -702,15 +737,46 @@ class MainWindow(QMainWindow):
     def summary(self) -> str:
         model = self._view.model()
 
-        if not isinstance(model, TextureModel) or not model.narrowed:
+        if not isinstance(model, TextureModel):
             return self._summary
 
-        return f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
+        if model.narrowed:
+            return (
+                f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
+            )
+
+        return self.grid_summary()
+
+    def grid_summary(self) -> str:
+        model = self._view.model()
+
+        if self._cache is None or not isinstance(model, TextureModel):
+            return self._summary
+
+        shown = model.rowCount()
+
+        summary = f"Showing {format_count(shown)} textures of {format_count(len(self._cache))} entries in cache"
+
+        # both counts are of the rows the grid ended up with rather than of the
+        # cache, since an entry left out of it is neither shown nor news
+        unfinished = (
+            sum(1 for row in range(shown) if not model.texture(row).whole()) if self.showing_incomplete() else 0
+        )
+
+        if unfinished:
+            summary += f", {format_count(unfinished)} incomplete"
+
+        hidden = model.hidden()
+
+        if hidden:
+            summary += f", {format_count(hidden)} simple textures hidden"
+
+        return summary
 
     def sync_empty(self) -> None:
         model = self._view.model()
 
-        if not isinstance(model, TextureModel) or not model.narrowed:
+        if not isinstance(model, TextureModel) or not (model.narrowed or model.hidden()):
             self._view.set_message("Cache is empty")
         else:
             self._view.set_message("No textures match filters")
@@ -1105,6 +1171,7 @@ class MainWindow(QMainWindow):
         self.sync_preview()
         self.sync_filters()
         self.sync_incomplete()
+        self.sync_simple()
         self._status.set_opened(True)
 
         MainWindow.save_session()
@@ -1135,7 +1202,7 @@ class MainWindow(QMainWindow):
         if isinstance(old_model, TextureModel):
             old_model.shutdown()
 
-        model = TextureModel(textures, self)
+        model = TextureModel(textures, self._cache, self)
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
         model.ranked.connect(self.ranked_action)
@@ -1160,6 +1227,7 @@ class MainWindow(QMainWindow):
         if MainWindow._preview is not None and MainWindow._previewing is self:
             MainWindow._preview.clear()
 
+        model.set_simple_hidden(not self.showing_simple())
         model.set_filters(self._filters.colors())
 
         self.sync_export()
@@ -1167,14 +1235,7 @@ class MainWindow(QMainWindow):
         if not self.ranking():
             self.scroll_to_end()
 
-        self._summary = (
-            f"Showing {format_count(len(textures))} textures of {format_count(len(self._cache))} entries in cache"
-        )
-
-        unfinished = sum(1 for texture in textures if not texture.whole()) if incomplete else 0
-
-        if unfinished:
-            self._summary += f", {format_count(unfinished)} incomplete"
+        self._summary = self.grid_summary()
 
         self._status.set_summary(note if note else self.summary())
 

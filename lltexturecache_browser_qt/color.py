@@ -1,12 +1,18 @@
 import threading
 from collections import Counter
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field, replace
 from functools import cache
 from math import cbrt, dist, exp, hypot
 
 from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QColor, QImage
-from texture_courier import Texture, TextureCacheError
+from texture_courier import Texture, TextureCache, TextureCacheError
+
+# the mip level a thumbnail was taken at is the only thing in the cache that
+# says how large the texture behind it is, and it is not carried out through
+# the public api, which hands over the encoded thumbnail and nothing else
+from texture_courier.core import Thumbnail, read_fast_cache
 
 from lltexturecache_browser_qt.images import read_image
 
@@ -79,6 +85,28 @@ CUTOFF = 3.0
 # how much of a texture has to be near a color before it is worth showing
 MATCH_FLOOR = 0.12
 
+# how far apart two of a texture's raw channel levels can stand and still be
+# the one color. a thumbnail is decoded out of a lossy codestream, so a texture
+# painted one flat color comes back a level or two either side of it
+FLAT_RANGE = 4
+
+# the same for opacity. a solid color cut into a shape is a sprite rather than
+# a blank, and the shape is in the opacity, so a texture only counts as flat
+# when its opacity is as unvarying as its color
+FLAT_ALPHA_RANGE = 4
+
+# what a texture with no picture in it is allowed to cost, as the markers every
+# codestream opens with plus what its pixels come to. a thumbnail is sixteen
+# pixels at the most, which is few enough to average a weave or a grain away to
+# nothing, so what the thumbnail says has to be borne out by what the encoder
+# needed. the two terms are both wanted: without the base a small blank is
+# damned by the header it could not avoid paying for, and without the rate a
+# large one has no room to hold its own size. the base is kept near the
+# smallest codestream a cache holds, since past that it stops telling a small
+# blank apart from a small texture, both of which are mostly header
+FLAT_BASE_BYTES = 384
+FLAT_MAX_DENSITY = 0.03
+
 # bits of each channel a color is rounded to before it is counted, which is
 # 32768 colors and an error too small to move a texture in the ranking
 QUANTUM = 5
@@ -144,21 +172,70 @@ def tightening(target_chroma: float) -> float:
     return cbrt(room * room)
 
 
-def counted(image: QImage) -> Counter[int]:
+def packed(image: QImage) -> bytes:
+    """The image's pixels, as they were decoded"""
+
     argb = image.convertToFormat(QImage.Format.Format_ARGB32)
 
     # a row of 32 bit pixels is never padded out, so the buffer holds the
     # pixels and nothing besides, in the order a word of argb reads back in
-    packed = bytes(argb.constBits()).translate(QUANTIZE)
-
-    return Counter(memoryview(packed).cast("I"))
+    return bytes(argb.constBits())
 
 
-def signature(image: QImage) -> list[tuple[Lab, float]] | None:
+def counted(raw: bytes) -> Counter[int]:
+    """How many pixels the image holds of each color, at the levels lab is kept against"""
+
+    return Counter(memoryview(raw.translate(QUANTIZE)).cast("I"))
+
+
+def spans(distinct: set[int], *, lit: bool) -> tuple[int, int]:
+    """How far the colors and the opacities in an image stand apart, in raw levels
+
+    Off the pixels as they were decoded rather than the rounded ones the color
+    index counts. Rounding drops two neighbouring levels in different bins as
+    readily as in the same one, and the grey a normal map is mostly made of
+    sits on a bin edge exactly, so a texture painted one flat color comes back
+    from the rounding looking like a texture painted two.
+    """
+
+    color = max(
+        max(levels) - min(levels)
+        for levels in ([(pixel >> shift) & 0xFF for pixel in distinct] for shift in (0, 8, 16))
+    )
+
+    opacities = [pixel >> 24 for pixel in distinct] if lit else [0xFF]
+
+    return color, max(opacities) - min(opacities)
+
+
+@dataclass(frozen=True)
+class Signature:
+    colors: list[tuple[Lab, float]] = field(default_factory=list)
+
+    # whether the texture is one solid color all over, or shows nothing at all.
+    # either way there is no picture in it to look at, only a color, which is
+    # what a cache is full of and what a viewer is rarely looking for
+    flat: bool = False
+
+
+def signature(image: QImage) -> Signature | None:
     if image.isNull():
         return None
 
-    counts = counted(image)
+    raw = packed(image)
+    distinct = set(memoryview(raw).cast("I"))
+
+    if not distinct:
+        return None
+
+    # the viewer does not always write the opacity of a thumbnail it keeps, and
+    # an image with none of it anywhere is one that was left out rather than one
+    # that is really invisible. taking those at their word hands a twentieth of
+    # a cache to whatever asks for a blank, and keeps their colors out of the
+    # index besides, since a clear pixel is one that shows no color
+    lit = any(pixel >> 24 for pixel in distinct)
+
+    counts = counted(raw)
     gathered: dict[tuple[int, int, int], list[float]] = {}
 
     total = 0
@@ -167,7 +244,7 @@ def signature(image: QImage) -> list[tuple[Lab, float]] | None:
     for pixel, count in counts.items():
         total += count
 
-        alpha = pixel >> 24
+        alpha = (pixel >> 24) if lit else 0xFF
 
         if alpha < ALPHA_FLOOR:
             continue
@@ -191,16 +268,25 @@ def signature(image: QImage) -> list[tuple[Lab, float]] | None:
             bin[3] += blue_yellow * weight
 
     if not shown:
-        return None
+        # nothing in it is opaque enough to show a color, so there is no color
+        # to file it under and nothing to see either
+        return Signature(flat=True)
 
     coverage = min(1.0, shown / (total * MIN_COVERAGE))
 
     top = sorted(merged(gathered.values()), key=lambda bin: bin[0], reverse=True)[:CLUSTERS]
 
-    return [
+    colors = [
         ((lightness, green_red, blue_yellow), weight / shown * coverage)
         for weight, lightness, green_red, blue_yellow in top
     ]
+
+    color, opacity = spans(distinct, lit=lit)
+
+    # the thumbnail is only half of it: the cache keeps some of them at a
+    # single pixel, which is one solid color whatever it was reduced from, so
+    # what the bytes say is what settles those
+    return Signature(colors, flat=color <= FLAT_RANGE and opacity <= FLAT_ALPHA_RANGE)
 
 
 def merged(bins: Iterable[list[float]]) -> list[list[float]]:
@@ -248,12 +334,22 @@ class ColorIndex:
         self._blue_yellow: list[float] = []
         self._chroma: list[float] = []
         self._weights: list[float] = []
+        self._flat: set[int] = set()
 
     def __len__(self) -> int:
         return self._count
 
-    def add(self, row: int, colors: list[tuple[Lab, float]]) -> None:
-        for (lightness, green_red, blue_yellow), weight in colors:
+    @property
+    def flat(self) -> set[int]:
+        """The rows holding one solid color, or nothing visible at all"""
+
+        return self._flat
+
+    def add(self, row: int, signature: Signature) -> None:
+        if signature.flat:
+            self._flat.add(row)
+
+        for (lightness, green_red, blue_yellow), weight in signature.colors:
             self._rows.append(row)
             self._lightness.append(lightness)
             self._green_red.append(green_red)
@@ -348,10 +444,13 @@ class ScanSignals(QObject):
 class ColorScan(QRunnable):
     """Reads the colors of every texture in a cache, off the ui thread"""
 
-    def __init__(self, textures: list[Texture], thumbnails: threading.Lock, signals: ScanSignals) -> None:
+    def __init__(
+        self, textures: list[Texture], cache: TextureCache, thumbnails: threading.Lock, signals: ScanSignals
+    ) -> None:
         super().__init__()
 
         self._textures = textures
+        self._cache = cache
         self._thumbnails = thumbnails
         self._signals = signals
         self._stopped = threading.Event()
@@ -367,10 +466,10 @@ class ColorScan(QRunnable):
             if self._stopped.is_set():
                 return
 
-            colors = self.read(texture)
+            signature = self.read(texture)
 
-            if colors is not None:
-                index.add(row, colors)
+            if signature is not None:
+                index.add(row, signature)
 
         if self._stopped.is_set():
             return
@@ -382,11 +481,12 @@ class ColorScan(QRunnable):
             # check above and here, taking the signals it reports through along
             pass
 
-    def read(self, texture: Texture) -> list[tuple[Lab, float]] | None:
+    def read(self, texture: Texture) -> Signature | None:
         try:
             # the thumbnails all come out of the one file, the same as the reads
             # the grid makes, so this waits its turn among them
             with self._thumbnails:
+                kept = self.kept(texture)
                 thumbnail = texture.thumbnail_png()
         except (TextureCacheError, OSError):
             return None
@@ -394,4 +494,36 @@ class ColorScan(QRunnable):
         if thumbnail is None:
             return None
 
-        return signature(read_image(QByteArray(thumbnail)))
+        found = signature(read_image(QByteArray(thumbnail)))
+
+        # the thumbnail is the only look at the texture this gets, and sixteen
+        # pixels average a weave away to one flat color as readily as they
+        # report a blank. what the encoder needed is the second opinion, and
+        # it is the one that stands
+        if found is not None and found.flat and self.dense(texture, kept):
+            return replace(found, flat=False)
+
+        return found
+
+    def kept(self, texture: Texture) -> Thumbnail | None:
+        """The thumbnail as the cache holds it, which knows what it was reduced from"""
+
+        fast_cache = self._cache.fast_cache_file
+
+        return read_fast_cache(fast_cache, texture.index) if fast_cache is not None else None
+
+    def dense(self, texture: Texture, kept: Thumbnail | None) -> bool:
+        """Whether the texture pays too many bytes for its pixels to be holding no picture
+
+        The thumbnail was taken at one of the texture's mip levels and says
+        which, so doubling it back up that many times is the size of the
+        texture itself. Nothing says so when the cache has no thumbnail kept,
+        and an entry with none of its own never reaches this.
+        """
+
+        if kept is None or not kept.width or not kept.height:
+            return False
+
+        pixels = (kept.width << kept.discard_level) * (kept.height << kept.discard_level)
+
+        return texture.image_size > FLAT_BASE_BYTES + pixels * FLAT_MAX_DENSITY

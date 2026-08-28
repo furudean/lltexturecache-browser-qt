@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
-from lltexturecache_browser_qt.model import INCOMPLETE_ROLE, Index
+from lltexturecache_browser_qt.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index
 
 CELL_PADDING = 14
 
@@ -36,6 +36,11 @@ MESSAGE_WIDTH = 320
 # since it is drawn over the image rather than over the background
 INCOMPLETE_COLOR = QColor(0xEF, 0x7C, 0x14)
 INCOMPLETE_WEIGHT = 2
+
+SIMPLE_COLOR = QColor(0x33, 0x33, 0x33)
+SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
+SIMPLE_WEIGHT = 2
+SIMPLE_DASH = 2.5
 
 
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
@@ -59,25 +64,58 @@ class CellDelegate(QStyledItemDelegate):
 
         icon.paint(painter, option.rect, Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
 
-        if index.data(INCOMPLETE_ROLE):
-            self.mark(painter, icon, option.rect)
+        incomplete = bool(index.data(INCOMPLETE_ROLE))
 
-    def mark(self, painter: QPainter, icon: QIcon, rect: QRect) -> None:
-        """Ring the image of an entry the cache never finished downloading"""
+        if index.data(SIMPLE_ROLE):
+            self.mark_simple(painter, icon, option.rect, INCOMPLETE_WEIGHT if incomplete else 0)
 
+        if incomplete:
+            self.mark_incomplete(painter, icon, option.rect)
+
+    def image_rect(self, icon: QIcon, rect: QRect, weight: float, inset: float) -> QRectF | None:
         drawn = QRect(QPoint(), icon.actualSize(rect.size()))
 
         if drawn.isEmpty():
-            return
+            return None
 
         drawn.moveCenter(rect.center())
 
-        inset = INCOMPLETE_WEIGHT / 2
+        room = inset + weight / 2
+
+        return QRectF(drawn).adjusted(room, room, -room, -room)
+
+    def mark_incomplete(self, painter: QPainter, icon: QIcon, rect: QRect) -> None:
+        box = self.image_rect(icon, rect, INCOMPLETE_WEIGHT, 0)
+
+        if box is None:
+            return
 
         painter.save()
         painter.setPen(QPen(INCOMPLETE_COLOR, INCOMPLETE_WEIGHT))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(QRectF(drawn).adjusted(inset, inset, -inset, -inset))
+        painter.drawRect(box)
+        painter.restore()
+
+    def mark_simple(self, painter: QPainter, icon: QIcon, rect: QRect, inset: float) -> None:
+        box = self.image_rect(icon, rect, SIMPLE_WEIGHT, inset)
+
+        if box is None:
+            return
+
+        dashed = QPen(SIMPLE_COLOR, SIMPLE_WEIGHT, Qt.PenStyle.CustomDashLine)
+        dashed.setDashPattern([SIMPLE_DASH, SIMPLE_DASH])
+
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+        # the pale ring goes down whole and the dark one dashes over it, so a
+        # blank of any lightness has one of the two to show it against
+        painter.setPen(QPen(SIMPLE_GROUND, SIMPLE_WEIGHT))
+        painter.drawRect(box)
+
+        painter.setPen(dashed)
+        painter.drawRect(box)
+
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: Index) -> QSize:

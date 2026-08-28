@@ -14,7 +14,7 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
-from texture_courier import Texture, TextureCacheError
+from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
@@ -52,6 +52,10 @@ type Index = QModelIndex | QPersistentModelIndex
 # whether the row's entry is one the cache never finished downloading, which the
 # grid marks and nothing else has a way of asking about
 INCOMPLETE_ROLE = Qt.ItemDataRole.UserRole
+
+# whether the row's texture holds one solid color or nothing visible at all,
+# which the grid rings when it is not leaving those out altogether
+SIMPLE_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 def sidebar_key(uuid: str) -> str:
@@ -114,7 +118,7 @@ class TextureModel(QAbstractListModel):
     preview_ready = Signal(str)
     ranked = Signal()
 
-    def __init__(self, textures: list[Texture], parent: QObject | None = None):
+    def __init__(self, textures: list[Texture], cache: TextureCache, parent: QObject | None = None):
         super().__init__(parent)
 
         self._textures = list(textures)
@@ -122,7 +126,11 @@ class TextureModel(QAbstractListModel):
         self._filtered_textures = self._textures
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(self._filtered_textures)}
         self._colors: list[QColor] = []
+        self._simple_hidden = False
         self._index: ColorIndex | None = None
+        # the textures the scan found no picture in, which are left out of the
+        # grid or ringed in it depending on what the menu says
+        self._simple: set[str] = set()
         # drained from the end, so whatever fills it puts the rows wanted
         # soonest last. what is kept against each row is the priority it goes to
         # the pool at, since the pool takes work back off nobody
@@ -167,7 +175,7 @@ class TextureModel(QAbstractListModel):
         self._scan_signals = ScanSignals(self)
         self._scan_signals.done.connect(self.scanned)
 
-        self._scan = ColorScan(self._textures, self._thumbnails, self._scan_signals)
+        self._scan = ColorScan(self._textures, cache, self._thumbnails, self._scan_signals)
 
         QThreadPool.globalInstance().start(self._scan)
 
@@ -195,6 +203,9 @@ class TextureModel(QAbstractListModel):
     def colors(self) -> list[QColor]:
         return list(self._colors)
 
+    def hidden(self) -> int:
+        return len(self._simple) if self._simple_hidden else 0
+
     def texture(self, row: int) -> Texture:
         return self._filtered_textures[row]
 
@@ -220,6 +231,9 @@ class TextureModel(QAbstractListModel):
 
         if role == INCOMPLETE_ROLE:
             return not texture.whole()
+
+        if role == SIMPLE_ROLE:
+            return texture.uuid in self._simple
 
         if role == Qt.ItemDataRole.ToolTipRole:
             lines = [texture.uuid, format_time(texture.time)]
@@ -397,8 +411,13 @@ class TextureModel(QAbstractListModel):
 
         return self.apply_filters()
 
+    def set_simple_hidden(self, hidden: bool) -> bool:
+        self._simple_hidden = hidden
+
+        return self.apply_filters()
+
     def apply_filters(self) -> bool:
-        if not self._colors:
+        if not self._colors and not self._simple_hidden:
             self.reorder(self._textures)
 
             return True
@@ -406,12 +425,17 @@ class TextureModel(QAbstractListModel):
         if self._index is None:
             return False
 
-        scores = self._index.scores(self._colors)
+        flat: set[int] = self._index.flat if self._simple_hidden else set()
 
-        floor = MATCH_FLOOR / len(self._colors)
+        kept = [row for row in range(len(self._textures)) if row not in flat]
 
-        kept = [row for row, score in enumerate(scores) if score >= floor]
-        kept.sort(key=lambda row: -scores[row])
+        if self._colors:
+            scores = self._index.scores(self._colors)
+
+            floor = MATCH_FLOOR / len(self._colors)
+
+            kept = [row for row in kept if scores[row] >= floor]
+            kept.sort(key=lambda row: -scores[row])
 
         self.reorder([self._textures[row] for row in kept])
 
@@ -433,9 +457,19 @@ class TextureModel(QAbstractListModel):
     @Slot(object)
     def scanned(self, index: ColorIndex) -> None:
         self._index = index
+        self._simple = {self._textures[row].uuid for row in index.flat}
 
-        if self._colors and self.apply_filters():
+        if (self._colors or self._simple_hidden) and self.apply_filters():
             self.ranked.emit()
+        elif self._simple and self._filtered_textures:
+            # nothing is being narrowed, so no reset goes out to redraw the
+            # grid, and the rows the scan just found no picture in would sit
+            # there unringed until something else happened to touch them
+            self.dataChanged.emit(
+                self.index(0, 0),
+                self.index(len(self._filtered_textures) - 1, 0),
+                [SIMPLE_ROLE],
+            )
 
     def request(self, texture: Texture) -> None:
         if self.enqueue(texture, CELL_PRIORITY):
