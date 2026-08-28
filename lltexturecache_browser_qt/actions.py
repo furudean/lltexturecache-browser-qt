@@ -202,6 +202,9 @@ class WindowActions(QObject):
         checkerboard = view_menu.addMenu("&Transparency Mode")
         checkerboard.addActions(list(self._tones.values()))
 
+        view_menu.addSeparator()
+        # any native system menus under here
+
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
         CheckerboardChanges.shared().changed.disconnect(self.sync_checkerboard)
