@@ -22,8 +22,8 @@ SIMPLE_KEY = "showSimple"
 
 TONES = {
     CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
-    CheckerTone.LIGHT: ("&Light", "Draw a light checkerboard behind the transparent parts of a texture"),
-    CheckerTone.DARK: ("&Dark", "Draw a dark checkerboard behind the transparent parts of a texture"),
+    CheckerTone.LIGHT: ("&Grid (Light)", "Draw a light checkerboard behind the transparent parts of a texture"),
+    CheckerTone.DARK: ("&Grid (Dark)", "Draw a dark checkerboard behind the transparent parts of a texture"),
     CheckerTone.NONE: ("&None", "Leave the transparent parts of a texture as they are"),
 }
 
@@ -198,7 +198,8 @@ class WindowActions(QObject):
         view_menu.addAction(self.incomplete)
         view_menu.addAction(self.simple)
 
-        checkerboard = view_menu.addMenu("&Transparency")
+        view_menu.addSeparator()
+        checkerboard = view_menu.addMenu("&Transparency Mode")
         checkerboard.addActions(list(self._tones.values()))
 
     def shutdown(self) -> None:
