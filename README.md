@@ -124,8 +124,8 @@ set the following environment variables to enable code signing and notarization:
 | `MACOS_SIGN_IDENTITY`        | e.g. `Developer ID Application: Your Name (TEAMID)`             | signing        |
 | `APPLE_ID`                   | Apple ID the app-specific password belongs to                   | notarization   |
 | `APPLE_APP_PASSWORD`         | [app-specific password](https://support.apple.com/en-us/102654) | notarization   |
-| `APPLE_TEAM_ID`              | ten character team ID                                           | notarization   |
-| `MACOS_CERTIFICATE`          | developer ID Application certificate as `.p12`, base64 encoded  | keychain in CI |
+| `APPLE_TEAM_ID`              | last part of MACOS_SIGN_IDENTITY                                | notarization   |
+| `MACOS_CERTIFICATE`          | developer id application certificate as `.p12`, base64 encoded  | keychain in CI |
 | `MACOS_CERTIFICATE_PASSWORD` | password the `.p12` was exported with                           | keychain in CI |
 
 ## attribution
