@@ -199,7 +199,7 @@ class WindowActions(QObject):
         view_menu.addAction(self.simple)
 
         view_menu.addSeparator()
-        checkerboard = view_menu.addMenu("&Transparency Mode")
+        checkerboard = view_menu.addMenu("&Alpha Mode")
         checkerboard.addActions(list(self._tones.values()))
 
         view_menu.addSeparator()
@@ -236,7 +236,7 @@ class WindowActions(QObject):
 
         triggers(preview, self.preview_toggled.emit)
 
-        checkerboard = menu.addMenu("&Transparency Mode")
+        checkerboard = menu.addMenu("&Alpha Mode")
         checkerboard.addActions(list(self._tones.values()))
 
         menu.addSeparator()
