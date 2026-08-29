@@ -5,29 +5,47 @@
     alt="a screenshot of lltexturecache-browser-qt with a cache open">
 </p>
 
-a cross-platform tool to browse and export textures from the second life texture
-cache
+lltexturecache-browser-qt is a cross-platform tool to browse and export textures
+from the second life texture cache.
 
-## install
+this application is useful if you want to mod existing assets on second life, like character clothing and the author does not provide a texture to download.
 
-windows and linux builds are attached to
-[each release](https://github.com/furudean/lltexturecache-viewer-gui/releases).
+lltexturecache-browser-qt only reads what is stored in your cache files. it is not a copybot and should not be used to steal assets.
 
-on mac, you can install with homebrew:
-
-```bash
-brew install --cask furudean/tap/lltexturecache-browser-qt
-```
+slcachegirl designed by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
 
 ## features
 
 - browse and filter through a large amount of textures
 - save textures to disk in commonly-used image formats
 - drag and drop support
-- it's fast and out of your way
+- it's fast
 - it's not an electron app
 
-## develop
+
+## i want it
+
+windows, linux and mac builds are attached to
+[each release](https://github.com/furudean/lltexturecache-viewer-gui/releases).
+
+on mac, you may install with homebrew:
+
+```bash
+brew install --cask furudean/tap/lltexturecache-browser-qt
+```
+
+| platform | runs on                                     |
+| -------- | ------------------------------------------- |
+| mac      | macos 13 ventura or later, apple silicon    |
+| windows  | windows 10 or later, x86-64                 |
+| linux    | glibc 2.35 or later (ubuntu 22.04+), x86-64 |
+
+intel macs are not built for.
+
+to run from source or build your own, see [develop](#develop) and
+[build](#build).
+
+## install
 
 use [uv](https://docs.astral.sh/uv/) to run the app in a development context
 
@@ -37,15 +55,20 @@ uv run lltexturecache-browser-qt
 
 ## build
 
-build script makes the app for the host platform. mac gets a `.app` windows
-`.exe` and linux a binary/AppImage. cross-compiling is not supported
+a script makes the app for the host platform. mac gets a `.app` windows
+`.exe` and linux a binary/AppImage. cross-compiling is not supported.
 
 ```bash
 ./scripts/build.sh
 ```
 
-uv is required to build. on linux, you will also need `patchelf` and
-`libxcb-cursor0` on PATH.
+| needs            | on    | for                                                     |
+| ---------------- | ----- | ------------------------------------------------------- |
+| `uv`             | all   | running the build                                       |
+| `patchelf`       | linux | nuitka to fix up the rpaths of the bundled qt libraries |
+| `libxcb-cursor0` | linux | nuitka to have a copy to bundle into the binary         |
+
+none of it is needed to run the result
 
 ## release
 
@@ -59,7 +82,7 @@ to it. it can be triggered like this:
 it bumps the version, commits the bump, tags it, pushes both and creates the
 release. the release triggers a github workflow. which does the rest
 
-## signing (mac only)
+## sign / notarize (mac only)
 
 signing needs a developer ID Application certificate from an apple developer
 program membership. create it in [certificates, identifiers &
@@ -128,6 +151,6 @@ set the following environment variables to enable code signing and notarization:
 | `MACOS_CERTIFICATE`          | developer id application certificate as `.p12`, base64 encoded  | keychain in CI |
 | `MACOS_CERTIFICATE_PASSWORD` | password the `.p12` was exported with                           | keychain in CI |
 
-## attribution
+## prior art
 
-the icon was made by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
+- [SLCacheViewer](http://slcacheviewer.com/) (Windows only)
