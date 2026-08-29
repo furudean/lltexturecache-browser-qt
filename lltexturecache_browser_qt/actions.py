@@ -22,8 +22,8 @@ SIMPLE_KEY = "showSimple"
 
 TONES = {
     CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
-    CheckerTone.LIGHT: ("&Grid (Light)", "Draw a light checkerboard behind the transparent parts of a texture"),
-    CheckerTone.DARK: ("&Grid (Dark)", "Draw a dark checkerboard behind the transparent parts of a texture"),
+    CheckerTone.LIGHT: ("&Checkerboard (Light)", "Draw a light checkerboard behind the transparent parts of a texture"),
+    CheckerTone.DARK: ("&Checkerboard (Dark)", "Draw a dark checkerboard behind the transparent parts of a texture"),
     CheckerTone.NONE: ("&None", "Leave the transparent parts of a texture as they are"),
 }
 
