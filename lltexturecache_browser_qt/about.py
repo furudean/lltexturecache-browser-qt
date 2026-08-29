@@ -87,7 +87,8 @@ class AboutDialog(QDialog):
         width = max(TEXT_WIDTH, licences.sizeHint().width())
 
         self.setFixedWidth(DIALOG_MARGIN * 2 + COLUMN_SPACING + ICON_SIZE + width)
-        self.setFixedHeight(self.sizeHint().height())
+
+        self.setFixedHeight(max(self.minimumSizeHint().height(), body.heightForWidth(self.width())))
 
     def show_licences(self) -> None:
         LicencesDialog.show_shared()
