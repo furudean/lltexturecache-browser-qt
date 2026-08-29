@@ -12,7 +12,7 @@ this application is useful if you want to mod existing assets on second life, li
 
 lltexturecache-browser-qt only reads what is stored in your cache files. it is not a copybot and should not be used to steal assets.
 
-slcachegirl designed by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
+the app's icon, slcachegirl, is designed by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
 
 ## features
 
