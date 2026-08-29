@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
 
         self._inspector = InspectorPane()
         self._inspector.dragged.connect(self.inspector_drag_action)
+        self._inspector.menued.connect(self.inspector_context_action)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._view)
@@ -561,19 +562,28 @@ class MainWindow(QMainWindow):
         if index.isValid() and not selection.isSelected(index):
             selection.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
-        selected = len(selection.selectedIndexes())
+        self.show_context_menu(self._view, self._view.viewport().mapToGlobal(at))
+
+    def inspector_context_action(self, at: QPoint) -> None:
+        self.show_context_menu(self._inspector, at)
+
+    def show_context_menu(self, parent: QWidget, at: QPoint) -> None:
+        if not isinstance(self._view.model(), TextureModel):
+            return
+
+        selected = len(self._view.selectionModel().selectedIndexes())
 
         if not selected:
             return
 
         menu = self._actions.context_menu(
-            self._view,
+            parent,
             selected,
             idle=self._job is None,
             previewing=self.holds_preview(),
         )
 
-        menu.exec(self._view.viewport().mapToGlobal(at))
+        menu.exec(at)
         menu.deleteLater()
 
     def sync_export(self) -> None:

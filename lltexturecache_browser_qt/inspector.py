@@ -1,5 +1,6 @@
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import (
+    QContextMenuEvent,
     QMouseEvent,
     QPixmap,
     QResizeEvent,
@@ -34,6 +35,7 @@ ROW_SPACING = 4
 class SidebarLabel(QLabel):
     clicked = Signal()
     dragged = Signal()
+    menued = Signal(QPoint)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,6 +94,12 @@ class SidebarLabel(QLabel):
 
         super().mouseReleaseEvent(event)
 
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        self._pressed = False
+
+        event.accept()
+        self.menued.emit(event.globalPos())
+
     def heightForWidth(self, width: int) -> int:
         if self._source.isNull():
             return SIDEBAR_MIN_HEIGHT
@@ -134,6 +142,7 @@ class SidebarLabel(QLabel):
 
 class InspectorPane(QWidget):
     dragged = Signal()
+    menued = Signal(QPoint)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -150,6 +159,7 @@ class InspectorPane(QWidget):
         # the two places one is shown big enough to see through
         self._sidebar.clicked.connect(cycle_pane_tone)
         self._sidebar.dragged.connect(self.dragged)
+        self._sidebar.menued.connect(self.menued)
 
         self._name = wrapped(copyable(bold(QLabel())))
 
