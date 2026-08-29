@@ -58,8 +58,6 @@ class SidebarLabel(QLabel):
     def set_source(self, pixmap: QPixmap) -> None:
         self._source = pixmap
 
-        self.setToolTip("" if pixmap.isNull() else "Click to change the transparency mode, or drag out to export")
-
         self.updateGeometry()
         self.refit()
 
