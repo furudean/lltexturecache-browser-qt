@@ -230,12 +230,14 @@ class WindowActions(QObject):
         menu = QMenu(parent)
 
         preview = menu.addAction("Hide Preview" if previewing else "Preview")
-
         preview.setShortcut(QKeySequence(Qt.Key.Key_Space))
         preview.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
         preview.setShortcutVisibleInContextMenu(True)
 
         triggers(preview, self.preview_toggled.emit)
+
+        checkerboard = menu.addMenu("&Transparency Mode")
+        checkerboard.addActions(list(self._tones.values()))
 
         menu.addSeparator()
 
