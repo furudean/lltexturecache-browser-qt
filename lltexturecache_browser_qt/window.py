@@ -1036,6 +1036,7 @@ class MainWindow(QMainWindow):
         self._inspector.set_sidebar(
             stack_pixmap(cards, self._inspector.sidebar_room()),
             self.shape(model, self._stack[-1]),
+            transparent=any(card.hasAlphaChannel() for _, card in cards),
         )
 
     def shape(self, model: TextureModel, texture: Texture) -> QSize | None:

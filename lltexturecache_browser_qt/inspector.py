@@ -55,11 +55,20 @@ class SidebarLabel(QLabel):
 
         self.setSizePolicy(policy)
 
-    def set_source(self, pixmap: QPixmap) -> None:
+    def set_source(self, pixmap: QPixmap, *, transparent: bool = False) -> None:
         self._source = pixmap
 
+        self.sync_tip(transparent)
         self.updateGeometry()
         self.refit()
+
+    def sync_tip(self, transparent: bool) -> None:
+        actions = ["Drag out to save", "Right-click for options"]
+
+        if transparent:
+            actions.insert(0, "Click to cycle alpha mode")
+
+        self.setToolTip("\n".join(actions))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._source.isNull()
@@ -279,8 +288,8 @@ class InspectorPane(QWidget):
     def sidebar_room(self) -> QSize:
         return self._sidebar.room()
 
-    def set_sidebar(self, pixmap: QPixmap, natural: QSize | None) -> None:
-        self._sidebar.set_source(pixmap)
+    def set_sidebar(self, pixmap: QPixmap, natural: QSize | None, *, transparent: bool = False) -> None:
+        self._sidebar.set_source(pixmap, transparent=transparent)
 
         self.share_height()
 
