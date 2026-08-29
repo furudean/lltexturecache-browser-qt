@@ -27,6 +27,25 @@ if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
 	exit 1
 fi
 
+changelog="CHANGELOG.md"
+
+if ! grep -q '^## unreleased$' "$changelog"; then
+	echo "err: no '## unreleased' section in $changelog" >&2
+	exit 1
+fi
+
+# body of the unreleased section, without surrounding blank lines
+notes="$(
+	awk '/^## unreleased$/ { f = 1; next } f && /^## / { exit } f { print }' "$changelog" |
+		awk 'NF { for (i = 0; i < held; i++) print ""; held = 0; print; seen = 1; next }
+		     seen { held++ }'
+)"
+
+if [ -z "$notes" ]; then
+	echo "err: the unreleased section in $changelog is empty" >&2
+	exit 1
+fi
+
 printf 'you are about to release %s (from v%s) on branch %s. continue? [y/N] ' \
 	"$tag" "$(uv version --short)" "$(git rev-parse --abbrev-ref HEAD)"
 read -r reply </dev/tty
@@ -40,11 +59,21 @@ esac
 
 uv version --bump "$bump"
 
-git add pyproject.toml uv.lock
+date="$(date -u +%Y-%m-%d)"
+tmp="$(mktemp)"
+awk -v heading="## $tag - $date" \
+	'!done && /^## unreleased$/ { print heading; done = 1; next } { print }' \
+	"$changelog" >"$tmp"
+mv "$tmp" "$changelog"
+
+git add pyproject.toml uv.lock "$changelog"
 git commit -m "release $tag"
 git tag "$tag"
 
 git push origin HEAD
 git push origin "$tag"
 
-gh release create "$tag" --generate-notes --prerelease
+notes_file="$(mktemp)"
+printf '%s\n' "$notes" >"$notes_file"
+gh release create "$tag" --notes-file "$notes_file" --prerelease
+rm -f "$notes_file"

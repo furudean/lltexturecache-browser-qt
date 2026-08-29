@@ -73,14 +73,23 @@ none of it is needed to run the result
 ## release
 
 publishing a github release builds for all platforms and attaches the binaries
-to it. it can be triggered like this:
+to it. write what changed under the `## unreleased` heading in `CHANGELOG.md`
+first, then run:
 
 ```bash
 ./scripts/release.sh major|minor|patch
 ```
 
-it bumps the version, commits the bump, tags it, pushes both and creates the
-release. the release triggers a github workflow. which does the rest
+the script will
+
+1. bump the version
+2. retitle `## unreleased` in [CHANGELOG.md](CHANGELOG.md) to the version and
+   date being released
+3. commit that along with the bump, and tag it
+4. push
+5. create the release with notes from the changelog
+
+the release triggers a github workflow. which does the rest
 
 ## sign / notarize (mac only)
 
