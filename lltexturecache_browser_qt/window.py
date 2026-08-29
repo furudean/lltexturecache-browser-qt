@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QProgressDialog,
     QSplitter,
+    QWidget,
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
 
@@ -184,6 +185,7 @@ class MainWindow(QMainWindow):
         self._view.verticalScrollBar().rangeChanged.connect(self.prefetch_action)
 
         self._inspector = InspectorPane()
+        self._inspector.dragged.connect(self.inspector_drag_action)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._view)
@@ -491,7 +493,10 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.export(textures, Path(dialog.selectedFiles()[0]), format, model.reads)
 
-    def drag_action(self) -> None:
+    def inspector_drag_action(self) -> None:
+        self.drag_action(self._inspector)
+
+    def drag_action(self, source: QWidget | None = None) -> None:
         model = self._view.model()
 
         if not isinstance(model, TextureModel):
@@ -518,7 +523,7 @@ class MainWindow(QMainWindow):
 
         pixmap = self.drag_pixmap(model)
 
-        drag = QDrag(self._view)
+        drag = QDrag(source if source is not None else self._view)
         drag.setMimeData(drag_data(paths))
 
         if not pixmap.isNull():

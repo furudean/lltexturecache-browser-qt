@@ -1,10 +1,11 @@
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import (
     QMouseEvent,
     QPixmap,
     QResizeEvent,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QFormLayout,
     QLabel,
     QSizePolicy,
@@ -32,12 +33,14 @@ ROW_SPACING = 4
 
 class SidebarLabel(QLabel):
     clicked = Signal()
+    dragged = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._source = QPixmap()
         self._pressed = False
+        self._origin = QPoint()
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -53,19 +56,32 @@ class SidebarLabel(QLabel):
     def set_source(self, pixmap: QPixmap) -> None:
         self._source = pixmap
 
-        self.setToolTip("" if pixmap.isNull() else "Click to change the transparency mode")
+        self.setToolTip("" if pixmap.isNull() else "Click to change the transparency mode, or drag out to export")
 
         self.updateGeometry()
         self.refit()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._source.isNull()
+        self._origin = event.position().toPoint()
 
         if self._pressed:
             event.accept()
             return
 
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if not self._pressed or not (event.buttons() & Qt.MouseButton.LeftButton):
+            super().mouseMoveEvent(event)
+            return
+
+        if (event.position().toPoint() - self._origin).manhattanLength() < QApplication.startDragDistance():
+            return
+
+        self._pressed = False
+
+        self.dragged.emit()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         pressed, self._pressed = self._pressed, False
@@ -117,6 +133,8 @@ class SidebarLabel(QLabel):
 
 
 class InspectorPane(QWidget):
+    dragged = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -131,6 +149,7 @@ class InspectorPane(QWidget):
         # which checkerboard goes behind a texture in here and in the preview window,
         # the two places one is shown big enough to see through
         self._sidebar.clicked.connect(cycle_pane_tone)
+        self._sidebar.dragged.connect(self.dragged)
 
         self._name = wrapped(copyable(bold(QLabel())))
 
