@@ -47,7 +47,7 @@ intel macs are not built for.
 to run from source or build your own, see [develop](#develop) and
 [build](#build).
 
-## install
+## developing
 
 use [uv](https://docs.astral.sh/uv/) to run the app in a development context
 
