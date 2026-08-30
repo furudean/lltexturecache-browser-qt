@@ -34,6 +34,8 @@ on mac, you may install with homebrew:
 brew install --cask furudean/tap/lltexturecache-browser-qt
 ```
 
+### platform requirements
+
 | platform | runs on                                     |
 | -------- | ------------------------------------------- |
 | mac      | macos 13 ventura or later, apple silicon    |
