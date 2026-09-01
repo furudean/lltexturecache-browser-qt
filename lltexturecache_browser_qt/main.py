@@ -104,7 +104,13 @@ def start_logging() -> None:
     )
 
 
-def main() -> None:
+def main() -> int:
+    """Run the app, and hand back what it exited with
+
+    The console script and the module entry point below both turn this into
+    the process's exit status, so nothing in here has to reach for one.
+    """
+
     start_logging()
 
     app = QApplication(sys.argv)
@@ -155,8 +161,8 @@ def main() -> None:
 
     sys.excepthook = excepthook
 
-    sys.exit(app.exec())
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

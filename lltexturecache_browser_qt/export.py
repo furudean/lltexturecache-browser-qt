@@ -63,7 +63,8 @@ def write_texture(texture: Texture, path: Path, fmt: Format, reads: Lock) -> Non
         with reads:
             jp2_bytes = texture.jpeg_2000()
 
-        path.write_bytes(jp2_bytes)
+        with path.open("wb") as out:
+            out.write(jp2_bytes)
 
         return
 
