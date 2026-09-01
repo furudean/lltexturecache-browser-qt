@@ -2,6 +2,10 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- ships a `.dmg` next to the zip
+
 ## v0.5.0 - 2026-09-01
 
 - find a texture from a similar image. useful for screenshots

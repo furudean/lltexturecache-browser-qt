@@ -28,6 +28,7 @@ the app's icon, slcachegirl, is designed by [@sferics32.bsky.social](https://bsk
 
 windows, linux and mac builds are attached to
 [each release](https://github.com/furudean/lltexturecache-viewer-gui/releases).
+on mac, open the `.dmg` and drag the app into Applications.
 
 on mac, you may install with homebrew:
 
@@ -126,6 +127,15 @@ hardened runtime, notarizes it and staples the ticket. notarization is skipped
 when the signature is ad-hoc or the apple credentials are unset, so it doubles
 as a plain signing step
 
+[scripts/macos-dmg.sh](scripts/macos-dmg.sh) makes the disk image users drag
+the app out of, then signs, notarizes and staples that as well. it runs as part
+of [scripts/package.sh](scripts/package.sh), so a mac release carries both a
+`.dmg` and a `.zip` of the same bundle
+
+```bash
+./scripts/package.sh
+```
+
 the first signature of a session makes macos ask for permission to use the key.
 allow always, or every later `codesign` run stops on the same prompt
 
@@ -145,6 +155,7 @@ codesign --verify --deep --strict --verbose=2 dist/lltexturecache-browser-qt.app
 
 # is notarization stapled
 xcrun stapler validate dist/lltexturecache-browser-qt.app
+xcrun stapler validate staging/lltexturecache-browser-qt-*-macos-arm64.dmg
 
 # gatekeeper
 spctl --assess --type execute --verbose=4 dist/lltexturecache-browser-qt.app

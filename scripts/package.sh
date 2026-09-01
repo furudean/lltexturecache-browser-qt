@@ -39,6 +39,7 @@ mkdir -p "$staging"
 case "$(uname -s)" in
 	Darwin)
 		ditto -c -k --keepParent "$EXEC_DIRECTORY/$NAME.app" "$staging/$asset.zip"
+		./scripts/macos-dmg.sh "$staging/$asset.dmg"
 		;;
 	CYGWIN* | MINGW* | MSYS* | Windows_NT)
 		cp "$EXEC_DIRECTORY/$NAME.exe" "$staging/$asset.exe"
