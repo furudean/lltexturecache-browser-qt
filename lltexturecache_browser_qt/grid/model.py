@@ -17,8 +17,9 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt.cache.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
+from lltexturecache_browser_qt.cache.color import ColorIndex, ColorScan, ScanSignals
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
+from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
 from lltexturecache_browser_qt.view.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.view.formatting import format_size, format_time
@@ -130,9 +131,9 @@ class TextureModel(QAbstractListModel):
         self._lookup = {texture.uuid: texture for texture in self._textures}
         self._filtered_textures = self._textures
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(self._filtered_textures)}
-        self._colors: list[QColor] = []
-        self._simple_hidden = False
-        self._index: ColorIndex | None = None
+        # what is being asked of the grid, and what the colour scan found to
+        # answer it with
+        self._narrowing = Narrowing()
         # the textures the scan found no picture in, which are left out of the
         # grid or ringed in it depending on what the menu says
         self._simple: set[str] = set()
@@ -186,14 +187,14 @@ class TextureModel(QAbstractListModel):
 
     @property
     def narrowed(self) -> bool:
-        return bool(self._colors) and self._index is not None
+        return self._narrowing.narrowed
 
     @property
     def colors(self) -> list[QColor]:
-        return list(self._colors)
+        return list(self._narrowing.colors)
 
     def hidden(self) -> int:
-        return len(self._simple) if self._simple_hidden else 0
+        return self._narrowing.hidden()
 
     def texture(self, row: int) -> Texture:
         return self._filtered_textures[row]
@@ -390,35 +391,22 @@ class TextureModel(QAbstractListModel):
         return True
 
     def set_filters(self, colors: list[QColor]) -> bool:
-        self._colors = list(colors)
+        self._narrowing.colors = list(colors)
 
         return self.apply_filters()
 
     def set_simple_hidden(self, hidden: bool) -> bool:
-        self._simple_hidden = hidden
+        self._narrowing.simple_hidden = hidden
 
         return self.apply_filters()
 
     def apply_filters(self) -> bool:
-        if not self._colors and not self._simple_hidden:
-            self.reorder(self._textures)
+        """Show the rows being asked for, and say whether that could be answered"""
 
-            return True
+        kept = self._narrowing.kept(len(self._textures))
 
-        if self._index is None:
+        if kept is None:
             return False
-
-        flat: set[int] = self._index.flat if self._simple_hidden else set()
-
-        kept = [row for row in range(len(self._textures)) if row not in flat]
-
-        if self._colors:
-            scores = self._index.scores(self._colors)
-
-            floor = MATCH_FLOOR / len(self._colors)
-
-            kept = [row for row in kept if scores[row] >= floor]
-            kept.sort(key=lambda row: -scores[row])
 
         self.reorder([self._textures[row] for row in kept])
 
@@ -439,10 +427,10 @@ class TextureModel(QAbstractListModel):
 
     @Slot(object)
     def scanned(self, index: ColorIndex) -> None:
-        self._index = index
-        self._simple = {self._textures[row].uuid for row in index.flat}
+        self._narrowing.index = index
+        self._simple = self._narrowing.flat_uuids([texture.uuid for texture in self._textures])
 
-        if (self._colors or self._simple_hidden) and self.apply_filters():
+        if self._narrowing.asking and self.apply_filters():
             self.ranked.emit()
         elif self._simple and self._filtered_textures:
             # nothing is being narrowed, so no reset goes out to redraw the
