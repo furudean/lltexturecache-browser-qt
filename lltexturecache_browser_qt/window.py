@@ -1,18 +1,15 @@
-from bisect import bisect_left, bisect_right
 from functools import partial
 from pathlib import Path
 from threading import Lock
 from typing import ClassVar
 
 from PySide6.QtCore import (
-    QByteArray,
     QDir,
     QEvent,
     QItemSelection,
     QItemSelectionModel,
     QModelIndex,
     QPoint,
-    QRect,
     QSettings,
     QSize,
     Qt,
@@ -20,6 +17,7 @@ from PySide6.QtCore import (
     QUrl,
 )
 from PySide6.QtGui import (
+    QAction,
     QCloseEvent,
     QColor,
     QDesktopServices,
@@ -45,6 +43,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
+from lltexturecache_browser_qt.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.checkerboard import (
     CheckerboardChanges,
     pixmap_lightness,
@@ -61,31 +60,26 @@ from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGr
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
 from lltexturecache_browser_qt.inspector import INSPECTOR_WIDTH, InspectorPane
 from lltexturecache_browser_qt.model import TextureModel, full_size, sidebar_key
+from lltexturecache_browser_qt.prefetch import prefetch
 from lltexturecache_browser_qt.preview import PreviewWindow
+from lltexturecache_browser_qt.previewing import PreviewHost
 from lltexturecache_browser_qt.recents import RecentCaches
 from lltexturecache_browser_qt.reveal import reveal
-from lltexturecache_browser_qt.stack import STACK_CARDS, stack_pixmap
+from lltexturecache_browser_qt.settings import (
+    FILTERS_KEY,
+    GEOMETRY_KEY,
+    SESSION_KEY,
+    SPLITTER_KEY,
+    stored_blob,
+    stored_paths,
+)
+from lltexturecache_browser_qt.stack import stack_pixmap
 from lltexturecache_browser_qt.status import WindowStatus
 from lltexturecache_browser_qt.suggested import paths as suggested_paths
-
-# keys to track how the last window was left so it can be restored
-SESSION_KEY = "openCaches"
-GEOMETRY_KEY = "windowGeometry"
-SPLITTER_KEY = "windowSplitter"
-PREVIEW_GEOMETRY_KEY = "previewGeometry"
-FILTERS_KEY = "colorFilters"
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 DELAY_MESSAGE_DURATION_MS = 250
-
-PREFETCH_SCREENS = 2
-
-
-def stored_blob(settings: QSettings, key: str) -> QByteArray:
-    stored = settings.value(key)
-
-    return stored if isinstance(stored, QByteArray) else QByteArray()
 
 
 def color_spans(model: TextureModel, rows: list[int]) -> QItemSelection:
@@ -121,8 +115,10 @@ class MainWindow(QMainWindow):
     _windows: ClassVar[list["MainWindow"]] = []
     _quitting: ClassVar[bool] = False
     _about: ClassVar["AboutDialog | None"] = None
-    _preview: ClassVar["PreviewWindow | None"] = None
-    _previewing: ClassVar["MainWindow | None"] = None
+
+    # the preview belongs to the app rather than to any window, so what it is
+    # doing is kept beside the windows rather than in one of them
+    _preview_host: ClassVar[PreviewHost]
 
     def __init__(self) -> None:
         super().__init__()
@@ -251,13 +247,7 @@ class MainWindow(QMainWindow):
 
     @classmethod
     def session(cls) -> list[Path]:
-        stored = QSettings().value(SESSION_KEY) or []
-
-        # a list of one comes back out of the store as the string it held
-        if isinstance(stored, str):
-            stored = [stored]
-
-        return [Path(path) for path in stored]
+        return stored_paths(QSettings(), SESSION_KEY)
 
     @classmethod
     def save_session(cls) -> None:
@@ -283,12 +273,7 @@ class MainWindow(QMainWindow):
     def shared_preview(cls) -> "PreviewWindow":
         """The one preview window, which belongs to the app rather than a window"""
 
-        if cls._preview is None:
-            cls._preview = PreviewWindow()
-            cls._preview.closed.connect(cls.preview_closed_action)
-            cls._preview.restoreGeometry(stored_blob(QSettings(), PREVIEW_GEOMETRY_KEY))
-
-        return cls._preview
+        return cls._preview_host.shared()
 
     @classmethod
     def set_preview_shown(cls, shown: bool) -> None:
@@ -298,48 +283,16 @@ class MainWindow(QMainWindow):
         # preview is doing is put away here instead
         WindowActions.store_preview(shown)
 
-        for window in cls._windows:
-            action = window._actions.preview
-
-            if action.isChecked() == shown:
-                continue
-
-            was = action.blockSignals(True)
-            action.setChecked(shown)
-            action.blockSignals(was)
+        cls._preview_host.sync_ticks(shown=shown)
 
     @classmethod
     def follow_preview(cls, window: "MainWindow | None" = None) -> None:
         """Point the shared preview at a window, or at whichever one is left to take it"""
 
-        if window is not None and not window.wants_preview():
-            # the window asking has nothing to put there, so the preview stays
-            # where it is unless where it is happens to be that same window
-            window = None if window is cls._previewing else cls._previewing
-
-        if window is None:
-            window = next((other for other in cls._windows if other.wants_preview()), None)
-
-        cls._previewing = window
-
-        if window is None:
-            if cls._preview is not None:
-                cls._preview.hide()
-
-            return
-
-        preview = cls.shared_preview()
-
-        # the window it follows changes as windows are clicked between, which is
-        # no reason to keep pulling the preview back in front of them
-        if not preview.isVisible():
-            preview.present()
-
-        window.fill_preview()
+        cls._preview_host.follow(window)
 
     @classmethod
     def preview_closed_action(cls) -> None:
-        cls._previewing = None
         cls.set_preview_shown(False)
 
     def save_layout(self) -> None:
@@ -349,8 +302,7 @@ class MainWindow(QMainWindow):
         settings.setValue(SPLITTER_KEY, self._splitter.saveState())
         settings.setValue(FILTERS_KEY, self._filters.state())
 
-        if MainWindow._preview is not None:
-            settings.setValue(PREVIEW_GEOMETRY_KEY, MainWindow._preview.saveGeometry())
+        MainWindow._preview_host.save_geometry(settings)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_layout()
@@ -371,8 +323,7 @@ class MainWindow(QMainWindow):
             MainWindow._windows.remove(self)
 
         # the preview is left with whichever window is still open to take it
-        if MainWindow._previewing is self:
-            MainWindow._previewing = None
+        if MainWindow._preview_host.release(self):
             MainWindow.follow_preview()
 
         if not MainWindow._quitting:
@@ -397,8 +348,10 @@ class MainWindow(QMainWindow):
         # behind it, so a new checkerboard is a repaint rather than a fresh
         # decode. the checkerboard they draw is their own, and moves without the
         # cells' checkerboard moving with it
-        if MainWindow._preview is not None:
-            MainWindow._preview.update()
+        preview = MainWindow._preview_host.window
+
+        if preview is not None:
+            preview.update()
 
         self.paint_inspector()
 
@@ -539,16 +492,9 @@ class MainWindow(QMainWindow):
         if not index.isValid():
             return QPixmap()
 
-        stack = self.stack_textures(model, index, self._view.selectionModel().selectedIndexes())
+        selected = self._view.selectionModel().selectedIndexes()
 
-        cards = []
-
-        for texture in stack:
-            cell = model.cell(texture)
-
-            cards.append((texture.uuid, model.sidebar(texture) if cell.isNull() else cell))
-
-        return stack_pixmap([(uuid, card) for uuid, card in cards if not card.isNull()])
+        return stack_pixmap(grid_cards(model, stack_textures(model, index, selected)))
 
     def context_action(self, at: QPoint) -> None:
         model = self._view.model()
@@ -884,14 +830,21 @@ class MainWindow(QMainWindow):
 
         MainWindow.follow_preview(self)
 
-        if MainWindow._preview is not None:
-            MainWindow._preview.present()
+        preview = MainWindow._preview_host.window
+
+        if preview is not None:
+            preview.present()
 
     def wants_preview(self) -> bool:
         return self._cache is not None and self._actions.preview.isChecked()
 
     def holds_preview(self) -> bool:
-        return self.wants_preview() and MainWindow._previewing is self
+        return self.wants_preview() and MainWindow._preview_host.followed_by(self)
+
+    def preview_menu_entry(self) -> QAction:
+        """The tick this window carries for the preview, which the host keeps in step"""
+
+        return self._actions.preview
 
     def sync_preview(self) -> None:
         self._actions.preview.setEnabled(self._cache is not None)
@@ -905,9 +858,9 @@ class MainWindow(QMainWindow):
         """Show whatever is selected in the preview window, if it is following this one"""
 
         model = self._view.model()
-        preview = MainWindow._preview
+        preview = MainWindow._preview_host.window
 
-        if MainWindow._previewing is not self or preview is None or not preview.isVisible():
+        if not MainWindow._preview_host.followed_by(self) or preview is None or not preview.isVisible():
             return
 
         if not isinstance(model, TextureModel):
@@ -989,23 +942,10 @@ class MainWindow(QMainWindow):
             sum(model.texture(other.row()).image_size for other in selected),
         )
 
-        self._stack = self.stack_textures(model, index, selected)
+        self._stack = stack_textures(model, index, selected)
         self._settle.start()
 
         self.paint_inspector()
-
-    def stack_textures(self, model: TextureModel, index: QModelIndex, selected: list[QModelIndex]) -> list[Texture]:
-
-        top = model.texture(index.row())
-        others = [model.texture(other.row()) for other in selected if other.row() != index.row()]
-
-        if not others:
-            return [top]
-
-        # sample selection
-        step = max(1, len(others) // (STACK_CARDS - 1))
-
-        return [*others[::step][: STACK_CARDS - 1], top]
 
     def paint_inspector(self) -> None:
         model = self._view.model()
@@ -1061,54 +1001,8 @@ class MainWindow(QMainWindow):
     def prefetch_action(self) -> None:
         model = self._view.model()
 
-        if not isinstance(model, TextureModel):
-            return
-
-        visible = self.visible_rows(model)
-        band = self.rows_within(model, self.reach())
-
-        if visible is None or band is None:
-            return
-
-        model.prefetch(self.outward(band, visible), range(visible[0], visible[1] + 1))
-
-    def reach(self) -> int:
-        """How far past the viewport, in pixels, cells are decoded ahead"""
-
-        return round(self._view.viewport().height() * PREFETCH_SCREENS)
-
-    def outward(self, band: tuple[int, int], visible: tuple[int, int]) -> list[int]:
-        """The rows of the band, the furthest from what is on screen first
-
-        The model decodes the last of these first, so the order runs backwards.
-        Sorting on the distance from the middle of the viewport puts every row
-        that is on screen after every row that is not, since none of the ones
-        on screen can be further from its middle than its own edges are: what
-        the user is looking at is decoded first, from the middle out, and only
-        then does the band either side of it get a turn.
-        """
-
-        first, last = band
-        middle = sum(visible) / 2
-
-        return sorted(range(first, last + 1), key=lambda row: -abs(row - middle))
-
-    def visible_rows(self, model: TextureModel) -> tuple[int, int] | None:
-        return self.rows_within(model, 0)
-
-    def rows_within(self, model: TextureModel, margin: int) -> tuple[int, int] | None:
-        """The rows of the band the viewport sits in the middle of"""
-
-        count = model.rowCount()
-        height = self._view.viewport().height()
-
-        def cell(row: int) -> QRect:
-            return self._view.visualRect(model.index(row, 0))
-
-        first = bisect_left(range(count), -margin, key=lambda row: cell(row).bottom())
-        last = bisect_right(range(count), height + margin, key=lambda row: cell(row).top()) - 1
-
-        return (first, last) if first <= last < count else None
+        if isinstance(model, TextureModel):
+            prefetch(self._view, model)
 
     def select_texture(self, uuid: str) -> None:
         model = self._view.model()
@@ -1268,8 +1162,10 @@ class MainWindow(QMainWindow):
 
         # the window was showing a texture out of the model just retired, and
         # is filled again by whatever selection lands in the new one
-        if MainWindow._preview is not None and MainWindow._previewing is self:
-            MainWindow._preview.clear()
+        preview = MainWindow._preview_host.window
+
+        if preview is not None and MainWindow._preview_host.followed_by(self):
+            preview.clear()
 
         model.set_simple_hidden(not self.showing_simple())
         model.set_filters(self._filters.colors())
@@ -1290,3 +1186,11 @@ class MainWindow(QMainWindow):
         MainWindow._about.show()
         MainWindow._about.raise_()
         MainWindow._about.activateWindow()
+
+
+# the preview follows the windows, and the windows are the class's own list, so
+# the host is given a way to ask for them rather than a copy taken here
+MainWindow._preview_host = PreviewHost(
+    clients=lambda: list(MainWindow._windows),
+    closed=MainWindow.preview_closed_action,
+)

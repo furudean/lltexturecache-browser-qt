@@ -9,13 +9,8 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
 from lltexturecache_browser_qt.model import FULL_SIZE, TextureModel
-from lltexturecache_browser_qt.window import (
-    SESSION_KEY,
-    MainWindow,
-    color_spans,
-    laid_card,
-    stored_blob,
-)
+from lltexturecache_browser_qt.settings import SESSION_KEY, stored_blob, stored_paths
+from lltexturecache_browser_qt.window import MainWindow, color_spans, laid_card
 from tests import fakes
 
 
@@ -33,6 +28,10 @@ def windows(app: QApplication, settings: None, quiet_scan: None) -> Iterator[Non
 
     for window in list(MainWindow._windows):
         window.close()
+
+    # the preview host outlives any one window, and a test that pointed it at
+    # one of these must not leave it pointed at a window that has since gone
+    MainWindow._preview_host.follow(None)
 
     MainWindow._windows = kept
     MainWindow._quitting = quitting
@@ -179,14 +178,27 @@ class TestQuitting:
         assert MainWindow._quitting is True
 
 
+class TestStoredPaths:
+    def test_a_key_that_was_never_written_reads_back_empty(self, settings: None) -> None:
+        assert stored_paths(QSettings(), "neverWritten") == []
+
+    def test_a_stored_list_reads_back(self, settings: None) -> None:
+        QSettings().setValue("caches", ["/caches/one", "/caches/two"])
+
+        assert stored_paths(QSettings(), "caches") == [Path("/caches/one"), Path("/caches/two")]
+
+    def test_a_list_of_one_comes_back_out_of_the_store_as_a_string(self, settings: None) -> None:
+        QSettings().setValue("caches", "/caches/only")
+
+        assert stored_paths(QSettings(), "caches") == [Path("/caches/only")]
+
+
 class TestPreviewWindow:
     def test_the_preview_belongs_to_the_app_rather_than_a_window(self, windows: None) -> None:
-        MainWindow._preview = None
+        host = MainWindow._preview_host
 
         try:
             assert MainWindow.shared_preview() is MainWindow.shared_preview()
         finally:
-            if MainWindow._preview is not None:
-                MainWindow._preview.close()
-
-            MainWindow._preview = None
+            if host.window is not None:
+                host.window.close()
