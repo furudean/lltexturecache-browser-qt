@@ -10,9 +10,11 @@ from PIL import Image
 from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCacheError
 
+from lltexturecache_browser_qt import export as module
 from lltexturecache_browser_qt.export import (
     DEFAULT_FORMAT,
     FORMATS,
+    PARTIAL_SUFFIX,
     ExportJob,
     encodable,
     export_path,
@@ -101,6 +103,44 @@ class TestExportTexture:
         assert reads.acquire(blocking=False) is True
 
         reads.release()
+
+
+class TestAtomicWrite:
+    def test_nothing_partial_is_left_behind(self, tmp_path: Path, reads: Lock) -> None:
+        export_texture(fakes.texture(), tmp_path, JP2, reads)
+
+        assert [path.name for path in tmp_path.iterdir() if PARTIAL_SUFFIX in path.name] == []
+
+    def test_a_failed_export_leaves_no_file_at_all(self, tmp_path: Path, reads: Lock) -> None:
+        with pytest.raises(TextureCacheError):
+            export_texture(fakes.texture(unreadable=True), tmp_path, JP2, reads)
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_failed_export_does_not_blank_the_file_already_there(
+        self, tmp_path: Path, reads: Lock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        texture = fakes.texture()
+        path = export_texture(texture, tmp_path, JP2, reads)
+
+        def failing(*args: object, **kwargs: object) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(module, "write_texture", failing)
+
+        with pytest.raises(OSError, match="disk full"):
+            export_texture(texture, tmp_path, JP2, reads)
+
+        assert path.read_bytes() == fakes.PAYLOAD
+
+    def test_re_exporting_replaces_the_file_in_one_step(self, tmp_path: Path, reads: Lock) -> None:
+        texture = fakes.texture()
+
+        first = export_texture(texture, tmp_path, JP2, reads)
+        second = export_texture(texture, tmp_path, JP2, reads)
+
+        assert first == second
+        assert list(tmp_path.iterdir()) == [first]
 
 
 class TestExportJob:

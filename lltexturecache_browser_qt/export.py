@@ -13,6 +13,9 @@ from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
 
 CONCURRENCY = 8
 
+# what a texture is called while it is still being written
+PARTIAL_SUFFIX = ".partial"
+
 PNG_MODES = frozenset({"1", "L", "LA", "I", "I;16", "P", "RGB", "RGBA"})
 
 # how a decoded texture's components are described to pillow
@@ -55,22 +58,50 @@ def export_path(out_dir: Path, uuid: str, format: Format) -> Path:
     return out_dir / f"{uuid}.{format.suffix}"
 
 
-def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) -> Path:
-    path = export_path(out_dir, texture.uuid, fmt)
-
+def write_texture(texture: Texture, path: Path, fmt: Format, reads: Lock) -> None:
     if fmt.encoder is None:
         with reads:
             jp2_bytes = texture.jpeg_2000()
-        path.write_bytes(jp2_bytes)
-    else:
-        with reads:
-            # the codestream decodes as it is, so wrapping it in a container
-            # first would be work nothing downstream asks for
-            codestream = texture.codestream()
-        with open_image(codestream) as image:
-            encodable(image, fmt).save(path, fmt.encoder, **fmt.options)
 
-    os.utime(path, (texture.time.timestamp(), texture.time.timestamp()))
+        path.write_bytes(jp2_bytes)
+
+        return
+
+    with reads:
+        # the codestream decodes as it is, so wrapping it in a container
+        # first would be work nothing downstream asks for
+        codestream = texture.codestream()
+
+    with open_image(codestream) as image:
+        encodable(image, fmt).save(path, fmt.encoder, **fmt.options)
+
+
+def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) -> Path:
+    """Write one texture out, and hand back where it landed
+
+    An export runs against a cache the viewer is still writing to, and a read
+    that fails part way through leaves whatever was written behind it. So the
+    file is built under a name of its own and moved into place once it is
+    whole: what appears at the exported path is either the finished texture or
+    nothing at all, never a truncated file that opens as a broken image.
+    """
+
+    path = export_path(out_dir, texture.uuid, fmt)
+    partial = path.with_name(f"{path.name}{PARTIAL_SUFFIX}")
+
+    try:
+        write_texture(texture, partial, fmt, reads)
+
+        stamp = texture.time.timestamp()
+        os.utime(partial, (stamp, stamp))
+
+        # a rename within the one directory replaces whatever was there in a
+        # single step, so a re-export never blanks a good file on its way in
+        partial.replace(path)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+
+        raise
 
     return path
 

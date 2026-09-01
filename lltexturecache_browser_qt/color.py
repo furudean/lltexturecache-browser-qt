@@ -1,3 +1,4 @@
+import logging
 import threading
 from collections import Counter
 from collections.abc import Iterable, Sequence
@@ -15,6 +16,8 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from texture_courier.core import Thumbnail, read_fast_cache
 
 from lltexturecache_browser_qt.images import read_image
+
+log = logging.getLogger(__name__)
 
 type Lab = tuple[float, float, float]
 
@@ -117,12 +120,29 @@ LEVELS = 1 << QUANTUM
 # colors anyone reaches for first, land exactly on themselves
 QUANTIZE = bytes(round((value >> (8 - QUANTUM)) * 255 / (LEVELS - 1)) for value in range(256))
 
-# srgb's transfer curve, which is the only per channel work in the conversion
-LINEAR = [value / 3294.6 if value <= 10 else ((value / 255 + 0.055) / 1.055) ** 2.4 for value in range(256)]
+# srgb's transfer curve, which is the only per channel work in the conversion.
+# the foot of the curve is a straight line of this slope, and the rest of it is
+# the power law above, both as the standard writes them
+SRGB_TOE_SLOPE = 12.92
+SRGB_TOE_END = 10
+SRGB_OFFSET = 0.055
+SRGB_GAMMA = 2.4
 
-# the two constants cielab is cut at, and the d65 white srgb is written against
-EPSILON = 216 / 24389
-KAPPA = 24389 / 27
+LINEAR = [
+    value / (255 * SRGB_TOE_SLOPE)
+    if value <= SRGB_TOE_END
+    else ((value / 255 + SRGB_OFFSET) / (1 + SRGB_OFFSET)) ** SRGB_GAMMA
+    for value in range(256)
+]
+
+# the two constants cielab is cut at, written as cie's own integers rather than
+# as the rounded decimals the older printings of the standard carry
+CIE_EPSILON_NUMERATOR = 216
+CIE_KAPPA_NUMERATOR = 24389
+CIE_KAPPA_DENOMINATOR = 27
+
+EPSILON = CIE_EPSILON_NUMERATOR / CIE_KAPPA_NUMERATOR
+KAPPA = CIE_KAPPA_NUMERATOR / CIE_KAPPA_DENOMINATOR
 WHITE_X = 0.95047
 WHITE_Z = 1.08883
 
@@ -479,7 +499,7 @@ class ColorScan(QRunnable):
         except RuntimeError:
             # the model this was reading for went out from under it between the
             # check above and here, taking the signals it reports through along
-            pass
+            log.debug("colour scan finished after its model closed", exc_info=True)
 
     def read(self, texture: Texture) -> Signature | None:
         try:

@@ -19,7 +19,10 @@ FRAME_EDGE = QColor(0x00, 0x00, 0x00, 0x28)
 
 
 def card_transform(uuid: str, side: float) -> QTransform:
-    angles = Random(uuid)
+    # seeded on the uuid so a texture is always dealt at the same angle, which
+    # is what makes a pile look the same each time it is laid out. nothing is
+    # being kept secret, so the ordinary generator is the one wanted here
+    angles = Random(uuid)  # nosec B311 - visual jitter, seeded for repeatability
 
     return (
         QTransform()

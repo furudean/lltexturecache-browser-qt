@@ -1,3 +1,5 @@
+import logging
+import os
 import signal
 import sys
 import traceback
@@ -16,6 +18,14 @@ from lltexturecache_browser_qt.model import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.signals import SignalWatcher
 from lltexturecache_browser_qt.suggested import resolve as resolve_suggested
 from lltexturecache_browser_qt.window import MainWindow
+
+log = logging.getLogger(__name__)
+
+# what the app says about itself when nothing has asked for more. a viewer's
+# texture cache is full of half-written entries, so the ones the app steps
+# around are only worth a line when something has gone looking for them
+LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
+LOG_LEVEL_VAR = "LLTEXTURECACHE_LOG"
 
 
 class AppWatcher(QObject):
@@ -42,8 +52,10 @@ def restore(paths: list[Path]) -> list[MainWindow]:
     for path in paths:
         try:
             cache = TextureCache(path)
-        except (FileNotFoundError, TextureCacheError):
-            # a cache cleared out or unplugged
+        except (FileNotFoundError, TextureCacheError) as e:
+            # a cache cleared out or unplugged, which is nothing to stop the
+            # session over: the rest of it still opens
+            log.info("leaving %s out of the restored session: %s", path, e)
             continue
 
         if windows:
@@ -80,7 +92,21 @@ class ErrorReporter(QObject):
         QMessageBox.critical(None, title, message)
 
 
+def start_logging() -> None:
+    """Send the app's own reports to stderr, at the level asked for"""
+
+    level = os.environ.get(LOG_LEVEL_VAR, "WARNING").upper()
+
+    logging.basicConfig(
+        level=getattr(logging, level, logging.WARNING),
+        format=LOG_FORMAT,
+        stream=sys.stderr,
+    )
+
+
 def main() -> None:
+    start_logging()
+
     app = QApplication(sys.argv)
 
     app.setApplicationName(APP_NAME)

@@ -50,3 +50,8 @@ strict = true
 [tool.ruff]
 target-version = "py313"
 line-length = 120
+
+[tool.bandit]
+# build output is a copy of the package, and dist is what was shipped from it,
+# so scanning either only reports every finding a second time
+exclude_dirs = ["build", "dist", ".venv", "tests"]

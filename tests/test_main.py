@@ -1,5 +1,6 @@
 """The entry point: session restore, shutdown, and the app-wide error report"""
 
+import logging
 from pathlib import Path
 from typing import cast
 
@@ -10,6 +11,16 @@ from texture_courier import TextureCacheError
 
 from lltexturecache_browser_qt import main as module
 from lltexturecache_browser_qt.main import AppWatcher, ErrorReporter, restore, stop
+
+
+class Recorder:
+    """Keeps the keyword arguments it was called with"""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def __call__(self, **fields: object) -> None:
+        self.calls.append(fields)
 
 
 def restored(paths: list[Path]) -> list["FakeWindow"]:
@@ -112,6 +123,32 @@ class TestRestore:
         restored([Path("/caches/one"), Path("/caches/two")])
 
         assert opened_windows == []
+
+
+class TestLogging:
+    def test_the_level_comes_from_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(module.LOG_LEVEL_VAR, "debug")
+        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+
+        module.start_logging()
+
+        assert record_config.calls[0]["level"] == logging.DEBUG
+
+    def test_an_unset_variable_keeps_the_app_quiet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv(module.LOG_LEVEL_VAR, raising=False)
+        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+
+        module.start_logging()
+
+        assert record_config.calls[0]["level"] == logging.WARNING
+
+    def test_a_level_the_app_does_not_know_keeps_it_quiet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv(module.LOG_LEVEL_VAR, "chatty")
+        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+
+        module.start_logging()
+
+        assert record_config.calls[0]["level"] == logging.WARNING
 
 
 class TestStop:
