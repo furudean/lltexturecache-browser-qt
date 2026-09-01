@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "mypy>=2.3.1",
     "nuitka>=4.1.3",
+    "pytest>=8.4.2",
     "ruff>=0.16.3",
     "zstandard>=0.25.0",
 ]
@@ -36,6 +37,10 @@ lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 [tool.app]
 display-name = "lltexturecache-browser-qt"
 bundle-id = "com.furudean.lltexturecache-browser-qt"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.mypy]
 python_version = "3.13"
