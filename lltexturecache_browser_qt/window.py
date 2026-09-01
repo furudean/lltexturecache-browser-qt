@@ -42,7 +42,6 @@ from lltexturecache_browser_qt.actions import WindowActions
 from lltexturecache_browser_qt.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.checkerboard import (
     CheckerboardChanges,
-    pixmap_lightness,
     reset_pane_tone,
     set_picked_lightness,
     sync_checkerboard,
@@ -56,7 +55,8 @@ from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
 from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
 from lltexturecache_browser_qt.inspector import INSPECTOR_WIDTH, InspectorPane
-from lltexturecache_browser_qt.model import TextureModel, full_size, sidebar_key
+from lltexturecache_browser_qt.model import TextureModel, sidebar_key
+from lltexturecache_browser_qt.panes import paint as paint_pane
 from lltexturecache_browser_qt.prefetch import prefetch
 from lltexturecache_browser_qt.preview import PreviewWindow
 from lltexturecache_browser_qt.previewing import PreviewHost
@@ -77,17 +77,6 @@ from lltexturecache_browser_qt.summary import empty_message, narrowed_summary
 from lltexturecache_browser_qt.summary import grid_summary as summary_of
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
-
-
-def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
-    laid = full_size(natural)
-
-    if natural.isEmpty() or laid == pixmap.size():
-        return pixmap
-
-    # the stand-in is a picture of the same texture, so any shape it has that
-    # the texture does not is rounding from the size it was kept at
-    return pixmap.scaled(laid, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
 class MainWindow(QMainWindow):
@@ -863,42 +852,8 @@ class MainWindow(QMainWindow):
     def paint_inspector(self) -> None:
         model = self._view.model()
 
-        if not isinstance(model, TextureModel) or not self._stack:
-            return
-
-        # only the texture on top is worth a decode on the spot
-        model.full(self._stack[-1])
-
-        cards = []
-
-        for texture in self._stack:
-            # the rest go in with whatever the grid or an earlier selection left
-            # behind, until the selection settles and they are decoded properly
-            ready = model.standing(texture)
-
-            if ready is not None:
-                cards.append((texture.uuid, laid_card(*ready)))
-
-        # a hidden pane is repainted with whatever the last visible one was left on,
-        # which is not what the preview beside it is showing
-        if cards and self._inspector.isVisible():
-            # the card on top is the one the pane is really about, so the automatic
-            # checkerboard behind that one is where a click in the pane carries on from
-            set_picked_lightness(pixmap_lightness(cards[-1][1]))
-
-        self._inspector.set_sidebar(
-            stack_pixmap(cards, self._inspector.sidebar_room()),
-            self.shape(model, self._stack[-1]),
-            transparent=any(card.hasAlphaChannel() for _, card in cards),
-        )
-
-    def shape(self, model: TextureModel, texture: Texture) -> QSize | None:
-        natural = model.natural(texture)
-
-        if not natural.isEmpty():
-            return natural
-
-        return QSize() if model.full(texture, decode=False) is not None else None
+        if isinstance(model, TextureModel):
+            paint_pane(self._inspector, model, self._stack)
 
     def selected_index(self) -> QModelIndex:
         selection = self._view.selectionModel()

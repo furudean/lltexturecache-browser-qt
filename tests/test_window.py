@@ -4,14 +4,13 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QByteArray, QSettings, QSize
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QByteArray, QSettings
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.model import FULL_SIZE, TextureModel
+from lltexturecache_browser_qt.model import TextureModel
 from lltexturecache_browser_qt.selection import row_spans
 from lltexturecache_browser_qt.settings import SESSION_KEY, stored_blob, stored_paths
-from lltexturecache_browser_qt.window import MainWindow, laid_card
+from lltexturecache_browser_qt.window import MainWindow
 from tests import fakes
 
 
@@ -51,30 +50,6 @@ class TestStoredBlob:
         QSettings().setValue("geometry", "not a blob")
 
         assert stored_blob(QSettings(), "geometry") == QByteArray()
-
-
-class TestLaidCard:
-    def test_a_card_already_the_right_size_is_handed_straight_back(self, app: QApplication) -> None:
-        natural = QSize(64, 64)
-
-        card = QPixmap(64, 64)
-
-        assert laid_card(card, natural) is card
-
-    def test_a_texture_with_no_known_shape_leaves_the_card_alone(self, app: QApplication) -> None:
-        card = QPixmap(8, 8)
-
-        assert laid_card(card, QSize()) is card
-
-    def test_a_stand_in_is_laid_out_at_the_size_the_texture_will_be(self, app: QApplication) -> None:
-        laid = laid_card(QPixmap(8, 8), QSize(400, 200))
-
-        assert laid.size() == QSize(400, 200)
-
-    def test_a_large_texture_is_laid_out_within_the_inspector_box(self, app: QApplication) -> None:
-        laid = laid_card(QPixmap(8, 8), QSize(4000, 2000))
-
-        assert laid.size() == QSize(FULL_SIZE, FULL_SIZE // 2)
 
 
 class TestRowSpans:
