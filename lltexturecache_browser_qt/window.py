@@ -5,7 +5,6 @@ from typing import ClassVar
 from PySide6.QtCore import (
     QDir,
     QEvent,
-    QItemSelection,
     QItemSelectionModel,
     QModelIndex,
     QPoint,
@@ -62,6 +61,7 @@ from lltexturecache_browser_qt.prefetch import prefetch
 from lltexturecache_browser_qt.preview import PreviewWindow
 from lltexturecache_browser_qt.previewing import PreviewHost
 from lltexturecache_browser_qt.recents import RecentCaches
+from lltexturecache_browser_qt.selection import KeptSelection
 from lltexturecache_browser_qt.settings import (
     FILTERS_KEY,
     GEOMETRY_KEY,
@@ -73,26 +73,10 @@ from lltexturecache_browser_qt.settings import (
 from lltexturecache_browser_qt.stack import stack_pixmap
 from lltexturecache_browser_qt.status import WindowStatus
 from lltexturecache_browser_qt.suggested import paths as suggested_paths
+from lltexturecache_browser_qt.summary import empty_message, narrowed_summary
+from lltexturecache_browser_qt.summary import grid_summary as summary_of
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
-
-
-def color_spans(model: TextureModel, rows: list[int]) -> QItemSelection:
-    selection = QItemSelection()
-    first = last = rows[0]
-
-    for row in rows[1:]:
-        if row == last + 1:
-            last = row
-            continue
-
-        selection.select(model.index(first, 0), model.index(last, 0))
-
-        first = last = row
-
-    selection.select(model.index(first, 0), model.index(last, 0))
-
-    return selection
 
 
 def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
@@ -138,9 +122,9 @@ class MainWindow(QMainWindow):
 
         self._summary = ""
 
-        # after filters
-        self._kept: list[str] = []
-        self._current: str | None = None
+        # what was selected before the model was last reset, put back once the
+        # rows it was picked out of have landed again
+        self._kept = KeptSelection()
 
         # the texture the panes are showing, which is what says whether a click on
         # one of them is still about what is in front of the user
@@ -665,51 +649,29 @@ class MainWindow(QMainWindow):
         self.scroll_ranked()
 
     def summary(self) -> str:
+        """What the status bar rests on, which is the filters if any are asking"""
+
         model = self._view.model()
 
-        if not isinstance(model, TextureModel):
-            return self._summary
-
-        if model.narrowed:
-            return (
-                f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
-            )
+        if isinstance(model, TextureModel) and model.narrowed:
+            return narrowed_summary(model)
 
         return self.grid_summary()
 
     def grid_summary(self) -> str:
+        """What the grid holds out of the cache, whatever is being asked of it"""
+
         model = self._view.model()
 
         if self._cache is None or not isinstance(model, TextureModel):
             return self._summary
 
-        shown = model.rowCount()
-
-        summary = f"Showing {format_count(shown)} textures of {format_count(len(self._cache))} entries in cache"
-
-        # both counts are of the rows the grid ended up with rather than of the
-        # cache, since an entry left out of it is neither shown nor news
-        unfinished = (
-            sum(1 for row in range(shown) if not model.texture(row).whole()) if self.showing_incomplete() else 0
-        )
-
-        if unfinished:
-            summary += f", {format_count(unfinished)} incomplete"
-
-        hidden = model.hidden()
-
-        if hidden:
-            summary += f", {format_count(hidden)} simple textures hidden"
-
-        return summary
+        return summary_of(model, len(self._cache), counting_incomplete=self.showing_incomplete())
 
     def sync_empty(self) -> None:
         model = self._view.model()
 
-        if not isinstance(model, TextureModel) or not (model.narrowed or model.hidden()):
-            self._view.set_message("Cache is empty")
-        else:
-            self._view.set_message("No textures match filters")
+        self._view.set_message(empty_message(model if isinstance(model, TextureModel) else None))
 
     def scroll_ranked(self) -> None:
         current = self._view.currentIndex()
@@ -729,11 +691,13 @@ class MainWindow(QMainWindow):
         if not isinstance(model, TextureModel):
             return
 
-        selected = self._view.selectionModel().selectedIndexes()
         current = self.selected_index()
 
-        self._kept = [model.texture(index.row()).uuid for index in selected]
-        self._current = model.texture(current.row()).uuid if current.isValid() else None
+        self._kept = KeptSelection.taken(
+            model,
+            [index.row() for index in self._view.selectionModel().selectedIndexes()],
+            current.row() if current.isValid() else None,
+        )
 
     def restore_selection(self) -> None:
         model = self._view.model()
@@ -741,22 +705,9 @@ class MainWindow(QMainWindow):
         if not isinstance(model, TextureModel):
             return
 
-        kept, current = self._kept, self._current
+        kept, self._kept = self._kept, KeptSelection()
 
-        self._kept, self._current = [], None
-
-        rows = sorted(row for uuid in kept if (row := model.row(uuid)) is not None)
-        selection = self._view.selectionModel()
-
-        if rows:
-            selection.select(color_spans(model, rows), QItemSelectionModel.SelectionFlag.ClearAndSelect)
-
-        standing = model.row(current) if current is not None else None
-
-        if standing is not None:
-            # the selection is already back, and this only says which of it the
-            # panes are on, so it is set without touching what is selected
-            selection.setCurrentIndex(model.index(standing, 0), QItemSelectionModel.SelectionFlag.NoUpdate)
+        kept.restore(model, self._view.selectionModel())
 
     def inspector_action(self, shown: bool) -> None:
         self.sync_inspector()

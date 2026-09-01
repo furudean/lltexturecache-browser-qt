@@ -9,8 +9,9 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
 from lltexturecache_browser_qt.model import FULL_SIZE, TextureModel
+from lltexturecache_browser_qt.selection import row_spans
 from lltexturecache_browser_qt.settings import SESSION_KEY, stored_blob, stored_paths
-from lltexturecache_browser_qt.window import MainWindow, color_spans, laid_card
+from lltexturecache_browser_qt.window import MainWindow, laid_card
 from tests import fakes
 
 
@@ -76,7 +77,7 @@ class TestLaidCard:
         assert laid.size() == QSize(FULL_SIZE, FULL_SIZE // 2)
 
 
-class TestColorSpans:
+class TestRowSpans:
     @staticmethod
     def model(count: int) -> TextureModel:
         return TextureModel(fakes.textures(count), fakes.cache())
@@ -85,7 +86,7 @@ class TestColorSpans:
         built = self.model(5)
 
         try:
-            spans = color_spans(built, [2])
+            spans = row_spans(built, [2])
 
             assert spans.count() == 1
             assert (spans.at(0).top(), spans.at(0).bottom()) == (2, 2)
@@ -96,7 +97,7 @@ class TestColorSpans:
         built = self.model(8)
 
         try:
-            spans = color_spans(built, [1, 2, 3])
+            spans = row_spans(built, [1, 2, 3])
 
             assert spans.count() == 1
             assert (spans.at(0).top(), spans.at(0).bottom()) == (1, 3)
@@ -107,7 +108,7 @@ class TestColorSpans:
         built = self.model(8)
 
         try:
-            spans = color_spans(built, [0, 1, 4, 5])
+            spans = row_spans(built, [0, 1, 4, 5])
 
             assert [(spans.at(at).top(), spans.at(at).bottom()) for at in range(spans.count())] == [(0, 1), (4, 5)]
         finally:
@@ -117,7 +118,7 @@ class TestColorSpans:
         built = self.model(8)
 
         try:
-            assert color_spans(built, [0, 2, 4, 6]).count() == 4
+            assert row_spans(built, [0, 2, 4, 6]).count() == 4
         finally:
             built.shutdown()
 
