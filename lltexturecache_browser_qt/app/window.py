@@ -40,6 +40,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.app.about import AboutDialog
 from lltexturecache_browser_qt.app.actions import WindowActions
+from lltexturecache_browser_qt.app.alerts import warn
 from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
 from lltexturecache_browser_qt.app.session import AppState
@@ -363,7 +364,7 @@ class MainWindow(QMainWindow):
         try:
             changed = list(self._cache.refresh())
         except (FileNotFoundError, TextureCacheError) as e:
-            self._status.rest(f"could not refresh {self._cache.cache_dir}: {e}")
+            warn(self, f"Could not reload {self._cache.cache_dir.name}.", str(e))
             return
 
         added = [texture for texture in changed if texture.uuid not in sizes]
@@ -435,7 +436,16 @@ class MainWindow(QMainWindow):
             return
 
         if len(textures) > DRAG_LIMIT:
-            self._status.flash("Can't drag that many; export them instead")
+            # the mouse is still down on the drag this is turning away, so the
+            # alert waits for the press to be over rather than coming up under it
+            QTimer.singleShot(
+                0,
+                lambda: warn(
+                    self,
+                    f"Can't drag more than {format_count(DRAG_LIMIT)} textures at once.",
+                    "Export them to a folder instead.",
+                ),
+            )
             return
 
         QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
@@ -573,7 +583,7 @@ class MainWindow(QMainWindow):
         image = image_file(path)
 
         if image.isNull():
-            self._status.flash(f"Could not read {path.name} as an image")
+            warn(self, f"Could not read {path.name} as an image.")
             return
 
         self.match_picture(image, path.name)
@@ -582,7 +592,7 @@ class MainWindow(QMainWindow):
         image = QGuiApplication.clipboard().image()
 
         if image.isNull():
-            self._status.flash("There is no image on the clipboard")
+            warn(self, "There is no image on the clipboard.", "Copy a picture and try again.")
             return
 
         self.match_picture(image, "the pasted image")
@@ -981,7 +991,7 @@ class MainWindow(QMainWindow):
         try:
             cache = TextureCache(cache_dir)
         except (FileNotFoundError, TextureCacheError) as e:
-            self._status.rest(f"Could not open {cache_dir}: {e}")
+            warn(self, f"Could not open {cache_dir}.", str(e))
             return
 
         RecentCaches.shared().remember(cache.cache_dir)

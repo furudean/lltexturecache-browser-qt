@@ -8,11 +8,12 @@ from types import TracebackType
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QPixmapCache
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, APP_NAME, __version__
 from lltexturecache_browser_qt.app.actions import fallback_menu
+from lltexturecache_browser_qt.app.alerts import fail
 from lltexturecache_browser_qt.app.window import MainWindow
 from lltexturecache_browser_qt.cache.suggested import resolve as resolve_suggested
 from lltexturecache_browser_qt.grid.model import PIXMAP_CACHE_KB
@@ -86,7 +87,7 @@ class ErrorReporter(QObject):
 
     @Slot(str, str)
     def _show_error(self, title: str, message: str) -> None:
-        QMessageBox.critical(None, title, message)
+        fail(None, title, "The app ran into something it did not expect.", message)
 
 
 def start_logging() -> None:

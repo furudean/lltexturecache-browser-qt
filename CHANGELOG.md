@@ -14,6 +14,7 @@ all notable changes to this project are documented in this file.
 - better tooltip for the inspector preview
 - rename "Transparency Mode" to "Alpha Mode", and "Grid" to "Checkerboard"
 - fix sticky swatches
+- render alerts as a dialog instead of a line in the status bar
 
 ## v0.4.0 - 2026-08-28
 
