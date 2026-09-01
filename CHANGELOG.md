@@ -5,6 +5,10 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - find a texture from a similar image. useful for screenshots
+- a failed export no longer leaves a truncated file behind
+- set LLTEXTURECACHE_LOG env var to see debugging information
+- the app hands its exit code back
+- bumps texture-courier dependency, bringing in some minor improvements
 - right click menu on the inspector, with the alpha mode shown in it
 - drag and drop in the inspector
 - better tooltip for the inspector preview
