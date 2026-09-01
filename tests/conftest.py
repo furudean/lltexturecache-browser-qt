@@ -10,12 +10,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QCoreApplication, QSettings
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="session")
@@ -59,49 +58,3 @@ def settings(app: QApplication, tmp_path: Path) -> Iterator[None]:
     yield
 
     QSettings().clear()
-
-
-@pytest.fixture
-def moment() -> datetime:
-    """A fixed time, so nothing under test is read against the clock"""
-
-    return datetime(2024, 3, 7, 15, 4, 5, tzinfo=UTC)
-
-
-@pytest.fixture
-def holder(app: QApplication) -> Iterator[QWidget]:
-    """A parent widget something under test can be built under
-
-    A Qt child goes when its parent does, and a parent built inline in a test
-    goes as soon as the line it was built on ends.
-    """
-
-    widget = QWidget()
-
-    yield widget
-
-    widget.close()
-
-
-@pytest.fixture
-def quiet_scan(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the colour scan off the global pool
-
-    A model starts one the moment it is built, and it reads through a real
-    cache. Nothing under test here depends on what it would find, and a scan
-    left running reorders rows out from under whatever is asserting on them.
-    """
-
-    from PySide6.QtCore import QThreadPool
-
-    from lltexturecache_browser_qt.grid import model as module
-
-    class Idle:
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            pass
-
-        def cancel(self) -> None:
-            pass
-
-    monkeypatch.setattr(module, "ColorScan", Idle)
-    monkeypatch.setattr(QThreadPool.globalInstance(), "start", lambda *args, **kwargs: None)
