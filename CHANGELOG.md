@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.5.0 - 2026-09-01
 
 - find a texture from a similar image. useful for screenshots
 - a failed export no longer leaves a truncated file behind
