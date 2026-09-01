@@ -12,11 +12,11 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.app import window as module
 from lltexturecache_browser_qt.app.session import AppSession
-from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.app.window import MainWindow
 from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.grid.model import TextureModel
 from lltexturecache_browser_qt.grid.selection import row_spans
 from lltexturecache_browser_qt.settings import SESSION_KEY, stored_blob, stored_paths
-from lltexturecache_browser_qt.app.window import MainWindow
 from tests import fakes
 
 

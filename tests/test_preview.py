@@ -7,7 +7,6 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.view.checkerboard import CheckerTone, pane_tone, set_pane_tone
 from lltexturecache_browser_qt.panes.preview import (
     MIN_PANE_SIZE,
     WINDOW_TITLE,
@@ -15,6 +14,7 @@ from lltexturecache_browser_qt.panes.preview import (
     nearest,
     preview_title,
 )
+from lltexturecache_browser_qt.view.checkerboard import CheckerTone, pane_tone, set_pane_tone
 from tests import fakes
 
 
@@ -37,13 +37,6 @@ def settled(window: PreviewWindow, app: QApplication) -> None:
     window.show()
 
     app.processEvents()
-
-
-def card(width: int = 40, height: int = 40, alpha: int = 0xFF) -> QPixmap:
-    pixmap = QPixmap(width, height)
-    pixmap.fill(Qt.GlobalColor.red if alpha == 0xFF else Qt.GlobalColor.transparent)
-
-    return pixmap
 
 
 class TestNearest:
@@ -93,12 +86,12 @@ class TestWindowStates:
 
     def test_showing_a_texture_titles_the_window_for_it(self, window: PreviewWindow) -> None:
         texture = fakes.texture()
-        window.show_texture(texture, (card(), QSize(64, 64)), None)
+        window.show_texture(texture, (fakes.card(), QSize(64, 64)), None)
 
         assert texture.uuid in window.windowTitle()
 
     def test_clearing_puts_the_title_back(self, window: PreviewWindow) -> None:
-        window.show_texture(fakes.texture(), (card(), QSize(64, 64)), None)
+        window.show_texture(fakes.texture(), (fakes.card(), QSize(64, 64)), None)
         window.clear()
 
         assert window.windowTitle() == WINDOW_TITLE
@@ -120,37 +113,37 @@ class TestWindowStates:
         assert window._message == "Texture incomplete"
 
     def test_a_stand_in_is_shown_while_the_decode_is_out(self, window: PreviewWindow) -> None:
-        stand_in = card(8, 8)
+        stand_in = fakes.card(8, 8)
 
         window.show_texture(fakes.texture(), None, (stand_in, QSize(64, 64)))
 
         assert window._pixmap.size() == stand_in.size()
 
     def test_the_decode_is_preferred_over_the_stand_in(self, window: PreviewWindow) -> None:
-        window.show_texture(fakes.texture(), (card(64, 64), QSize(64, 64)), (card(8, 8), QSize(64, 64)))
+        window.show_texture(fakes.texture(), (fakes.card(64, 64), QSize(64, 64)), (fakes.card(8, 8), QSize(64, 64)))
 
         assert window._pixmap.size() == QSize(64, 64)
 
 
 class TestShaping:
     def test_a_window_takes_the_shape_of_the_texture(self, window: PreviewWindow) -> None:
-        window.show_texture(fakes.texture(), (card(), QSize(400, 200)), None)
+        window.show_texture(fakes.texture(), (fakes.card(), QSize(400, 200)), None)
 
         assert window.width() > window.height()
 
     def test_a_texture_is_shaped_once_rather_than_on_every_decode(self, window: PreviewWindow) -> None:
         texture = fakes.texture()
 
-        window.show_texture(texture, (card(), QSize(400, 200)), None)
+        window.show_texture(texture, (fakes.card(), QSize(400, 200)), None)
         window.resize(300, 300)
-        window.show_texture(texture, (card(), QSize(400, 200)), None)
+        window.show_texture(texture, (fakes.card(), QSize(400, 200)), None)
 
         assert window.size() == QSize(300, 300)
 
     def test_a_different_texture_shapes_the_window_again(self, window: PreviewWindow) -> None:
-        window.show_texture(fakes.texture(uuid="one"), (card(), QSize(400, 200)), None)
+        window.show_texture(fakes.texture(uuid="one"), (fakes.card(), QSize(400, 200)), None)
         window.resize(300, 300)
-        window.show_texture(fakes.texture(uuid="two"), (card(), QSize(200, 400)), None)
+        window.show_texture(fakes.texture(uuid="two"), (fakes.card(), QSize(200, 400)), None)
 
         assert window.height() > window.width()
 
@@ -174,7 +167,7 @@ class TestShaping:
         window.resize(200, 200)
         settled(window, app)
 
-        window.show_texture(fakes.texture(), (card(), QSize(400, 100)), None)
+        window.show_texture(fakes.texture(), (fakes.card(), QSize(400, 100)), None)
 
         app.processEvents()
 
@@ -184,7 +177,7 @@ class TestShaping:
         window.resize(200, 200)
         settled(window, app)
 
-        window.show_texture(fakes.texture(), (card(), QSize(400, 200)), None)
+        window.show_texture(fakes.texture(), (fakes.card(), QSize(400, 200)), None)
 
         assert window.width() <= 200
         assert window.height() <= 200
@@ -195,7 +188,7 @@ class TestInteraction:
         set_pane_tone(CheckerTone.LIGHT)
 
         window.resize(100, 100)
-        window.show_texture(fakes.texture(), (card(), QSize(64, 64)), None)
+        window.show_texture(fakes.texture(), (fakes.card(), QSize(64, 64)), None)
 
         window.mousePressEvent(self.click(QEvent.Type.MouseButtonPress))
         window.mouseReleaseEvent(self.click(QEvent.Type.MouseButtonRelease))

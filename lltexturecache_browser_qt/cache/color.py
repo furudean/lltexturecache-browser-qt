@@ -385,16 +385,14 @@ class ColorIndex:
         answer for part of it.
         """
 
-        if not colors:
-            return [1.0] * self._count
-
-        scored: list[float] | None = None
+        # nothing asked for is a filter nothing fails, so every texture is a
+        # full match and the loop below has nothing to narrow it with
+        scored = [1.0] * self._count
 
         for color in colors:
-            against = self.matches(color)
-            scored = against if scored is None else list(map(min, scored, against))
+            scored = list(map(min, scored, self.matches(color)))
 
-        return scored if scored is not None else [1.0] * self._count
+        return scored
 
     def matches(self, color: QColor) -> list[float]:
         """How much of each texture is near the one color"""

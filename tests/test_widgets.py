@@ -61,11 +61,17 @@ class TestAdjustments:
         assert not flags & Qt.TextInteractionFlag.TextEditable
 
 
+# where a press lands when a test does not care where
+PRESSED_AT = QPoint(5, 5)
+
+
 class TestClickTracker:
     """Whether a press and a release together make a click"""
 
     @staticmethod
-    def press(at: QPoint = QPoint(5, 5), button: Qt.MouseButton = Qt.MouseButton.LeftButton) -> QMouseEvent:
+    def press(at: QPoint | None = None, button: Qt.MouseButton = Qt.MouseButton.LeftButton) -> QMouseEvent:
+        at = at if at is not None else PRESSED_AT
+
         return QMouseEvent(
             QEvent.Type.MouseButtonPress,
             QPointF(at),
@@ -87,7 +93,9 @@ class TestClickTracker:
         )
 
     @staticmethod
-    def release(at: QPoint = QPoint(5, 5)) -> QMouseEvent:
+    def release(at: QPoint | None = None) -> QMouseEvent:
+        at = at if at is not None else PRESSED_AT
+
         return QMouseEvent(
             QEvent.Type.MouseButtonRelease,
             QPointF(at),

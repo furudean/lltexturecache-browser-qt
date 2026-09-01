@@ -21,9 +21,9 @@ from lltexturecache_browser_qt.app.actions import (
     export_title,
     fallback_menu,
 )
-from lltexturecache_browser_qt.view.checkerboard import CheckerTone, grid_tone, set_grid_tone
 from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS
 from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.view.checkerboard import CheckerTone, grid_tone, set_grid_tone
 
 
 @pytest.fixture

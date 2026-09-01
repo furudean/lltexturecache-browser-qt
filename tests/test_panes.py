@@ -4,11 +4,11 @@ from collections.abc import Iterator
 
 import pytest
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor, QPixmap, QPixmapCache
+from PySide6.QtGui import QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.panes.inspector import InspectorPane
 from lltexturecache_browser_qt.grid.model import FULL_SIZE, TextureModel, alpha_key
+from lltexturecache_browser_qt.panes.inspector import InspectorPane
 from lltexturecache_browser_qt.panes.sidebar import laid_card, paint, shape, standing_cards
 from tests import fakes
 
@@ -33,13 +33,6 @@ def pane(app: QApplication) -> Iterator[InspectorPane]:
     built.close()
 
 
-def card(width: int = 8, height: int = 8) -> QPixmap:
-    pixmap = QPixmap(width, height)
-    pixmap.fill(QColor("red"))
-
-    return pixmap
-
-
 class TestLaidCard:
     def test_a_card_already_the_right_size_is_handed_straight_back(self, app: QApplication) -> None:
         pixmap = QPixmap(64, 64)
@@ -47,15 +40,15 @@ class TestLaidCard:
         assert laid_card(pixmap, QSize(64, 64)) is pixmap
 
     def test_a_texture_with_no_known_shape_leaves_the_card_alone(self, app: QApplication) -> None:
-        pixmap = card()
+        pixmap = fakes.card()
 
         assert laid_card(pixmap, QSize()) is pixmap
 
     def test_a_stand_in_is_laid_out_at_the_size_the_texture_will_be(self, app: QApplication) -> None:
-        assert laid_card(card(), QSize(400, 200)).size() == QSize(400, 200)
+        assert laid_card(fakes.card(), QSize(400, 200)).size() == QSize(400, 200)
 
     def test_a_large_texture_is_laid_out_within_the_inspector_box(self, app: QApplication) -> None:
-        assert laid_card(card(), QSize(4000, 2000)).size() == QSize(FULL_SIZE, FULL_SIZE // 2)
+        assert laid_card(fakes.card(), QSize(4000, 2000)).size() == QSize(FULL_SIZE, FULL_SIZE // 2)
 
 
 class TestShape:
@@ -77,7 +70,7 @@ class TestShape:
 
 class TestStandingCards:
     def test_a_texture_with_a_decode_in_hand_makes_a_card(self, model: TextureModel) -> None:
-        QPixmapCache.insert(alpha_key("texture-0"), card())
+        QPixmapCache.insert(alpha_key("texture-0"), fakes.card())
 
         assert [uuid for uuid, _ in standing_cards(model, [model.texture(0)])] == ["texture-0"]
 
@@ -86,7 +79,7 @@ class TestStandingCards:
 
     def test_cards_come_back_in_the_order_they_were_asked_for(self, model: TextureModel) -> None:
         for row in range(3):
-            QPixmapCache.insert(alpha_key(f"texture-{row}"), card())
+            QPixmapCache.insert(alpha_key(f"texture-{row}"), fakes.card())
 
         textures = [model.texture(row) for row in (2, 0, 1)]
 
@@ -101,7 +94,7 @@ class TestPaint:
 
     def test_a_selection_puts_a_pile_in_the_sidebar(self, pane: InspectorPane, model: TextureModel) -> None:
         for row in range(3):
-            QPixmapCache.insert(alpha_key(f"texture-{row}"), card())
+            QPixmapCache.insert(alpha_key(f"texture-{row}"), fakes.card())
 
         textures = [model.texture(row) for row in range(3)]
 
@@ -121,7 +114,7 @@ class TestPaint:
     def test_a_decoded_texture_reports_its_shape_in_the_pane(self, pane: InspectorPane, model: TextureModel) -> None:
         texture = model.texture(0)
 
-        QPixmapCache.insert(alpha_key("texture-0"), card())
+        QPixmapCache.insert(alpha_key("texture-0"), fakes.card())
         model.learn("texture-0", QSize(512, 256))
 
         pane.show_texture(texture, 1, 1024)

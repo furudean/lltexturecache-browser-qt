@@ -114,7 +114,13 @@ class WindowActions(QObject):
         # is only answered by a window the action can be reached from
         menu = window.menuBar()
 
-        file_menu = menu.addMenu("&File")
+        self.build_file_menu(window, menu.addMenu("&File"))
+        self.build_export_menu(menu.addMenu("&Export"))
+        self.build_view_menu(window, menu.addMenu("&View"))
+        self.build_app_menu(menu.addMenu("About"))
+
+    def build_file_menu(self, window: QMainWindow, file_menu: QMenu) -> None:
+        """Opening caches, reloading one, and opening or closing a window"""
 
         new = QAction("&New Window", window)
         new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
@@ -143,7 +149,6 @@ class WindowActions(QObject):
         file_menu.addAction(open)
 
         self._recents = file_menu.addMenu("Open &Recent")
-
         self._suggested = file_menu.addMenu("Open &Suggested")
 
         file_menu.addSeparator()
@@ -158,9 +163,13 @@ class WindowActions(QObject):
         self.populate_recents()
         self.populate_suggested()
 
-        self.exports = menu.addMenu("&Export")
-        self._selected_export = self.format_menu(self.exports, "Export Selected As...", everything=False)
-        self._all_export = self.format_menu(self.exports, "Export Full Cache As...", everything=True)
+    def build_export_menu(self, exports: QMenu) -> None:
+        """Writing the selection, or the whole cache, out in each format"""
+
+        self.exports = exports
+
+        self._selected_export = self.format_menu(exports, "Export Selected As...", everything=False)
+        self._all_export = self.format_menu(exports, "Export Full Cache As...", everything=True)
 
         # the first format wraps the codestream the cache is already holding
         # instead of encoding a new one, which is what a shortcut should reach
@@ -175,13 +184,35 @@ class WindowActions(QObject):
         # up as until a window has something to say about it
         self.sync_export(0, 0, idle=True)
 
-        view_menu = menu.addMenu("&View")
+    def build_view_menu(self, window: QMainWindow, view_menu: QMenu) -> None:
+        """Which panes are up, what the grid holds, and the checkerboard behind it"""
+
+        self.build_toggles(window)
+        self.build_tones(window)
+
+        view_menu.addAction(self.preview)
+        view_menu.addAction(self.inspector)
+        view_menu.addAction(self.filters)
+
+        # what the grid holds rather than which panes are up, so it sits apart
+        # from the three entries above it
+        view_menu.addSeparator()
+        view_menu.addAction(self.incomplete)
+        view_menu.addAction(self.simple)
+
+        view_menu.addSeparator()
+        checkerboard = view_menu.addMenu("&Alpha Mode")
+        checkerboard.addActions(list(self._tones.values()))
+
+        view_menu.addSeparator()
+        # any native system menus under here
+
+    def build_toggles(self, window: QMainWindow) -> None:
+        """The five ticks, which are the same entry with a different label"""
 
         # the command key "Ctrl" on mac and hands "Meta" to control
         inspector_key = "Shift+Ctrl+I" if sys.platform == "darwin" else "Shift+Alt+I"
 
-        # every entry under View is the same entry with a different label: a
-        # tick that is put away and read back, and that says so to the window
         toggles = (
             Toggle(PREVIEW_KEY, "Show &Preview Pane", "Show the selected texture in a window of its own"),
             Toggle(
@@ -220,7 +251,10 @@ class WindowActions(QObject):
         self.incomplete = self._toggles[INCOMPLETE_KEY]
         self.simple = self._toggles[SIMPLE_KEY]
 
-        self._tones: dict[CheckerTone, QAction] = {}
+    def build_tones(self, window: QMainWindow) -> None:
+        """The checkerboard the app draws behind transparency, one of four"""
+
+        self._tones = {}
 
         tones = QActionGroup(window)
         tones.setExclusive(True)
@@ -238,27 +272,13 @@ class WindowActions(QObject):
 
         self.sync_checkerboard()
 
-        app_menu = menu.addMenu("About")  # label doesn't matter on macOS, instead decided by role
-        about_action = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
-        about_action.setMenuRole(QAction.MenuRole.AboutRole)
-        about_action.triggered.connect(self.abouted.emit)
+    def build_app_menu(self, app_menu: QMenu) -> None:
+        """The About entry, which macOS moves under the application menu itself"""
 
-        view_menu.addAction(self.preview)
-        view_menu.addAction(self.inspector)
-        view_menu.addAction(self.filters)
-
-        # what the grid holds rather than which panes are up, so it sits apart
-        # from the three entries above it
-        view_menu.addSeparator()
-        view_menu.addAction(self.incomplete)
-        view_menu.addAction(self.simple)
-
-        view_menu.addSeparator()
-        checkerboard = view_menu.addMenu("&Alpha Mode")
-        checkerboard.addActions(list(self._tones.values()))
-
-        view_menu.addSeparator()
-        # any native system menus under here
+        # the label does not matter on macOS, where the role decides where it goes
+        about = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
+        about.setMenuRole(QAction.MenuRole.AboutRole)
+        about.triggered.connect(self.abouted.emit)
 
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)

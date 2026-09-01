@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
 
+from PySide6.QtGui import QColor, QPixmap
 from texture_courier import Texture, TextureCache, TextureCacheError
 
 CACHED_AT = datetime(2024, 3, 7, 15, 4, 5, tzinfo=UTC)
@@ -69,3 +70,18 @@ def textures(count: int, **fields: object) -> list[Texture]:
 
 def cache(count: int = 0) -> TextureCache:
     return cast("TextureCache", FakeCache(count))
+
+
+def card(width: int = 8, height: int = 8, color: str = "red", *, alpha: int = 0xFF) -> QPixmap:
+    """A pixmap standing in for a decoded texture
+
+    Named for what it is used as: the app calls one of these a card wherever it
+    lays a selection out as a pile. Filled flat, since nothing under test reads
+    a pixel out of it — only its size, its shape and whether it has an alpha
+    channel.
+    """
+
+    pixmap = QPixmap(width, height)
+    pixmap.fill(QColor(color) if alpha == 0xFF else QColor(0, 0, 0, 0))
+
+    return pixmap

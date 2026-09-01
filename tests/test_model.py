@@ -8,8 +8,8 @@ from PySide6.QtGui import QColor, QImage, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.grid import model as module
 from lltexturecache_browser_qt.cache.color import ColorIndex, Signature, to_lab
+from lltexturecache_browser_qt.grid import model as module
 from lltexturecache_browser_qt.grid.model import (
     FULL_SIZE,
     INCOMPLETE_ROLE,

@@ -6,10 +6,10 @@ import pytest
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.view import checkerboard as module
 from lltexturecache_browser_qt.view.checkerboard import (
     CHECKERBOARD_SIZE,
     DARK_SHADES,
+    GRID_KEY,
     LIGHT_SHADES,
     LIGHTNESS_THRESHOLD,
     TONE_CYCLE,
@@ -27,6 +27,7 @@ from lltexturecache_browser_qt.view.checkerboard import (
     pane_tone,
     pixmap_lightness,
     predominant_lightness,
+    reset,
     reset_pane_tone,
     set_grid_tone,
     set_pane_tone,
@@ -34,23 +35,24 @@ from lltexturecache_browser_qt.view.checkerboard import (
     shaded,
     shades,
     standing_tone,
+    state,
     sync_checkerboard,
 )
 
 
 @pytest.fixture
 def tones(settings: None) -> Iterator[None]:
-    """Put the module's globals back the way the test found them
+    """Put the checkerboard back the way the test found it
 
-    The checkerboard is app-wide state by design — every pane and cell reads the
-    one setting — so a test that moves it has to move it back.
+    It is app-wide state by design — every pane and cell reads the one
+    setting — so a test that moves it has to move it back.
     """
 
-    kept = (module._grid_tone, module._pane_tone, module._picked_tone)
+    was = reset()
 
     yield
 
-    module._grid_tone, module._pane_tone, module._picked_tone = kept
+    reset(was)
 
 
 class TestShades:
@@ -143,21 +145,21 @@ class TestOpposingTone:
 
 class TestTones:
     def test_an_unset_store_opens_on_the_automatic_checkerboard(self, tones: None) -> None:
-        module._grid_tone = None
+        state().grid = None
 
         assert grid_tone() is CheckerTone.AUTO
 
     def test_a_stored_tone_is_read_back(self, tones: None) -> None:
         set_grid_tone(CheckerTone.DARK)
-        module._grid_tone = None
+        state().grid = None
 
         assert grid_tone() is CheckerTone.DARK
 
     def test_a_tone_the_app_does_not_know_falls_back_to_automatic(self, tones: None) -> None:
         from PySide6.QtCore import QSettings
 
-        QSettings().setValue(module.GRID_KEY, "chartreuse")
-        module._grid_tone = None
+        QSettings().setValue(GRID_KEY, "chartreuse")
+        state().grid = None
 
         assert grid_tone() is CheckerTone.AUTO
 
@@ -276,7 +278,7 @@ class TestSync:
 
         before = checkerboard_generation()
 
-        module._grid_tone = CheckerTone.DARK
+        state().grid = CheckerTone.DARK
 
         assert sync_checkerboard() is True
         assert checkerboard_generation() > before

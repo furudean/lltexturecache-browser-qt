@@ -1,18 +1,11 @@
 """The bigger decodes the panes ask for"""
 
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor, QImage, QPixmap
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 
 from lltexturecache_browser_qt.grid.decodes import FULL_CACHE, FullDecodes, PreviewDecodes
 from tests import fakes
-
-
-def decoded(width: int = 8, height: int = 8) -> QPixmap:
-    pixmap = QPixmap(width, height)
-    pixmap.fill(QColor("red"))
-
-    return pixmap
 
 
 def image(width: int = 8, height: int = 8) -> QImage:
@@ -42,7 +35,7 @@ class TestFullDecodes:
 
     def test_a_landed_decode_is_handed_back(self, app: QApplication) -> None:
         store = FullDecodes()
-        store.landed("one", decoded(), QSize(64, 64))
+        store.landed("one", fakes.card(), QSize(64, 64))
 
         ready = store.ready("one")
 
@@ -54,7 +47,7 @@ class TestFullDecodes:
         texture = fakes.texture(uuid="one")
 
         store.wanted(texture)
-        store.landed("one", decoded(), QSize(64, 64))
+        store.landed("one", fakes.card(), QSize(64, 64))
 
         assert store.wanted(texture) is True
 
@@ -62,7 +55,7 @@ class TestFullDecodes:
         store = FullDecodes()
 
         for index in range(FULL_CACHE + 3):
-            store.landed(f"texture-{index}", decoded(), QSize(64, 64))
+            store.landed(f"texture-{index}", fakes.card(), QSize(64, 64))
 
         assert store.ready("texture-0") is None
         assert store.ready(f"texture-{FULL_CACHE + 2}") is not None
@@ -71,7 +64,7 @@ class TestFullDecodes:
         store = FullDecodes()
 
         for index in range(FULL_CACHE * 3):
-            store.landed(f"texture-{index}", decoded(), QSize(64, 64))
+            store.landed(f"texture-{index}", fakes.card(), QSize(64, 64))
 
         kept = sum(1 for index in range(FULL_CACHE * 3) if store.ready(f"texture-{index}") is not None)
 
@@ -79,7 +72,7 @@ class TestFullDecodes:
 
     def test_clearing_lets_everything_go(self, app: QApplication) -> None:
         store = FullDecodes()
-        store.landed("one", decoded(), QSize(64, 64))
+        store.landed("one", fakes.card(), QSize(64, 64))
         store.clear()
 
         assert store.ready("one") is None

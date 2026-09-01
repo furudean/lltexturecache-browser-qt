@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 
 import pytest
-from PySide6.QtGui import QColor, QPixmap, QPixmapCache
+from PySide6.QtGui import QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
@@ -24,12 +24,9 @@ def model(app: QApplication, quiet_scan: None) -> Iterator[TextureModel]:
 
 
 def swatch(color: str = "red") -> QPixmap:
-    """A card of one flat colour, which is all these tests need one to be"""
+    """A card of a nameable colour, so two of them can be told apart"""
 
-    pixmap = QPixmap(8, 8)
-    pixmap.fill(QColor(color))
-
-    return pixmap
+    return fakes.card(color=color)
 
 
 class TestStackTextures:

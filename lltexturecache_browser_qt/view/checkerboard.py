@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import ClassVar, Self
 
@@ -44,32 +45,67 @@ class CheckerboardChanges(QObject):
         return cls._shared
 
 
-# every checkerboard a texture may be laid on, by the pair of colours it is made of,
-# and the scheme's own pair as it stood when they were built. a decode thread
-# reads these and never writes one, so a change of scheme replaces the lot here
-# rather than drawing over an image already out with a thread
-_checkerboards: dict[tuple[int, int], QImage] = {}
-_scheme_colors: tuple[QColor, QColor] | None = None
+@dataclass
+class Checkerboards:
+    """Which checkerboard the app is on, and the tiles it is drawn from
 
-# the tone the cells are on and the scheme they were decoded against, which is
-# what says whether a cell already drawn is still the right one
-_grid_state: tuple[CheckerTone, tuple[QColor, QColor] | None] | None = None
+    App-wide by design: the grid, both panes and every open window draw
+    against the one checkerboard, and a decode thread reads it. Gathered into
+    one object so the functions below say what they are changing, and so a
+    caller that has to put it back — a test, mostly — can ask for that in one
+    call instead of assigning to six module attributes.
+    """
 
-# read out of the store the first time it is asked for, which is after the app
-# has a name to look one up under
-_grid_tone: CheckerTone | None = None
+    # every checkerboard a texture may be laid on, by the pair of colours it is
+    # made of, and the scheme's own pair as it stood when they were built. a
+    # decode thread reads these and never writes one, so a change of scheme
+    # replaces the lot here rather than drawing over an image already out with
+    # a thread
+    tiles: dict[tuple[int, int], QImage] = field(default_factory=dict)
+    scheme: tuple[QColor, QColor] | None = None
 
-# a look at a texture rather than a way the app is set up, so it is not kept:
-# every run opens on the checkerboard the scheme would have drawn anyway
-_pane_tone = CheckerTone.AUTO
+    # the tone the cells are on and the scheme they were decoded against, which
+    # is what says whether a cell already drawn is still the right one
+    grid_state: tuple[CheckerTone, tuple[QColor, QColor] | None] | None = None
 
-# the checkerboard the automatic one picked for what is selected now. it is the only
-# tone that reads the texture rather than the settings, so it moves with the
-# selection, and it is what a click on a pane carries on from
-_picked_tone: CheckerTone | None = None
+    # read out of the store the first time it is asked for, which is after the
+    # app has a name to look one up under
+    grid: CheckerTone | None = None
 
-# how many checkerboards the cells have been through
-_generation = 0
+    # a look at a texture rather than a way the app is set up, so it is not
+    # kept: every run opens on the checkerboard the scheme would have drawn
+    pane: CheckerTone = CheckerTone.AUTO
+
+    # the checkerboard the automatic one picked for what is selected now. it is
+    # the only tone that reads the texture rather than the settings, so it moves
+    # with the selection, and it is what a click on a pane carries on from
+    picked: CheckerTone | None = None
+
+    # how many checkerboards the cells have been through
+    generation: int = 0
+
+
+_state = Checkerboards()
+
+
+def state() -> Checkerboards:
+    """What the app's checkerboard is doing right now"""
+
+    return _state
+
+
+def reset(to: Checkerboards | None = None) -> Checkerboards:
+    """Put the checkerboard back, and hand back what it was
+
+    The app never calls this. A test that moves the checkerboard does, since
+    what it moved is shared with every other test in the run.
+    """
+
+    global _state
+
+    was, _state = _state, to if to is not None else Checkerboards()
+
+    return was
 
 
 def shaded(color: QColor, by: int) -> QColor:
@@ -182,7 +218,7 @@ def tone_colors(tone: CheckerTone, lightness: float | None = None) -> tuple[QCol
             # nothing to stand off, so the checkerboard goes with the window instead:
             # the scheme's own background, tint and all, which reads as part of
             # the pane rather than as something laid over it
-            return _scheme_colors
+            return _state.scheme
 
         tone = opposed
 
@@ -197,29 +233,27 @@ def resolved_tone(tone: CheckerTone) -> CheckerTone:
 
 
 def grid_tone() -> CheckerTone:
-    global _grid_tone
 
-    if _grid_tone is None:
+    if _state.grid is None:
         stored = QSettings().value(GRID_KEY)
 
         # a store written by a later version, or by hand, still has to open
         tones = {tone.value: tone for tone in CheckerTone}
 
-        _grid_tone = tones.get(stored, CheckerTone.AUTO) if isinstance(stored, str) else CheckerTone.AUTO
+        _state.grid = tones.get(stored, CheckerTone.AUTO) if isinstance(stored, str) else CheckerTone.AUTO
 
-    return _grid_tone
+    return _state.grid
 
 
 def set_grid_tone(tone: CheckerTone) -> None:
-    global _grid_tone, _pane_tone
 
     # picking the checkerboard the grid is already on is still worth something while
     # the panes have been clicked off it, since it is how they are called back
-    if tone == grid_tone() and tone == _pane_tone:
+    if tone == grid_tone() and tone == _state.pane:
         return
 
-    _grid_tone = tone
-    _pane_tone = tone
+    _state.grid = tone
+    _state.pane = tone
 
     QSettings().setValue(GRID_KEY, tone.value)
 
@@ -229,29 +263,27 @@ def set_grid_tone(tone: CheckerTone) -> None:
 
 
 def pane_tone() -> CheckerTone:
-    return _pane_tone
+    return _state.pane
 
 
 def set_picked_lightness(lightness: float | None) -> None:
-    global _picked_tone
 
-    _picked_tone = opposing_tone(lightness)
+    _state.picked = opposing_tone(lightness)
 
 
 def standing_tone() -> CheckerTone:
-    if _pane_tone is CheckerTone.AUTO and _picked_tone is not None:
-        return _picked_tone
+    if _state.pane is CheckerTone.AUTO and _state.picked is not None:
+        return _state.picked
 
-    return resolved_tone(_pane_tone)
+    return resolved_tone(_state.pane)
 
 
 def set_pane_tone(tone: CheckerTone) -> None:
-    global _pane_tone
 
-    if tone == _pane_tone:
+    if tone == _state.pane:
         return
 
-    _pane_tone = tone
+    _state.pane = tone
 
     # the cells are not drawn against this one, so nothing is decoded again and
     # the generation the threads watch stays where it is
@@ -269,13 +301,12 @@ def cycle_pane_tone() -> None:
 
 
 def sync_checkerboard() -> bool:
-    global _checkerboards, _scheme_colors, _grid_state, _generation
 
     scheme = shades(scheme_base())
 
-    if scheme != _scheme_colors:
-        _scheme_colors = scheme
-        _checkerboards = {
+    if scheme != _state.scheme:
+        _state.scheme = scheme
+        _state.tiles = {
             checkerboard_key(colors): checker_tile(*colors) for colors in (LIGHT_SHADES, DARK_SHADES, scheme)
         }
 
@@ -285,11 +316,11 @@ def sync_checkerboard() -> bool:
     # palette it ignores
     state = (grid_tone(), scheme if grid_tone() is CheckerTone.AUTO else None)
 
-    if state == _grid_state:
+    if state == _state.grid_state:
         return False
 
-    _grid_state = state
-    _generation += 1
+    _state.grid_state = state
+    _state.generation += 1
 
     QPixmapCache.clear()
 
@@ -302,7 +333,7 @@ def checkerboard_key(colors: tuple[QColor, QColor]) -> tuple[int, int]:
 
 def checkerboard_at(colors: tuple[QColor, QColor], square: int = CHECKERBOARD_SIZE) -> QImage:
     if square == CHECKERBOARD_SIZE:
-        built = _checkerboards.get(checkerboard_key(colors))
+        built = _state.tiles.get(checkerboard_key(colors))
 
         if built is not None:
             return built
@@ -311,18 +342,18 @@ def checkerboard_at(colors: tuple[QColor, QColor], square: int = CHECKERBOARD_SI
 
 
 def checkerboard_generation() -> int:
-    return _generation
+    return _state.generation
 
 
 def pane_lightness(pixmap: QPixmap) -> float | None:
     # only the automatic checkerboard looks at what it is going behind
-    return pixmap_lightness(pixmap) if _pane_tone is CheckerTone.AUTO else None
+    return pixmap_lightness(pixmap) if _state.pane is CheckerTone.AUTO else None
 
 
 def pane_colors(lightness: float | None = None) -> tuple[QColor, QColor] | None:
     """The two colours the panes lay behind a texture, or neither of them"""
 
-    return tone_colors(_pane_tone, lightness)
+    return tone_colors(_state.pane, lightness)
 
 
 def pane_checkerboard(lightness: float | None = None) -> QImage | None:

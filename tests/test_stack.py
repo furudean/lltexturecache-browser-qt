@@ -14,13 +14,7 @@ from lltexturecache_browser_qt.view.stack import (
     dealt_card,
     stack_pixmap,
 )
-
-
-def card(width: int, height: int, color: str = "red") -> QPixmap:
-    pixmap = QPixmap(width, height)
-    pixmap.fill(QColor(color))
-
-    return pixmap
+from tests import fakes
 
 
 class TestCardTransform:
@@ -36,39 +30,39 @@ class TestCardTransform:
 
 class TestBiggestCard:
     def test_the_card_taking_the_most_room_sets_the_size(self, app: QApplication) -> None:
-        cards = [("a", card(10, 100)), ("b", card(40, 40)), ("c", card(90, 10))]
+        cards = [("a", fakes.card(10, 100)), ("b", fakes.card(40, 40)), ("c", fakes.card(90, 10))]
 
         assert biggest_card(cards) == QSize(40, 40)
 
     def test_a_single_card_sets_its_own_size(self, app: QApplication) -> None:
-        assert biggest_card([("a", card(30, 20))]) == QSize(30, 20)
+        assert biggest_card([("a", fakes.card(30, 20))]) == QSize(30, 20)
 
 
 class TestDealtCard:
     def test_a_card_already_the_right_size_is_handed_straight_back(self, app: QApplication) -> None:
-        pixmap = card(40, 40)
+        pixmap = fakes.card(40, 40)
 
         assert dealt_card(pixmap, QSize(40, 40), round(40 * STACK_SPAN_RATIO)) is pixmap
 
     def test_a_dealt_card_keeps_its_shape(self, app: QApplication) -> None:
-        dealt = dealt_card(card(80, 20), QSize(40, 40), 50)
+        dealt = dealt_card(fakes.card(80, 20), QSize(40, 40), 50)
 
         assert dealt.width() > dealt.height()
 
     def test_a_small_card_is_blown_up_to_sit_with_the_rest(self, app: QApplication) -> None:
-        small = card(8, 8)
+        small = fakes.card(8, 8)
         dealt = dealt_card(small, QSize(64, 64), 80)
 
         assert dealt.width() > small.width()
 
     def test_a_card_never_deals_to_nothing(self, app: QApplication) -> None:
-        dealt = dealt_card(card(1000, 1), QSize(4, 4), 5)
+        dealt = dealt_card(fakes.card(1000, 1), QSize(4, 4), 5)
 
         assert dealt.width() >= 1
         assert dealt.height() >= 1
 
     def test_a_card_is_never_dealt_past_the_span(self, app: QApplication) -> None:
-        dealt = dealt_card(card(400, 400), QSize(40, 40), 50)
+        dealt = dealt_card(fakes.card(400, 400), QSize(40, 40), 50)
 
         assert max(dealt.width(), dealt.height()) <= 50
 
@@ -100,19 +94,19 @@ class TestStackPixmap:
         assert stack_pixmap([]).isNull()
 
     def test_one_card_comes_back_about_its_own_size(self, app: QApplication) -> None:
-        stacked = stack_pixmap([("a", card(40, 40))])
+        stacked = stack_pixmap([("a", fakes.card(40, 40))])
 
         assert stacked.width() == pytest.approx(40, abs=4)
         assert stacked.height() == pytest.approx(40, abs=4)
 
     def test_a_pile_reaches_further_than_the_card_on_top(self, app: QApplication) -> None:
-        cards = [(f"texture-{index}", card(40, 40)) for index in range(4)]
+        cards = [(f"texture-{index}", fakes.card(40, 40)) for index in range(4)]
         stacked = stack_pixmap(cards)
 
         assert stacked.width() > 40
 
     def test_a_pile_lays_out_the_same_way_every_time(self, app: QApplication) -> None:
-        cards = [(f"texture-{index}", card(40, 40)) for index in range(4)]
+        cards = [(f"texture-{index}", fakes.card(40, 40)) for index in range(4)]
 
         assert stack_pixmap(cards).size() == stack_pixmap(cards).size()
 
@@ -123,6 +117,6 @@ class TestStackPixmap:
         assert not stack_pixmap([("a", clear), ("b", clear)]).isNull()
 
     def test_the_room_a_stack_is_seen_at_does_not_change_its_size(self, app: QApplication) -> None:
-        cards = [(f"texture-{index}", card(40, 40)) for index in range(3)]
+        cards = [(f"texture-{index}", fakes.card(40, 40)) for index in range(3)]
 
         assert stack_pixmap(cards, QSize(20, 20)).size() == stack_pixmap(cards).size()
