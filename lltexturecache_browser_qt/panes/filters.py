@@ -257,6 +257,10 @@ class FilterBar(QToolBar):
         return [f"{ON_MARK if swatch.isChecked() else OFF_MARK}{swatch.color.name()}" for swatch in self._swatches]
 
     def revive(self, stored: object) -> None:
+        if stored is None:
+            self.restore()
+            return
+
         # a list of one comes back out of the store as the string it held
         if isinstance(stored, str):
             stored = [stored]
@@ -273,10 +277,7 @@ class FilterBar(QToolBar):
                 if color.isValid():
                     remembered.append((color, entry[0] == ON_MARK))
 
-        if not remembered:
-            self.restore()
-        else:
-            self.replace(remembered)
+        self.replace(remembered)
 
     def remove(self, swatch: Swatch) -> None:
         self._swatches.remove(swatch)

@@ -13,6 +13,7 @@ all notable changes to this project are documented in this file.
 - drag and drop in the inspector
 - better tooltip for the inspector preview
 - rename "Transparency Mode" to "Alpha Mode", and "Grid" to "Checkerboard"
+- fix sticky swatches
 
 ## v0.4.0 - 2026-08-28
 
