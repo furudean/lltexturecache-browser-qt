@@ -5,8 +5,10 @@ binary the suite has no business carrying around. What the app asks of one is
 small and stable, so it is written out here instead.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from PySide6.QtGui import QColor, QPixmap
@@ -22,6 +24,7 @@ class FakeTexture:
     index: int = 3
     cached_size: int = 512
     image_size: int = 65536
+    body_size: int = 65024
     complete: bool = True
     unreadable: bool = False
     payload: bytes = PAYLOAD
@@ -85,3 +88,54 @@ def card(width: int = 8, height: int = 8, color: str = "red", *, alpha: int = 0x
     pixmap.fill(QColor(color) if alpha == 0xFF else QColor(0, 0, 0, 0))
 
     return pixmap
+
+
+class FakeCacheDir:
+    """A cache directory a window can be opened on
+
+    A real TextureCache wants a viewer's cache on disk. A window iterates it,
+    counts it, names it and refreshes it, so this stands in for all four.
+    """
+
+    def __init__(self, cache_dir: "Path", textures: list[Texture]) -> None:
+        self.cache_dir = cache_dir
+
+        self._textures = list(textures)
+        self._pending: list[Texture] | None = None
+        self._changed: list[Texture] = []
+        self._refusing: Exception | None = None
+
+    def __iter__(self) -> "Iterator[Texture]":
+        return iter(self._textures)
+
+    def __len__(self) -> int:
+        return len(self._textures)
+
+    def rewrite(self, textures: list[Texture], *, changed: list[Texture] | None = None) -> None:
+        """Stage what the next refresh will find
+
+        The viewer writes to the cache while the app is holding it, and the
+        app does not see any of it until it reads again, so what is staged
+        here does not land until `refresh` is called.
+        """
+
+        self._pending = list(textures)
+        self._changed = list(changed if changed is not None else textures)
+
+    def refuse(self, error: Exception) -> None:
+        """Make the next refresh fail, as a cache unplugged mid-session would"""
+
+        self._refusing = error
+
+    def refresh(self) -> "Iterator[Texture]":
+        if self._refusing is not None:
+            raise self._refusing
+
+        if self._pending is not None:
+            self._textures, self._pending = self._pending, None
+
+        return iter(self._changed)
+
+
+def cache_dir(path: "Path", count: int = 0) -> TextureCache:
+    return cast("TextureCache", FakeCacheDir(path, textures(count)))
