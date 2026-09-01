@@ -26,14 +26,12 @@ from lltexturecache_browser_qt.images import (
     placeholder,
     thumbnail_image,
 )
+from lltexturecache_browser_qt.queue import DecodeQueue
 
 FULL_SIZE = 800
 
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
-
-CELL_PRIORITY = 0
-AHEAD_PRIORITY = -1
 
 FULL_CACHE = 12
 
@@ -42,9 +40,6 @@ KB_PER_MB = 1024
 # a decoded cell is 100x100 at 32 bits, or 39 KB, so this holds about 27k textures
 PIXMAP_CACHE_MB = 1024
 PIXMAP_CACHE_KB = PIXMAP_CACHE_MB * KB_PER_MB
-
-DECODE_THREADS = 4
-DECODES_IN_FLIGHT = DECODE_THREADS * 2
 
 # an invalid index is the root of a list model, and it is a plain value type,
 # so one shared instance stands in for the default argument
@@ -134,32 +129,19 @@ class TextureModel(QAbstractListModel):
         # the textures the scan found no picture in, which are left out of the
         # grid or ringed in it depending on what the menu says
         self._simple: set[str] = set()
-        # drained from the end, so whatever fills it puts the rows wanted
-        # soonest last. what is kept against each row is the priority it goes to
-        # the pool at, since the pool takes work back off nobody
-        self._queue: dict[str, int] = {}
-        self._running: set[str] = set()
-        self._failed: set[str] = set()
         self._no_sidebar: set[str] = set()
         self._natural: dict[str, QSize] = {}
         self._full: dict[str, tuple[QPixmap, QSize]] = {}
         self._full_running: set[str] = set()
-        # cell decodes that set out under the palette before this one, which is
-        # to say the ones whose results are already out of date on arrival. a
-        # decode that keeps its opacity is not among them: it is painted over
-        # whatever checkerboard is down when it is drawn
-        self._stale: set[str] = set()
         # a preview window shows the one texture it is on, so the last one
         # asked for is the only one worth the room a full sized decode takes
         self._preview: tuple[str, QPixmap, QSize] | None = None
         self._previewing: str | None = None
         self._preview_running: set[str] = set()
         self._generation = checkerboard_generation()
-        self._reads = threading.Lock()
         self._thumbnails = threading.Lock()
 
-        self._pool = QThreadPool(self)
-        self._pool.setMaxThreadCount(DECODE_THREADS)
+        self._decodes = DecodeQueue(self, start=self.start_decode)
 
         self._signals = DecodeSignals(self)
         self._signals.done.connect(self.decoded)
@@ -190,7 +172,7 @@ class TextureModel(QAbstractListModel):
         reading alongside the grid's decodes has to wait for the same lock.
         """
 
-        return self._reads
+        return self._decodes.reads
 
     def rowCount(self, parent: Index = ROOT) -> int:
         return 0 if parent.isValid() else len(self._filtered_textures)
@@ -316,9 +298,9 @@ class TextureModel(QAbstractListModel):
 
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
-            task = DecodeTask(texture, self._reads, self._full_signals, FULL_SIZE, upscale=False, checkerboard=False)
+            task = DecodeTask(texture, self.reads, self._full_signals, FULL_SIZE, upscale=False, checkerboard=False)
 
-            self._pool.start(task, FULL_PRIORITY)
+            self._decodes.pool.start(task, FULL_PRIORITY)
 
         return None
 
@@ -382,9 +364,9 @@ class TextureModel(QAbstractListModel):
         if texture.whole() and uuid not in self._preview_running:
             self._preview_running.add(uuid)
 
-            task = DecodeTask(texture, self._reads, self._preview_signals, None, checkerboard=False)
+            task = DecodeTask(texture, self.reads, self._preview_signals, None, checkerboard=False)
 
-            self._pool.start(task, PREVIEW_PRIORITY)
+            self._decodes.pool.start(task, PREVIEW_PRIORITY)
 
         return None
 
@@ -405,7 +387,7 @@ class TextureModel(QAbstractListModel):
 
         # a cell decode already running was handed the old checkerboard, so whatever
         # it comes back with is painted on a background that is no longer there
-        self._stale = set(self._running)
+        self._decodes.restyle()
 
         return True
 
@@ -453,7 +435,7 @@ class TextureModel(QAbstractListModel):
         self._filtered_textures = textures
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(textures)}
 
-        self._queue.clear()
+        self._decodes.clear()
 
         self.endResetModel()
 
@@ -474,61 +456,25 @@ class TextureModel(QAbstractListModel):
                 [SIMPLE_ROLE],
             )
 
+    def start_decode(self, texture: Texture, priority: int) -> None:
+        """Put one cell decode on the pool, which is what the queue asks of us"""
+
+        self._decodes.pool.start(DecodeTask(texture, self.reads, self._signals), priority)
+
     def request(self, texture: Texture) -> None:
-        if self.enqueue(texture, CELL_PRIORITY):
-            self.pump()
+        """Ask for a cell, as painting one does when it finds nothing in hand"""
 
-    def enqueue(self, texture: Texture, priority: int) -> bool:
-        uuid = texture.uuid
-
-        if uuid in self._queue:
-            if priority <= self._queue[uuid]:
-                return False
-
-            del self._queue[uuid]
-        elif not self.wanted(texture):
-            return False
-
-        self._queue[uuid] = priority
-
-        return True
+        self._decodes.request(texture)
 
     def wanted(self, texture: Texture) -> bool:
-        uuid = texture.uuid
-
-        # an entry the cache never finished downloading has no codestream to
-        # decode, so the thumbnail beside it in the cache is all there ever is
-        if not texture.whole():
-            return False
-
-        if uuid in self._running or uuid in self._failed:
-            return False
-
-        return not QPixmapCache.find(uuid, QPixmap())
+        return self._decodes.wanted(texture)
 
     def prefetch(self, rows: Iterable[int], showing: Iterable[int]) -> None:
+        """Replace the queue with the band around the viewport"""
+
         on_screen = {self.texture(row).uuid for row in showing}
 
-        self._queue = {
-            texture.uuid: CELL_PRIORITY if texture.uuid in on_screen else AHEAD_PRIORITY
-            for texture in map(self.texture, rows)
-            if self.wanted(texture)
-        }
-
-        self.pump()
-
-    def pump(self) -> None:
-        while self._queue and len(self._running) < DECODES_IN_FLIGHT:
-            uuid, priority = self._queue.popitem()
-
-            row = self._filtered_rows.get(uuid)
-
-            if row is None:
-                continue
-
-            self._running.add(uuid)
-
-            self._pool.start(DecodeTask(self._filtered_textures[row], self._reads, self._signals), priority)
+        self._decodes.refill(map(self.texture, rows), on_screen)
 
     def learn(self, uuid: str, natural: QSize) -> None:
         if not natural.isEmpty():
@@ -536,28 +482,19 @@ class TextureModel(QAbstractListModel):
 
     @Slot(str, QImage, QSize)
     def decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
-        self._running.discard(uuid)
-
         # a cell is cut down to the size of a cell, but the decode behind it saw
         # the texture whole, and that is worth keeping for the panes that ask
         self.learn(uuid, natural)
 
-        self.pump()
-
-        if uuid in self._stale:
-            # nothing is kept from a decode that came back on the old checkerboard.
-            # the repaint below asks for the texture again, and the second time
-            # around it is decoded against the checkerboard the system is now on
-            self._stale.discard(uuid)
-        elif image.isNull():
-            # nothing goes in the pixmap cache, so without this the repaint
-            # below would ask for the same broken texture forever
-            self._failed.add(uuid)
-        else:
+        if self._decodes.landed(uuid, decoded=not image.isNull()):
             QPixmapCache.insert(uuid, QPixmap.fromImage(image))
 
             # the real texture is in now, so the sidebar is dead weight
             QPixmapCache.remove(sidebar_key(uuid))
+
+        # started after the arrival is booked in, so the slot freed by this
+        # decode is one the next of them can be handed
+        self._decodes.pump()
 
         row = self._filtered_rows.get(uuid)
 
@@ -611,11 +548,9 @@ class TextureModel(QAbstractListModel):
         self._scan.cancel()
         self._scan_signals.done.disconnect(self.scanned)
 
-        self._queue.clear()
         self._full.clear()
 
         self._preview = None
         self._previewing = None
 
-        self._pool.clear()
-        self._pool.waitForDone()
+        self._decodes.shutdown()

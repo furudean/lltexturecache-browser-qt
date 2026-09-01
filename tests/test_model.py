@@ -11,8 +11,6 @@ from texture_courier import Texture
 from lltexturecache_browser_qt import model as module
 from lltexturecache_browser_qt.color import ColorIndex, Signature, to_lab
 from lltexturecache_browser_qt.model import (
-    AHEAD_PRIORITY,
-    CELL_PRIORITY,
     FULL_SIZE,
     INCOMPLETE_ROLE,
     SIMPLE_ROLE,
@@ -21,6 +19,7 @@ from lltexturecache_browser_qt.model import (
     full_size,
     sidebar_key,
 )
+from lltexturecache_browser_qt.queue import AHEAD_PRIORITY, CELL_PRIORITY
 from tests import fakes
 
 
@@ -152,21 +151,7 @@ class TestWanted:
         assert model.wanted(model.texture(0)) is False
 
 
-class TestQueue:
-    def test_a_texture_is_queued_once(self, model: TextureModel) -> None:
-        assert model.enqueue(model.texture(0), CELL_PRIORITY) is True
-        assert model.enqueue(model.texture(0), CELL_PRIORITY) is False
-
-    def test_a_more_urgent_ask_moves_a_queued_texture_up(self, model: TextureModel) -> None:
-        model.enqueue(model.texture(0), AHEAD_PRIORITY)
-
-        assert model.enqueue(model.texture(0), CELL_PRIORITY) is True
-
-    def test_a_less_urgent_ask_leaves_a_queued_texture_where_it_is(self, model: TextureModel) -> None:
-        model.enqueue(model.texture(0), CELL_PRIORITY)
-
-        assert model.enqueue(model.texture(0), AHEAD_PRIORITY) is False
-
+class TestPrefetch:
     def test_prefetching_puts_what_is_on_screen_first(
         self, model: TextureModel, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -175,7 +160,7 @@ class TestQueue:
         # the queue drains straight into the pool, so the order it was in is
         # only visible in the priority each decode was handed
         monkeypatch.setattr(
-            model._pool,
+            model._decodes.pool,
             "start",
             lambda task, priority: started.__setitem__(task._texture.uuid, priority),
         )
@@ -196,11 +181,7 @@ class TestQueue:
 
         started: list[str] = []
 
-        monkeypatch.setattr(
-            model._pool,
-            "start",
-            lambda task, priority: started.append(task._texture.uuid),
-        )
+        monkeypatch.setattr(model._decodes.pool, "start", lambda task, priority: started.append(task._texture.uuid))
 
         model.prefetch(range(5), ())
 
@@ -351,20 +332,17 @@ class TestRestyle:
     def test_a_checkerboard_that_has_not_moved_needs_no_notice(self, model: TextureModel) -> None:
         assert model.restyle() is False
 
-    def test_a_moved_checkerboard_stales_the_decodes_already_out(
-        self, model: TextureModel, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        model._running = {"texture-0"}
-
+    def test_a_moved_checkerboard_is_noticed_once(self, model: TextureModel, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(module, "checkerboard_generation", lambda: 10_000)
 
         assert model.restyle() is True
-        assert model._stale == {"texture-0"}
+        assert model.restyle() is False
 
     def test_a_stale_decode_is_thrown_away_rather_than_cached(
         self, model: TextureModel, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        model._running = {"texture-0"}
+        # the decode is out under the checkerboard the app is about to leave
+        model.request(model.texture(0))
 
         monkeypatch.setattr(module, "checkerboard_generation", lambda: 10_000)
 
@@ -376,3 +354,18 @@ class TestRestyle:
         model.decoded("texture-0", image, QSize(64, 64))
 
         assert QPixmapCache.find("texture-0", QPixmap()) is False
+
+    def test_a_decode_that_set_out_afterwards_is_kept(
+        self, model: TextureModel, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(module, "checkerboard_generation", lambda: 10_000)
+
+        model.restyle()
+        model.request(model.texture(0))
+
+        image = QImage(4, 4, QImage.Format.Format_RGB32)
+        image.fill(QColor("red"))
+
+        model.decoded("texture-0", image, QSize(64, 64))
+
+        assert QPixmapCache.find("texture-0", QPixmap()) is True
