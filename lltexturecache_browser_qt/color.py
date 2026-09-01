@@ -10,11 +10,7 @@ from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-# the mip level a thumbnail was taken at is the only thing in the cache that
-# says how large the texture behind it is, and it is not carried out through
-# the public api, which hands over the encoded thumbnail and nothing else
-from texture_courier.core import Thumbnail, read_fast_cache
-
+from lltexturecache_browser_qt.fastcache import Thumbnail, stored_thumbnail
 from lltexturecache_browser_qt.images import read_image
 
 log = logging.getLogger(__name__)
@@ -532,9 +528,7 @@ class ColorScan(QRunnable):
     def kept(self, texture: Texture) -> Thumbnail | None:
         """The thumbnail as the cache holds it, which knows what it was reduced from"""
 
-        fast_cache = self._cache.fast_cache_file
-
-        return read_fast_cache(fast_cache, texture.index) if fast_cache is not None else None
+        return stored_thumbnail(self._cache, texture.index)
 
     def dense(self, texture: Texture, kept: Thumbnail | None) -> bool:
         """Whether the texture pays too many bytes for its pixels to be holding no picture

@@ -19,6 +19,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
+from lltexturecache_browser_qt.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.formatting import format_size, format_time
 from lltexturecache_browser_qt.images import (
     THUMBNAIL_SIZE,
@@ -35,8 +36,6 @@ log = logging.getLogger(__name__)
 
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
-
-FULL_CACHE = 12
 
 KB_PER_MB = 1024
 
@@ -139,13 +138,10 @@ class TextureModel(QAbstractListModel):
         self._simple: set[str] = set()
         self._no_sidebar: set[str] = set()
         self._natural: dict[str, QSize] = {}
-        self._full: dict[str, tuple[QPixmap, QSize]] = {}
-        self._full_running: set[str] = set()
+        self._fulls = FullDecodes()
         # a preview window shows the one texture it is on, so the last one
         # asked for is the only one worth the room a full sized decode takes
-        self._preview: tuple[str, QPixmap, QSize] | None = None
-        self._previewing: str | None = None
-        self._preview_running: set[str] = set()
+        self._previews = PreviewDecodes()
         self._generation = checkerboard_generation()
         self._thumbnails = threading.Lock()
 
@@ -300,14 +296,10 @@ class TextureModel(QAbstractListModel):
         Starts one if there is none, unless asked only to look.
         """
 
-        uuid = texture.uuid
-
-        if (ready := self._full.get(uuid)) is not None:
+        if (ready := self._fulls.ready(texture.uuid)) is not None:
             return ready
 
-        if decode and texture.whole() and uuid not in self._full_running:
-            self._full_running.add(uuid)
-
+        if decode and self._fulls.wanted(texture):
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
             task = DecodeTask(texture, self.reads, self._full_signals, FULL_SIZE, upscale=False, checkerboard=False)
@@ -366,16 +358,10 @@ class TextureModel(QAbstractListModel):
         return (cell, self.natural(texture)) if not cell.isNull() else None
 
     def preview(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
-        uuid = texture.uuid
+        if (ready := self._previews.asking(texture)) is not None:
+            return ready
 
-        self._previewing = uuid
-
-        if self._preview is not None and self._preview[0] == uuid:
-            return self._preview[1], self._preview[2]
-
-        if texture.whole() and uuid not in self._preview_running:
-            self._preview_running.add(uuid)
-
+        if self._previews.wanted(texture):
             task = DecodeTask(texture, self.reads, self._preview_signals, None, checkerboard=False)
 
             self._decodes.pool.start(task, PREVIEW_PRIORITY)
@@ -518,36 +504,23 @@ class TextureModel(QAbstractListModel):
 
     @Slot(str, QImage, QSize)
     def full_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
-        self._full_running.discard(uuid)
-
         self.learn(uuid, natural)
 
         # a texture that cannot be decoded caches its placeholder, or every
         # reselect would set the same doomed decode going again
         pixmap = placeholder() if image.isNull() else QPixmap.fromImage(image)
 
-        self._full[uuid] = (pixmap, natural)
-
-        while len(self._full) > FULL_CACHE:
-            del self._full[next(iter(self._full))]
+        self._fulls.landed(uuid, pixmap, natural)
 
         self.full_ready.emit(uuid)
 
     @Slot(str, QImage, QSize)
     def preview_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
-        self._preview_running.discard(uuid)
-
         # the shape stands even if the selection has moved on from the image
         self.learn(uuid, natural)
 
-        if uuid != self._previewing:
-            return
-
-        # a texture that could not be decoded comes back null, and is held that
-        # way so a reselect does not set the same doomed decode going again
-        self._preview = (uuid, QPixmap.fromImage(image), natural)
-
-        self.preview_ready.emit(uuid)
+        if self._previews.landed(uuid, image, natural):
+            self.preview_ready.emit(uuid)
 
     def shutdown(self) -> None:
         # a decode the pool already started still reports back, and this model
@@ -560,9 +533,7 @@ class TextureModel(QAbstractListModel):
         self._scan.cancel()
         self._scan_signals.done.disconnect(self.scanned)
 
-        self._full.clear()
-
-        self._preview = None
-        self._previewing = None
+        self._fulls.clear()
+        self._previews.clear()
 
         self._decodes.shutdown()
