@@ -10,8 +10,8 @@ from PySide6.QtCore import QModelIndex
 from PySide6.QtGui import QPixmap
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.model import TextureModel
-from lltexturecache_browser_qt.stack import STACK_CARDS
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.view.stack import STACK_CARDS
 
 type Card = tuple[str, QPixmap]
 

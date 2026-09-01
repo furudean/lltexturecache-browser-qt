@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QItemSelection, QItemSelectionModel
 
-from lltexturecache_browser_qt.model import TextureModel
+from lltexturecache_browser_qt.grid.model import TextureModel
 
 
 def row_spans(model: TextureModel, rows: list[int]) -> QItemSelection:

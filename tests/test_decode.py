@@ -8,7 +8,7 @@ import numpy
 import pytest
 from texture_courier import TextureCacheError
 
-from lltexturecache_browser_qt.decode import GREYSCALE, RGB, RGBA, Decoded, decode_texture
+from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, Decoded, decode_texture
 
 
 def stub(decoded: Any, monkeypatch: pytest.MonkeyPatch) -> None:

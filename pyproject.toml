@@ -25,8 +25,8 @@ dev = [
 requires = ["setuptools", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["lltexturecache_browser_qt"]
+[tool.setuptools.packages.find]
+include = ["lltexturecache_browser_qt*"]
 
 [tool.setuptools.package-data]
 lltexturecache_browser_qt = ["assets/*.png", "assets/licences/*.txt"]

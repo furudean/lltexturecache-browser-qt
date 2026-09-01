@@ -94,7 +94,7 @@ def quiet_scan(monkeypatch: pytest.MonkeyPatch) -> None:
 
     from PySide6.QtCore import QThreadPool
 
-    from lltexturecache_browser_qt import model as module
+    from lltexturecache_browser_qt.grid import model as module
 
     class Idle:
         def __init__(self, *args: object, **kwargs: object) -> None:

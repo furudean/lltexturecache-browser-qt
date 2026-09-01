@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.filters import (
+from lltexturecache_browser_qt.panes.filters import (
     DEFAULT_COLORS,
     OFF_MARK,
     ON_MARK,

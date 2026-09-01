@@ -6,9 +6,9 @@ import pytest
 from PySide6.QtGui import QColor, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.cards import grid_cards, stack_textures
-from lltexturecache_browser_qt.model import TextureModel, sidebar_key
-from lltexturecache_browser_qt.stack import STACK_CARDS
+from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
+from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
+from lltexturecache_browser_qt.view.stack import STACK_CARDS
 from tests import fakes
 
 

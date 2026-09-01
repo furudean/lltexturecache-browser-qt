@@ -6,8 +6,8 @@ import pytest
 from PySide6.QtCore import QItemSelectionModel
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.model import TextureModel
-from lltexturecache_browser_qt.selection import KeptSelection, row_spans
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.grid.selection import KeptSelection, row_spans
 from tests import fakes
 
 

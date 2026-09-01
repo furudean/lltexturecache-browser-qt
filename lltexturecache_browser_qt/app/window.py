@@ -37,43 +37,43 @@ from PySide6.QtWidgets import (
 from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
-from lltexturecache_browser_qt.about import AboutDialog
-from lltexturecache_browser_qt.actions import WindowActions
-from lltexturecache_browser_qt.app_session import AppSession
-from lltexturecache_browser_qt.cards import grid_cards, stack_textures
-from lltexturecache_browser_qt.checkerboard import (
-    CheckerboardChanges,
-    reset_pane_tone,
-    set_picked_lightness,
-    sync_checkerboard,
-)
-from lltexturecache_browser_qt.drag import DRAG_LIMIT, drag_data, staged
-from lltexturecache_browser_qt.dropzone import DropZone
-from lltexturecache_browser_qt.export import Format
-from lltexturecache_browser_qt.exporting import ExportRun, ask_for_directory
-from lltexturecache_browser_qt.filters import ColorFilterBar
-from lltexturecache_browser_qt.formatting import format_count
-from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
-from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
-from lltexturecache_browser_qt.inspector import INSPECTOR_WIDTH, InspectorPane
-from lltexturecache_browser_qt.model import TextureModel, sidebar_key
-from lltexturecache_browser_qt.panes import paint as paint_pane
-from lltexturecache_browser_qt.prefetch import prefetch
-from lltexturecache_browser_qt.preview import PreviewWindow
-from lltexturecache_browser_qt.previewing import PreviewHost
-from lltexturecache_browser_qt.recents import RecentCaches
-from lltexturecache_browser_qt.selection import KeptSelection
+from lltexturecache_browser_qt.app.about import AboutDialog
+from lltexturecache_browser_qt.app.actions import WindowActions
+from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, drag_data, staged
+from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
+from lltexturecache_browser_qt.app.session import AppSession
+from lltexturecache_browser_qt.cache.export import Format
+from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
+from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
+from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, TextureGrid
+from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
+from lltexturecache_browser_qt.grid.prefetch import prefetch
+from lltexturecache_browser_qt.grid.selection import KeptSelection
+from lltexturecache_browser_qt.grid.summary import empty_message, narrowed_summary
+from lltexturecache_browser_qt.grid.summary import grid_summary as summary_of
+from lltexturecache_browser_qt.panes.dropzone import DropZone
+from lltexturecache_browser_qt.panes.filters import ColorFilterBar
+from lltexturecache_browser_qt.panes.inspector import INSPECTOR_WIDTH, InspectorPane
+from lltexturecache_browser_qt.panes.preview import PreviewWindow
+from lltexturecache_browser_qt.panes.previewing import PreviewHost
+from lltexturecache_browser_qt.panes.sidebar import paint as paint_pane
+from lltexturecache_browser_qt.panes.status import WindowStatus
 from lltexturecache_browser_qt.settings import (
     FILTERS_KEY,
     GEOMETRY_KEY,
     SPLITTER_KEY,
     stored_blob,
 )
-from lltexturecache_browser_qt.stack import stack_pixmap
-from lltexturecache_browser_qt.status import WindowStatus
-from lltexturecache_browser_qt.suggested import paths as suggested_paths
-from lltexturecache_browser_qt.summary import empty_message, narrowed_summary
-from lltexturecache_browser_qt.summary import grid_summary as summary_of
+from lltexturecache_browser_qt.view.checkerboard import (
+    CheckerboardChanges,
+    reset_pane_tone,
+    set_picked_lightness,
+    sync_checkerboard,
+)
+from lltexturecache_browser_qt.view.formatting import format_count
+from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 

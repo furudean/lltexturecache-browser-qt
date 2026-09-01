@@ -10,13 +10,13 @@ from PySide6.QtGui import QDragLeaveEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import QApplication
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt import window as module
-from lltexturecache_browser_qt.app_session import AppSession
-from lltexturecache_browser_qt.model import TextureModel
-from lltexturecache_browser_qt.recents import RecentCaches
-from lltexturecache_browser_qt.selection import row_spans
+from lltexturecache_browser_qt.app import window as module
+from lltexturecache_browser_qt.app.session import AppSession
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.grid.selection import row_spans
 from lltexturecache_browser_qt.settings import SESSION_KEY, stored_blob, stored_paths
-from lltexturecache_browser_qt.window import MainWindow
+from lltexturecache_browser_qt.app.window import MainWindow
 from tests import fakes
 
 

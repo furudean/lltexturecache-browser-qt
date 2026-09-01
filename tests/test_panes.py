@@ -7,9 +7,9 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.inspector import InspectorPane
-from lltexturecache_browser_qt.model import FULL_SIZE, TextureModel, alpha_key
-from lltexturecache_browser_qt.panes import laid_card, paint, shape, standing_cards
+from lltexturecache_browser_qt.panes.inspector import InspectorPane
+from lltexturecache_browser_qt.grid.model import FULL_SIZE, TextureModel, alpha_key
+from lltexturecache_browser_qt.panes.sidebar import laid_card, paint, shape, standing_cards
 from tests import fakes
 
 

@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import QApplication, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
-from lltexturecache_browser_qt.about import HOMEPAGE, SUMMARY, AboutDialog, app_icon, icon_label, title_label
+from lltexturecache_browser_qt.app.about import HOMEPAGE, SUMMARY, AboutDialog, app_icon, icon_label, title_label
 
 
 class TestIcon:

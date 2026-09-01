@@ -4,8 +4,8 @@ from PySide6.QtCore import QBuffer, QByteArray, QSize
 from PySide6.QtGui import QColor, QImage, QImageWriter
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.checkerboard import CheckerTone, set_grid_tone
-from lltexturecache_browser_qt.images import (
+from lltexturecache_browser_qt.view.checkerboard import CheckerTone, set_grid_tone
+from lltexturecache_browser_qt.view.images import (
     THUMBNAIL_SIZE,
     fit_image,
     placeholder,

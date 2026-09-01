@@ -12,12 +12,12 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from texture_courier import TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, APP_NAME, __version__
-from lltexturecache_browser_qt.actions import fallback_menu
-from lltexturecache_browser_qt.checkerboard import sync_checkerboard
-from lltexturecache_browser_qt.model import PIXMAP_CACHE_KB
+from lltexturecache_browser_qt.app.actions import fallback_menu
+from lltexturecache_browser_qt.app.window import MainWindow
+from lltexturecache_browser_qt.cache.suggested import resolve as resolve_suggested
+from lltexturecache_browser_qt.grid.model import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.signals import SignalWatcher
-from lltexturecache_browser_qt.suggested import resolve as resolve_suggested
-from lltexturecache_browser_qt.window import MainWindow
+from lltexturecache_browser_qt.view.checkerboard import sync_checkerboard
 
 log = logging.getLogger(__name__)
 

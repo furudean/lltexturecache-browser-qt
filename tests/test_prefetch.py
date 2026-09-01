@@ -6,9 +6,9 @@ import pytest
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QApplication, QListView
 
-from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
-from lltexturecache_browser_qt.model import TextureModel
-from lltexturecache_browser_qt.prefetch import (
+from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.grid.prefetch import (
     PREFETCH_SCREENS,
     outward,
     prefetch,

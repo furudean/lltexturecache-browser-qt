@@ -7,8 +7,8 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.checkerboard import CheckerTone, pane_tone, set_pane_tone
-from lltexturecache_browser_qt.preview import (
+from lltexturecache_browser_qt.view.checkerboard import CheckerTone, pane_tone, set_pane_tone
+from lltexturecache_browser_qt.panes.preview import (
     MIN_PANE_SIZE,
     WINDOW_TITLE,
     PreviewWindow,

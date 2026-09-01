@@ -11,11 +11,11 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.cards import Card
-from lltexturecache_browser_qt.checkerboard import pixmap_lightness, set_picked_lightness
-from lltexturecache_browser_qt.inspector import InspectorPane
-from lltexturecache_browser_qt.model import TextureModel, full_size
-from lltexturecache_browser_qt.stack import stack_pixmap
+from lltexturecache_browser_qt.grid.cards import Card
+from lltexturecache_browser_qt.grid.model import TextureModel, full_size
+from lltexturecache_browser_qt.panes.inspector import InspectorPane
+from lltexturecache_browser_qt.view.checkerboard import pixmap_lightness, set_picked_lightness
+from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 
 def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:

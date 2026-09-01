@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication, QWidget
 
-from lltexturecache_browser_qt import licences as module
-from lltexturecache_browser_qt.licences import Component, LicencesDialog, components, text_view
+from lltexturecache_browser_qt.app import licences as module
+from lltexturecache_browser_qt.app.licences import Component, LicencesDialog, components, text_view
 
 
 @pytest.fixture

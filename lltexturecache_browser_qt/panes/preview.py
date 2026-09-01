@@ -14,14 +14,14 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.checkerboard import (
+from lltexturecache_browser_qt.view.checkerboard import (
     cycle_pane_tone,
     pane_checkerboard,
     pixmap_lightness,
     set_picked_lightness,
 )
-from lltexturecache_browser_qt.formatting import format_count, format_size
-from lltexturecache_browser_qt.widgets import ClickTracker
+from lltexturecache_browser_qt.view.formatting import format_count, format_size
+from lltexturecache_browser_qt.view.widgets import ClickTracker
 
 WINDOW_SIZE = 480
 MIN_PANE_SIZE = 32

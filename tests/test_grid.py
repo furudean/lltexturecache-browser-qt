@@ -7,14 +7,14 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QSize, QStringListMod
 from PySide6.QtGui import QIcon, QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem, QWidget
 
-from lltexturecache_browser_qt.grid import (
+from lltexturecache_browser_qt.grid.cells import (
     MESSAGE_WIDTH,
     CellDelegate,
     EmptyState,
     TextureGrid,
     icon_mode,
 )
-from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
 
 
 @pytest.fixture

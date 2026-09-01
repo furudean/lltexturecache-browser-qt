@@ -9,11 +9,11 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
-from lltexturecache_browser_qt.checkerboard import CheckerboardChanges, CheckerTone, grid_tone, set_grid_tone
-from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS, Format
-from lltexturecache_browser_qt.formatting import format_count
-from lltexturecache_browser_qt.recents import RecentCaches
-from lltexturecache_browser_qt.suggested import paths as suggested_paths
+from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS, Format
+from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
+from lltexturecache_browser_qt.view.checkerboard import CheckerboardChanges, CheckerTone, grid_tone, set_grid_tone
+from lltexturecache_browser_qt.view.formatting import format_count
 
 PREVIEW_KEY = "showPreview"
 INSPECTOR_KEY = "showInspector"

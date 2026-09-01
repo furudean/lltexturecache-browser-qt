@@ -10,7 +10,7 @@ from PySide6.QtCore import QMimeData, QUrl
 from texture_courier import Texture, TextureCacheError
 
 from lltexturecache_browser_qt import APP_NAME
-from lltexturecache_browser_qt.export import FORMATS, export_texture
+from lltexturecache_browser_qt.cache.export import FORMATS, export_texture
 
 log = logging.getLogger(__name__)
 

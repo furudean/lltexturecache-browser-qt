@@ -4,7 +4,7 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PySide6.QtGui import QMouseEvent, QPalette
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
-from lltexturecache_browser_qt.widgets import (
+from lltexturecache_browser_qt.view.widgets import (
     ClickTracker,
     bold,
     copyable,

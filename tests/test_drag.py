@@ -6,8 +6,8 @@ from threading import Lock
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt import drag as module
-from lltexturecache_browser_qt.drag import DRAG_FORMAT, STAGING_PREFIX, drag_data, staged, staging
+from lltexturecache_browser_qt.app import drag as module
+from lltexturecache_browser_qt.app.drag import DRAG_FORMAT, STAGING_PREFIX, drag_data, staged, staging
 from tests import fakes
 
 

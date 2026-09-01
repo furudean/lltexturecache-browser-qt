@@ -8,7 +8,7 @@ from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot
 from texture_courier import Texture, TextureCacheError
 
-from lltexturecache_browser_qt.decode import GREYSCALE, RGB, RGBA, decode_texture
+from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
 
 CONCURRENCY = 8

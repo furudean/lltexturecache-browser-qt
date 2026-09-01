@@ -1,7 +1,7 @@
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QMainWindow, QStatusBar
 
-from lltexturecache_browser_qt.formatting import format_count
+from lltexturecache_browser_qt.view.formatting import format_count
 
 NOTICE_DURATION_MS = 5000
 

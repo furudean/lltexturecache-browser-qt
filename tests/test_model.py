@@ -8,9 +8,9 @@ from PySide6.QtGui import QColor, QImage, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 from texture_courier import Texture
 
-from lltexturecache_browser_qt import model as module
-from lltexturecache_browser_qt.color import ColorIndex, Signature, to_lab
-from lltexturecache_browser_qt.model import (
+from lltexturecache_browser_qt.grid import model as module
+from lltexturecache_browser_qt.cache.color import ColorIndex, Signature, to_lab
+from lltexturecache_browser_qt.grid.model import (
     FULL_SIZE,
     INCOMPLETE_ROLE,
     SIMPLE_ROLE,
@@ -19,7 +19,7 @@ from lltexturecache_browser_qt.model import (
     full_size,
     sidebar_key,
 )
-from lltexturecache_browser_qt.queue import AHEAD_PRIORITY, CELL_PRIORITY
+from lltexturecache_browser_qt.grid.queue import AHEAD_PRIORITY, CELL_PRIORITY
 from tests import fakes
 
 

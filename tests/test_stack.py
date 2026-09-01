@@ -5,8 +5,8 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.checkerboard import CHECKERBOARD_SIZE
-from lltexturecache_browser_qt.stack import (
+from lltexturecache_browser_qt.view.checkerboard import CHECKERBOARD_SIZE
+from lltexturecache_browser_qt.view.stack import (
     STACK_SPAN_RATIO,
     biggest_card,
     card_transform,

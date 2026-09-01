@@ -10,8 +10,8 @@ from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QColor, QImage
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt.fastcache import Thumbnail, stored_thumbnail
-from lltexturecache_browser_qt.images import read_image
+from lltexturecache_browser_qt.cache.fastcache import Thumbnail, stored_thumbnail
+from lltexturecache_browser_qt.view.images import read_image
 
 log = logging.getLogger(__name__)
 

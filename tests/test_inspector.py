@@ -7,7 +7,7 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget
 
-from lltexturecache_browser_qt.inspector import (
+from lltexturecache_browser_qt.panes.inspector import (
     SIDEBAR_MIN_HEIGHT,
     InspectorPane,
     SidebarLabel,

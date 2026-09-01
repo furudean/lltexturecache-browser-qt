@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from PySide6.QtCore import QLocale
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.formatting import format_count, format_size, format_time
+from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
 
 
 class TestFormatCount:

@@ -6,9 +6,9 @@ import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.color import ColorIndex, Signature, to_lab
-from lltexturecache_browser_qt.model import TextureModel
-from lltexturecache_browser_qt.summary import empty_message, grid_summary, narrowed_summary
+from lltexturecache_browser_qt.cache.color import ColorIndex, Signature, to_lab
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.grid.summary import empty_message, grid_summary, narrowed_summary
 from tests import fakes
 
 

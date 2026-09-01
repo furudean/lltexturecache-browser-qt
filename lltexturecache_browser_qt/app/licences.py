@@ -1,7 +1,6 @@
 import json
 from dataclasses import dataclass
 from functools import cache
-from pathlib import Path
 from typing import ClassVar
 
 from PySide6.QtGui import QFontDatabase
@@ -16,9 +15,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from lltexturecache_browser_qt.widgets import bold, dim, linked
+from lltexturecache_browser_qt.assets import LICENCES
+from lltexturecache_browser_qt.view.widgets import bold, dim, linked
 
-LICENCES_PATH = Path(__file__).parent / "assets" / "licences"
+LICENCES_PATH = LICENCES
 INDEX_PATH = LICENCES_PATH / "index.json"
 
 DIALOG_MARGIN = 16

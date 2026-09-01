@@ -5,7 +5,7 @@ from collections.abc import Iterator
 import pytest
 from PySide6.QtWidgets import QApplication, QMainWindow
 
-from lltexturecache_browser_qt.status import WindowStatus
+from lltexturecache_browser_qt.panes.status import WindowStatus
 
 
 @pytest.fixture

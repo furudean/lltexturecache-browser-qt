@@ -4,8 +4,8 @@ What a window has to say about itself when nothing has happened lately: how
 much of the cache is in the grid, and what is being left out of it.
 """
 
-from lltexturecache_browser_qt.formatting import format_count
-from lltexturecache_browser_qt.model import TextureModel
+from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.view.formatting import format_count
 
 
 def narrowed_summary(model: TextureModel) -> str:

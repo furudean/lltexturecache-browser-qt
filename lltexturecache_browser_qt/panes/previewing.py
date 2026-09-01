@@ -13,7 +13,7 @@ from typing import Protocol
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 
-from lltexturecache_browser_qt.preview import PreviewWindow
+from lltexturecache_browser_qt.panes.preview import PreviewWindow
 from lltexturecache_browser_qt.settings import stored_blob
 
 PREVIEW_GEOMETRY_KEY = "previewGeometry"

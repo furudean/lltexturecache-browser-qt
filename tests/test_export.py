@@ -10,8 +10,8 @@ from PIL import Image
 from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCacheError
 
-from lltexturecache_browser_qt import export as module
-from lltexturecache_browser_qt.export import (
+from lltexturecache_browser_qt.cache import export as module
+from lltexturecache_browser_qt.cache.export import (
     DEFAULT_FORMAT,
     FORMATS,
     PARTIAL_SUFFIX,

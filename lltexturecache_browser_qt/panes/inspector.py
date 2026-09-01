@@ -15,9 +15,9 @@ from PySide6.QtWidgets import (
 )
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.checkerboard import cycle_pane_tone
-from lltexturecache_browser_qt.formatting import format_count, format_size, format_time
-from lltexturecache_browser_qt.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
+from lltexturecache_browser_qt.view.checkerboard import cycle_pane_tone
+from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
+from lltexturecache_browser_qt.view.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
 
 INSPECTOR_WIDTH = 260
 INSPECTOR_MIN_WIDTH = 200

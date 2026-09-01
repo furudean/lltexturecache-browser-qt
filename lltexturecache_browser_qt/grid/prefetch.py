@@ -11,7 +11,7 @@ from bisect import bisect_left, bisect_right
 from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QListView
 
-from lltexturecache_browser_qt.model import TextureModel
+from lltexturecache_browser_qt.grid.model import TextureModel
 
 # how far past the viewport, in screenfuls, cells are decoded ahead
 PREFETCH_SCREENS = 2

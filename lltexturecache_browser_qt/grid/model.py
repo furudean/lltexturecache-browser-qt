@@ -17,18 +17,18 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt.checkerboard import checkerboard_generation
-from lltexturecache_browser_qt.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
-from lltexturecache_browser_qt.decodes import FullDecodes, PreviewDecodes
-from lltexturecache_browser_qt.formatting import format_size, format_time
-from lltexturecache_browser_qt.images import (
+from lltexturecache_browser_qt.cache.color import MATCH_FLOOR, ColorIndex, ColorScan, ScanSignals
+from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
+from lltexturecache_browser_qt.grid.queue import DecodeQueue
+from lltexturecache_browser_qt.view.checkerboard import checkerboard_generation
+from lltexturecache_browser_qt.view.formatting import format_size, format_time
+from lltexturecache_browser_qt.view.images import (
     THUMBNAIL_SIZE,
     decode_image,
     fit_image,
     placeholder,
     thumbnail_image,
 )
-from lltexturecache_browser_qt.queue import DecodeQueue
 
 FULL_SIZE = 800
 

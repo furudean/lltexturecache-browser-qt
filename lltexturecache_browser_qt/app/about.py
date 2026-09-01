@@ -1,14 +1,11 @@
-from pathlib import Path
-
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, __version__
-from lltexturecache_browser_qt.licences import LicencesDialog
-from lltexturecache_browser_qt.widgets import bold, copyable, linked, wrapped
-
-ICON_PATH = Path(__file__).parent / "assets" / "slcachegirl.png"
+from lltexturecache_browser_qt.app.licences import LicencesDialog
+from lltexturecache_browser_qt.assets import APP_ICON
+from lltexturecache_browser_qt.view.widgets import bold, copyable, linked, wrapped
 
 SUMMARY = "A cross-platform tool to browse and export textures from the Second Life texture cache."
 HOMEPAGE = "https://github.com/furudean/lltexturecache-browser-qt"
@@ -29,7 +26,7 @@ TEXT_WIDTH = 340
 def app_icon() -> QIcon:
     packaged = QGuiApplication.windowIcon()
 
-    return packaged if not packaged.isNull() else QIcon(str(ICON_PATH))
+    return packaged if not packaged.isNull() else QIcon(str(APP_ICON))
 
 
 def icon_label(parent: QWidget) -> QLabel:

@@ -16,9 +16,9 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFileDialog, QProgressDialog, QWidget
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.export import ExportJob, Format
-from lltexturecache_browser_qt.formatting import format_count
+from lltexturecache_browser_qt.cache.export import ExportJob, Format
 from lltexturecache_browser_qt.reveal import reveal
+from lltexturecache_browser_qt.view.formatting import format_count
 
 # how long a progress dialog waits before coming up, so a short export runs to
 # the end without a window flashing over the one being worked in

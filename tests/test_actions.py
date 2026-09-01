@@ -9,8 +9,8 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QMenuBar, QWidget
 
-from lltexturecache_browser_qt import actions as module
-from lltexturecache_browser_qt.actions import (
+from lltexturecache_browser_qt.app import actions as module
+from lltexturecache_browser_qt.app.actions import (
     FILTERS_KEY,
     INCOMPLETE_KEY,
     INSPECTOR_KEY,
@@ -21,9 +21,9 @@ from lltexturecache_browser_qt.actions import (
     export_title,
     fallback_menu,
 )
-from lltexturecache_browser_qt.checkerboard import CheckerTone, grid_tone, set_grid_tone
-from lltexturecache_browser_qt.export import DEFAULT_FORMAT, FORMATS
-from lltexturecache_browser_qt.recents import RecentCaches
+from lltexturecache_browser_qt.view.checkerboard import CheckerTone, grid_tone, set_grid_tone
+from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS
+from lltexturecache_browser_qt.cache.recents import RecentCaches
 
 
 @pytest.fixture

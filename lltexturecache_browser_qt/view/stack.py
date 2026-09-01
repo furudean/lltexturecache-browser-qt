@@ -4,7 +4,7 @@ from random import Random
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap, QTransform
 
-from lltexturecache_browser_qt.checkerboard import CHECKERBOARD_SIZE, pane_checkerboard_at, pane_lightness
+from lltexturecache_browser_qt.view.checkerboard import CHECKERBOARD_SIZE, pane_checkerboard_at, pane_lightness
 
 # how many of a selection are dealt out behind the one on top
 STACK_CARDS = 4

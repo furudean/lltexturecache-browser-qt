@@ -3,7 +3,7 @@
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
-from lltexturecache_browser_qt.dropzone import DropZone
+from lltexturecache_browser_qt.panes.dropzone import DropZone
 
 
 class TestDropZone:

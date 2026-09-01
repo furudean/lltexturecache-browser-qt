@@ -7,7 +7,7 @@ from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.previewing import PREVIEW_GEOMETRY_KEY, PreviewClient, PreviewHost
+from lltexturecache_browser_qt.panes.previewing import PREVIEW_GEOMETRY_KEY, PreviewClient, PreviewHost
 
 
 class FakeWindow:

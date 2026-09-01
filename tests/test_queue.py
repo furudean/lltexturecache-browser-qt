@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.queue import (
+from lltexturecache_browser_qt.grid.queue import (
     AHEAD_PRIORITY,
     CELL_PRIORITY,
     DECODES_IN_FLIGHT,

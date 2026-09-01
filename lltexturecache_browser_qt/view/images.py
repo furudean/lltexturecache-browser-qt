@@ -3,8 +3,8 @@ from functools import cache
 from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader, QPixmap
 
-from lltexturecache_browser_qt.checkerboard import over_checkerboard
-from lltexturecache_browser_qt.decode import GREYSCALE, RGB, RGBA, decode_texture
+from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
+from lltexturecache_browser_qt.view.checkerboard import over_checkerboard
 
 # how a decoded texture's components are described to qt
 IMAGE_FORMATS = {

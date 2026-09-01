@@ -4,7 +4,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.decodes import FULL_CACHE, FullDecodes, PreviewDecodes
+from lltexturecache_browser_qt.grid.decodes import FULL_CACHE, FullDecodes, PreviewDecodes
 from tests import fakes
 
 

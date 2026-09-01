@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from lltexturecache_browser_qt import suggested as module
-from lltexturecache_browser_qt.suggested import paths, resolve
+from lltexturecache_browser_qt.cache import suggested as module
+from lltexturecache_browser_qt.cache.suggested import paths, resolve
 
 
 @pytest.fixture(autouse=True)

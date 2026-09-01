@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.recents import RECENT_KEY, RECENT_LIMIT, RecentCaches
+from lltexturecache_browser_qt.cache.recents import RECENT_KEY, RECENT_LIMIT, RecentCaches
 
 
 class TestRemembering:

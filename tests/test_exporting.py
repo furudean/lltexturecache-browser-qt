@@ -7,9 +7,9 @@ import pytest
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QWidget
 
-from lltexturecache_browser_qt import exporting as module
-from lltexturecache_browser_qt.export import FORMATS
-from lltexturecache_browser_qt.exporting import ExportRun, export_summary, show_written
+from lltexturecache_browser_qt.app import exporting as module
+from lltexturecache_browser_qt.cache.export import FORMATS
+from lltexturecache_browser_qt.app.exporting import ExportRun, export_summary, show_written
 from tests import fakes
 
 JP2 = FORMATS[0]

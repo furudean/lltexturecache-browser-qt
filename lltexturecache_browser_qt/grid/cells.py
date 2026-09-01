@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from lltexturecache_browser_qt.images import THUMBNAIL_SIZE
-from lltexturecache_browser_qt.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index
+from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index
+from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
 
 CELL_PADDING = 14
 
