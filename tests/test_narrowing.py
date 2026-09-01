@@ -79,23 +79,23 @@ class TestFlatUuids:
 
 class TestKept:
     def test_nothing_asked_for_keeps_every_row_in_order(self) -> None:
-        assert Narrowing().kept(4) == [0, 1, 2, 3]
+        assert Narrowing().shown_rows(4) == [0, 1, 2, 3]
 
     def test_a_colour_with_no_scan_behind_it_cannot_be_answered(self, app: QApplication) -> None:
-        assert Narrowing(colors=[QColor("red")]).kept(4) is None
+        assert Narrowing(colors=[QColor("red")]).shown_rows(4) is None
 
     def test_hiding_simple_textures_with_no_scan_cannot_be_answered(self) -> None:
-        assert Narrowing(simple_hidden=True).kept(4) is None
+        assert Narrowing(simple_hidden=True).shown_rows(4) is None
 
     def test_hiding_simple_textures_leaves_them_out(self) -> None:
         index = scanned(4, row1=Signature(flat=True))
 
-        assert Narrowing(simple_hidden=True, index=index).kept(4) == [0, 2, 3]
+        assert Narrowing(simple_hidden=True, index=index).shown_rows(4) == [0, 2, 3]
 
     def test_showing_them_keeps_every_row(self) -> None:
         index = scanned(4, row1=Signature(flat=True))
 
-        assert Narrowing(index=index).kept(4) == [0, 1, 2, 3]
+        assert Narrowing(index=index).shown_rows(4) == [0, 1, 2, 3]
 
     def test_a_colour_keeps_what_answers_for_it(self, app: QApplication) -> None:
         index = scanned(
@@ -104,7 +104,7 @@ class TestKept:
             row1=Signature(colors=[(to_lab(0x0000FF), 1.0)]),
         )
 
-        kept = Narrowing(colors=[QColor("red")], index=index).kept(3)
+        kept = Narrowing(colors=[QColor("red")], index=index).shown_rows(3)
 
         assert kept == [0]
 
@@ -115,7 +115,7 @@ class TestKept:
             row1=Signature(colors=[(to_lab(0xFF0000), 1.0)]),
         )
 
-        kept = Narrowing(colors=[QColor("red")], index=index).kept(3)
+        kept = Narrowing(colors=[QColor("red")], index=index).shown_rows(3)
 
         assert kept is not None
         assert kept[0] == 1
@@ -123,14 +123,14 @@ class TestKept:
     def test_a_colour_nothing_holds_keeps_nothing(self, app: QApplication) -> None:
         index = scanned(2, row0=Signature(colors=[(to_lab(0x0000FF), 1.0)]))
 
-        assert Narrowing(colors=[QColor("red")], index=index).kept(2) == []
+        assert Narrowing(colors=[QColor("red")], index=index).shown_rows(2) == []
 
     def test_a_flat_texture_is_hidden_even_when_it_answers_for_the_colour(self, app: QApplication) -> None:
         index = ColorIndex(2)
         index.add(0, Signature(colors=[(to_lab(0xFF0000), 1.0)], flat=True))
         index.add(1, Signature(colors=[(to_lab(0xFF0000), 1.0)]))
 
-        kept = Narrowing(colors=[QColor("red")], simple_hidden=True, index=index).kept(2)
+        kept = Narrowing(colors=[QColor("red")], simple_hidden=True, index=index).shown_rows(2)
 
         assert kept == [1]
 
@@ -139,6 +139,6 @@ class TestKept:
         index.add(0, Signature(colors=[(to_lab(0xFF0000), 1.0)]))
         index.add(1, Signature(colors=[(to_lab(0xFF0000), 0.5), (to_lab(0x0000FF), 0.5)]))
 
-        kept = Narrowing(colors=[QColor("red"), QColor("blue")], index=index).kept(2)
+        kept = Narrowing(colors=[QColor("red"), QColor("blue")], index=index).shown_rows(2)
 
         assert kept == [1]

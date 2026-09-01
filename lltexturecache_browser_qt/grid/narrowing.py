@@ -15,8 +15,6 @@ from lltexturecache_browser_qt.cache.color import MATCH_FLOOR, ColorIndex
 
 @dataclass
 class Narrowing:
-    """What is being asked of the grid, and what the scan has to answer with"""
-
     colors: list[QColor] = field(default_factory=list)
 
     # whether the textures holding one solid colour, or nothing visible at all,
@@ -28,38 +26,28 @@ class Narrowing:
 
     @property
     def asking(self) -> bool:
-        """Whether anything is being asked of the grid at all"""
-
         return bool(self.colors) or self.simple_hidden
 
     @property
     def narrowed(self) -> bool:
-        """Whether the grid is showing less than the cache because of a colour"""
-
         return bool(self.colors) and self.index is not None
 
     def hidden(self) -> int:
-        """How many textures are being left out for holding no picture"""
-
         if not self.simple_hidden or self.index is None:
             return 0
 
         return len(self.index.flat)
 
     def flat_uuids(self, uuids: list[str]) -> set[str]:
-        """The textures the scan found no picture in, whether or not they are hidden"""
-
         if self.index is None:
             return set()
 
         return {uuids[row] for row in self.index.flat}
 
-    def kept(self, count: int) -> list[int] | None:
-        """The rows to show, in the order to show them
-
-        Nothing at all when something is being asked for that only the scan
-        can answer and the scan has not landed: the caller leaves the grid as
-        it is and this is asked again when it does.
+    def shown_rows(self, count: int) -> list[int] | None:
+        """Nothing at all when something is being asked for that only the scan can
+        answer and the scan has not landed: the caller leaves the grid as it is
+        and this is asked again when it does.
         """
 
         if not self.asking:

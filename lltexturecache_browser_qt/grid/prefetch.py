@@ -65,8 +65,6 @@ def outward(band: tuple[int, int], visible: tuple[int, int]) -> list[int]:
 
 
 def prefetch(view: QListView, model: TextureModel) -> None:
-    """Ask the model for the band around the viewport, nearest rows last"""
-
     visible = visible_rows(view, model)
     band = rows_within(view, model, reach(view))
 

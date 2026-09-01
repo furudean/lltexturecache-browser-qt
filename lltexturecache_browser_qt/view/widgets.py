@@ -71,8 +71,6 @@ class ClickTracker:
 
     @property
     def origin(self) -> QPoint:
-        """Where the press landed, which a drag is measured from"""
-
         return self._origin
 
     @property
@@ -80,8 +78,6 @@ class ClickTracker:
         return self._pressed
 
     def press(self, event: QMouseEvent, *, taking: bool = True) -> bool:
-        """Take a press, and say whether it was one worth taking"""
-
         self._pressed = taking and event.button() == Qt.MouseButton.LeftButton
         self._origin = event.position().toPoint()
 
@@ -114,8 +110,6 @@ class ClickTracker:
         self._pressed = False
 
     def release(self, event: QMouseEvent, within: QRect) -> bool:
-        """Spend the press, and say whether it and this release make a click"""
-
         pressed, self._pressed = self._pressed, False
 
         return pressed and event.button() == Qt.MouseButton.LeftButton and within.contains(event.position().toPoint())

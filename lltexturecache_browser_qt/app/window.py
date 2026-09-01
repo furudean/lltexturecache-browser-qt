@@ -213,8 +213,6 @@ class MainWindow(QMainWindow):
         self.sync_simple()
 
     def opened_cache(self) -> Path | None:
-        """The cache this window is showing, which is what the session saves"""
-
         return self._cache.cache_dir if self._cache is not None else None
 
     @classmethod
@@ -632,8 +630,6 @@ class MainWindow(QMainWindow):
         self.scroll_ranked()
 
     def summary(self) -> str:
-        """What the status bar rests on, which is the filters if any are asking"""
-
         model = self._model
 
         if model is not None and model.narrowed:
@@ -642,8 +638,6 @@ class MainWindow(QMainWindow):
         return self.grid_summary()
 
     def grid_summary(self) -> str:
-        """What the grid holds out of the cache, whatever is being asked of it"""
-
         model = self._model
 
         if self._cache is None or model is None:
@@ -738,8 +732,6 @@ class MainWindow(QMainWindow):
         return self.wants_preview() and MainWindow._app.preview.followed_by(self)
 
     def preview_menu_entry(self) -> QAction:
-        """The tick this window carries for the preview, which the host keeps in step"""
-
         return self._actions.preview
 
     def sync_preview(self) -> None:
@@ -774,7 +766,7 @@ class MainWindow(QMainWindow):
         # the selection has already been walked past is dropped when it lands.
         # the grid and the pane read smaller and sooner, and whichever of them
         # has already been through this texture stands in until it lands
-        preview.show_texture(texture, model.preview(texture), model.standing(texture))
+        preview.show_texture(texture, model.preview(texture), model.stand_in(texture))
 
     def selection_action(self, *_: object) -> None:
         self.sync_pane_tone()
@@ -809,7 +801,7 @@ class MainWindow(QMainWindow):
             return
 
         for texture in self._stack:
-            model.full(texture)
+            model.full_decode(texture)
 
         self.paint_inspector()
 

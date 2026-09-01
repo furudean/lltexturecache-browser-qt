@@ -92,7 +92,7 @@ class TestFullDecodes:
 
 class TestPreviewDecodes:
     def test_nothing_is_ready_to_begin_with(self, app: QApplication) -> None:
-        assert PreviewDecodes().asking(fakes.texture(uuid="one")) is None
+        assert PreviewDecodes().now_showing(fakes.texture(uuid="one")) is None
 
     def test_a_texture_nothing_has_yet_is_worth_decoding(self, app: QApplication) -> None:
         assert PreviewDecodes().wanted(fakes.texture(uuid="one")) is True
@@ -112,16 +112,16 @@ class TestPreviewDecodes:
         store = PreviewDecodes()
         texture = fakes.texture(uuid="one")
 
-        store.asking(texture)
+        store.now_showing(texture)
 
         assert store.landed("one", image(), QSize(64, 64)) is True
-        assert store.asking(texture) is not None
+        assert store.now_showing(texture) is not None
 
     def test_a_decode_the_selection_has_walked_past_is_dropped(self, app: QApplication) -> None:
         store = PreviewDecodes()
 
-        store.asking(fakes.texture(uuid="one"))
-        store.asking(fakes.texture(uuid="two"))
+        store.now_showing(fakes.texture(uuid="one"))
+        store.now_showing(fakes.texture(uuid="two"))
 
         assert store.landed("one", image(), QSize(64, 64)) is False
 
@@ -130,24 +130,24 @@ class TestPreviewDecodes:
 
         first = fakes.texture(uuid="one")
 
-        store.asking(first)
+        store.now_showing(first)
         store.landed("one", image(), QSize(64, 64))
 
         second = fakes.texture(uuid="two")
 
-        store.asking(second)
+        store.now_showing(second)
         store.landed("two", image(), QSize(32, 32))
 
-        assert store.asking(first) is None
+        assert store.now_showing(first) is None
 
     def test_a_texture_that_would_not_decode_is_held_that_way(self, app: QApplication) -> None:
         store = PreviewDecodes()
         texture = fakes.texture(uuid="one")
 
-        store.asking(texture)
+        store.now_showing(texture)
         store.landed("one", QImage(), QSize())
 
-        ready = store.asking(texture)
+        ready = store.now_showing(texture)
 
         assert ready is not None
         assert ready[0].isNull()
@@ -156,8 +156,8 @@ class TestPreviewDecodes:
         store = PreviewDecodes()
         texture = fakes.texture(uuid="one")
 
-        store.asking(texture)
+        store.now_showing(texture)
         store.landed("one", image(), QSize(64, 64))
         store.clear()
 
-        assert store.asking(texture) is None
+        assert store.now_showing(texture) is None

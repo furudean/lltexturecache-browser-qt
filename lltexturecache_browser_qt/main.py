@@ -93,8 +93,6 @@ class ErrorReporter(QObject):
 
 
 def start_logging() -> None:
-    """Send the app's own reports to stderr, at the level asked for"""
-
     level = os.environ.get(LOG_LEVEL_VAR, "WARNING").upper()
 
     logging.basicConfig(

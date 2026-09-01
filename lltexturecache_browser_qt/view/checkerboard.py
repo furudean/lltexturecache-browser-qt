@@ -89,8 +89,6 @@ _state = Checkerboards()
 
 
 def state() -> Checkerboards:
-    """What the app's checkerboard is doing right now"""
-
     return _state
 
 

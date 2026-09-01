@@ -26,9 +26,7 @@ class SessionWindow(PreviewClient, Protocol):
     preview client too rather than the two being tracked separately.
     """
 
-    def opened_cache(self) -> Path | None:
-        """The cache directory this window is showing, or nothing"""
-        ...
+    def opened_cache(self) -> Path | None: ...
 
 
 class AppSession:
@@ -68,13 +66,9 @@ class AppSession:
 
     @staticmethod
     def stored() -> list[Path]:
-        """The caches the last session was left on"""
-
         return stored_paths(QSettings(), SESSION_KEY)
 
     def save(self) -> None:
-        """Put away the caches the open windows are on"""
-
         QSettings().setValue(
             SESSION_KEY,
             [str(opened) for window in self._windows if (opened := window.opened_cache()) is not None],
@@ -125,8 +119,6 @@ class AppState:
         self._about: AboutDialog | None = None
 
     def show_about(self, build: Callable[[], "AboutDialog"]) -> None:
-        """Put the one about box up, building it the first time it is asked for"""
-
         if self._about is None:
             self._about = build()
 

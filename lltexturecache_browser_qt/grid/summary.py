@@ -13,8 +13,6 @@ def narrowed_summary(model: TextureModel) -> str:
 
 
 def grid_summary(model: TextureModel, entries: int, *, counting_incomplete: bool) -> str:
-    """What the grid holds, out of what the cache does"""
-
     shown = model.rowCount()
 
     summary = f"Showing {format_count(shown)} textures of {format_count(entries)} entries in cache"
@@ -35,8 +33,6 @@ def grid_summary(model: TextureModel, entries: int, *, counting_incomplete: bool
 
 
 def empty_message(model: TextureModel | None) -> str:
-    """What an empty grid says, which turns on why it is empty"""
-
     if model is None or not (model.narrowed or model.hidden()):
         return "Cache is empty"
 

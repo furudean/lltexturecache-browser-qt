@@ -26,8 +26,6 @@ DELAY_MESSAGE_DURATION_MS = 250
 
 
 def ask_for_directory(parent: QWidget, textures: list[Texture], format: Format) -> Path | None:
-    """Where to write an export, or nothing if it was called off"""
-
     dialog = QFileDialog(parent, f"Export {format_count(len(textures))} textures as {format.label}")
     dialog.setFileMode(QFileDialog.FileMode.Directory)
     dialog.setLabelText(QFileDialog.DialogLabel.Accept, "Export")
@@ -36,8 +34,6 @@ def ask_for_directory(parent: QWidget, textures: list[Texture], format: Format) 
 
 
 def export_summary(out_dir: Path, written: int, failed: int, *, cancelled: bool) -> str:
-    """What an export left behind, as the status bar says it"""
-
     note = "Cancelled export of" if cancelled else "Exported"
     summary = f"{note} {format_count(written)} texture(s) to {out_dir}"
 
@@ -56,8 +52,6 @@ def show_written(out_dir: Path, paths: list[Path]) -> None:
 
 
 class ExportRun:
-    """One export, from the progress dialog going up to the report coming back"""
-
     def __init__(
         self,
         parent: QWidget,

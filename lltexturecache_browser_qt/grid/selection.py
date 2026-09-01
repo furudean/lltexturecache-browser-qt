@@ -39,8 +39,6 @@ def row_spans(model: TextureModel, rows: list[int]) -> QItemSelection:
 
 @dataclass
 class KeptSelection:
-    """What was selected before a reset, by uuid rather than by row"""
-
     uuids: list[str] = field(default_factory=list)
 
     # the one of them the panes were on, which a reset loses separately from
@@ -55,8 +53,6 @@ class KeptSelection:
         )
 
     def restore(self, model: TextureModel, selection: QItemSelectionModel) -> None:
-        """Put the selection back at whatever rows those textures are on now"""
-
         rows = sorted(row for uuid in self.uuids if (row := model.row(uuid)) is not None)
 
         if rows:

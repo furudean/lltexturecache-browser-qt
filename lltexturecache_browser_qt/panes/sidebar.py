@@ -18,12 +18,8 @@ from lltexturecache_browser_qt.view.checkerboard import pixmap_lightness, set_pi
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 
-def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
-    """A stand-in drawn at the size the real decode will be
-
-    Otherwise the pile is laid out at whatever size the stand-in happened to
-    be kept at and jumps when the decode lands.
-    """
+def stand_in_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
+    """Sized to the decode it stands in for, so the pile does not jump when that lands"""
 
     laid = full_size(natural)
 
@@ -35,11 +31,11 @@ def laid_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
     return pixmap.scaled(laid, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
-def shape(model: TextureModel, texture: Texture) -> QSize | None:
-    """The size a texture was drawn at, an empty size if it would not decode
+def drawn_size(model: TextureModel, texture: Texture) -> QSize | None:
+    """Empty when the texture would not decode, nothing while its decode is out
 
-    Nothing at all while the decode is still out, which is what the pane shows
-    as "Decoding..." rather than as a shape it does not know yet.
+    The pane shows the last of those as "Decoding..." rather than as a shape it
+    does not know yet.
     """
 
     natural = model.natural(texture)
@@ -47,33 +43,29 @@ def shape(model: TextureModel, texture: Texture) -> QSize | None:
     if not natural.isEmpty():
         return natural
 
-    return QSize() if model.full(texture, decode=False) is not None else None
+    return QSize() if model.full_decode(texture, decode=False) is not None else None
 
 
 def standing_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
-    """The best decode of each texture that has landed, laid out to size"""
-
     cards = []
 
     for texture in textures:
         # a card goes in with whatever the grid or an earlier selection left
         # behind, until the selection settles and it is decoded properly
-        ready = model.standing(texture)
+        ready = model.stand_in(texture)
 
         if ready is not None:
-            cards.append((texture.uuid, laid_card(*ready)))
+            cards.append((texture.uuid, stand_in_card(*ready)))
 
     return cards
 
 
 def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> None:
-    """Repaint the sidebar from whatever decodes are in hand"""
-
     if not textures:
         return
 
     # only the texture on top is worth a decode on the spot
-    model.full(textures[-1])
+    model.full_decode(textures[-1])
 
     cards = standing_cards(model, textures)
 
@@ -86,6 +78,6 @@ def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> 
 
     pane.set_sidebar(
         stack_pixmap(cards, pane.sidebar_room()),
-        shape(model, textures[-1]),
+        drawn_size(model, textures[-1]),
         transparent=any(card.hasAlphaChannel() for _, card in cards),
     )

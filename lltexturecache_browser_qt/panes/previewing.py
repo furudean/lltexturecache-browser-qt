@@ -20,19 +20,11 @@ PREVIEW_GEOMETRY_KEY = "previewGeometry"
 
 
 class PreviewClient(Protocol):
-    """What the host needs of a window to be able to point the preview at it"""
+    def wants_preview(self) -> bool: ...
 
-    def wants_preview(self) -> bool:
-        """Whether this window has something to put in the preview and is asking to"""
-        ...
+    def fill_preview(self) -> None: ...
 
-    def fill_preview(self) -> None:
-        """Show this window's selection in the preview"""
-        ...
-
-    def preview_menu_entry(self) -> QAction:
-        """The tick this window carries for the preview, kept in step with the rest"""
-        ...
+    def preview_menu_entry(self) -> QAction: ...
 
 
 class PreviewHost:
@@ -52,16 +44,12 @@ class PreviewHost:
 
     @property
     def window(self) -> PreviewWindow | None:
-        """The preview, if one has ever been opened"""
-
         return self._window
 
     def followed_by(self, client: PreviewClient) -> bool:
         return self._following is client
 
     def shared(self) -> PreviewWindow:
-        """The preview window, built the first time anything asks for it"""
-
         if self._window is None:
             self._window = PreviewWindow()
             self._window.closed.connect(self.was_closed)
@@ -92,8 +80,6 @@ class PreviewHost:
             entry.blockSignals(was)
 
     def follow(self, client: PreviewClient | None = None) -> None:
-        """Point the preview at a window, or at whichever one is left to take it"""
-
         if client is not None and not client.wants_preview():
             # the window asking has nothing to put there, so the preview stays
             # where it is unless where it is happens to be that same window
@@ -120,8 +106,6 @@ class PreviewHost:
         client.fill_preview()
 
     def release(self, client: PreviewClient) -> bool:
-        """Let go of a window that is closing, and say whether it held the preview"""
-
         if self._following is not client:
             return False
 
@@ -130,8 +114,6 @@ class PreviewHost:
         return True
 
     def was_closed(self) -> None:
-        """The preview was closed by hand, so nothing is following it now"""
-
         self._following = None
 
         self._closed()

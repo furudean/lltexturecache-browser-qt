@@ -40,8 +40,6 @@ def store_toggle(key: str, shown: bool) -> None:
 
 
 def stored_toggle(key: str, *, default: bool) -> bool:
-    """Where a tick was left, or where it opens when it has never been moved"""
-
     return bool(QSettings().value(key, default, type=bool))
 
 
@@ -120,8 +118,6 @@ class WindowActions(QObject):
         self.build_app_menu(menu.addMenu("About"))
 
     def build_file_menu(self, window: QMainWindow, file_menu: QMenu) -> None:
-        """Opening caches, reloading one, and opening or closing a window"""
-
         new = QAction("&New Window", window)
         new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
         new.setStatusTip("Open another window")
@@ -164,8 +160,6 @@ class WindowActions(QObject):
         self.populate_suggested()
 
     def build_export_menu(self, exports: QMenu) -> None:
-        """Writing the selection, or the whole cache, out in each format"""
-
         self.exports = exports
 
         self._selected_export = self.format_menu(exports, "Export Selected As...", everything=False)
@@ -185,8 +179,6 @@ class WindowActions(QObject):
         self.sync_export(0, 0, idle=True)
 
     def build_view_menu(self, window: QMainWindow, view_menu: QMenu) -> None:
-        """Which panes are up, what the grid holds, and the checkerboard behind it"""
-
         self.build_toggles(window)
         self.build_tones(window)
 
@@ -208,8 +200,6 @@ class WindowActions(QObject):
         # any native system menus under here
 
     def build_toggles(self, window: QMainWindow) -> None:
-        """The five ticks, which are the same entry with a different label"""
-
         # the command key "Ctrl" on mac and hands "Meta" to control
         inspector_key = "Shift+Ctrl+I" if sys.platform == "darwin" else "Shift+Alt+I"
 
@@ -252,8 +242,6 @@ class WindowActions(QObject):
         self.simple = self._toggles[SIMPLE_KEY]
 
     def build_tones(self, window: QMainWindow) -> None:
-        """The checkerboard the app draws behind transparency, one of four"""
-
         self._tones = {}
 
         tones = QActionGroup(window)
@@ -273,8 +261,6 @@ class WindowActions(QObject):
         self.sync_checkerboard()
 
     def build_app_menu(self, app_menu: QMenu) -> None:
-        """The About entry, which macOS moves under the application menu itself"""
-
         # the label does not matter on macOS, where the role decides where it goes
         about = app_menu.addAction(f"About {APP_DISPLAY_NAME}")
         about.setMenuRole(QAction.MenuRole.AboutRole)

@@ -67,13 +67,9 @@ class DecodeQueue:
 
     @property
     def pool(self) -> QThreadPool:
-        """The pool the decodes run on, which the bigger ones share"""
-
         return self._pool
 
     def wanted(self, texture: Texture) -> bool:
-        """Whether this texture is worth decoding, or is already in hand"""
-
         uuid = texture.uuid
 
         # an entry the cache never finished downloading has no codestream to
@@ -108,8 +104,6 @@ class DecodeQueue:
         return True
 
     def request(self, texture: Texture) -> None:
-        """Ask for one texture, as a cell being painted does"""
-
         if self.enqueue(texture, CELL_PRIORITY):
             self.pump()
 
@@ -129,8 +123,6 @@ class DecodeQueue:
         self.pump()
 
     def pump(self) -> None:
-        """Start as many of the waiting decodes as the pool has room for"""
-
         while self._queue and len(self._running) < DECODES_IN_FLIGHT:
             uuid, (priority, texture) = self._queue.popitem()
 
@@ -163,8 +155,6 @@ class DecodeQueue:
         return True
 
     def restyle(self) -> None:
-        """Note that every decode now out was handed the old checkerboard"""
-
         self._stale = set(self._running)
 
     def clear(self) -> None:

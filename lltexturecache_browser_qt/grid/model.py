@@ -291,11 +291,8 @@ class TextureModel(QAbstractListModel):
 
         return QPixmap()
 
-    def full(self, texture: Texture, *, decode: bool = True) -> tuple[QPixmap, QSize] | None:
-        """An inspector sized decode and the size it was stored at, once it is in
-
-        Starts one if there is none, unless asked only to look.
-        """
+    def full_decode(self, texture: Texture, *, decode: bool = True) -> tuple[QPixmap, QSize] | None:
+        """Nothing until it is in, and one is started if there is none, unless asked only to look"""
 
         if (ready := self._fulls.ready(texture.uuid)) is not None:
             return ready
@@ -312,8 +309,8 @@ class TextureModel(QAbstractListModel):
     def natural(self, texture: Texture) -> QSize:
         return self._natural.get(texture.uuid, QSize())
 
-    def standing(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
-        """The best decode already in hand, and the size it came in at if known
+    def stand_in(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
+        """The best decode already in hand, with the size it came in at if known
 
         Nothing is started for it: this is only what a pane or a window can
         put up on the spot while the decode it really wants is out. The shape
@@ -327,7 +324,7 @@ class TextureModel(QAbstractListModel):
 
         uuid = texture.uuid
 
-        if (ready := self.full(texture, decode=False)) is not None:
+        if (ready := self.full_decode(texture, decode=False)) is not None:
             return ready
 
         kept = QPixmap()
@@ -359,7 +356,7 @@ class TextureModel(QAbstractListModel):
         return (cell, self.natural(texture)) if not cell.isNull() else None
 
     def preview(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
-        if (ready := self._previews.asking(texture)) is not None:
+        if (ready := self._previews.now_showing(texture)) is not None:
             return ready
 
         if self._previews.wanted(texture):
@@ -401,9 +398,7 @@ class TextureModel(QAbstractListModel):
         return self.apply_filters()
 
     def apply_filters(self) -> bool:
-        """Show the rows being asked for, and say whether that could be answered"""
-
-        kept = self._narrowing.kept(len(self._textures))
+        kept = self._narrowing.shown_rows(len(self._textures))
 
         if kept is None:
             return False
@@ -443,21 +438,15 @@ class TextureModel(QAbstractListModel):
             )
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        """Put one cell decode on the pool, which is what the queue asks of us"""
-
         self._decodes.pool.start(DecodeTask(texture, self.reads, self._signals), priority)
 
     def request(self, texture: Texture) -> None:
-        """Ask for a cell, as painting one does when it finds nothing in hand"""
-
         self._decodes.request(texture)
 
     def wanted(self, texture: Texture) -> bool:
         return self._decodes.wanted(texture)
 
     def prefetch(self, rows: Iterable[int], showing: Iterable[int]) -> None:
-        """Replace the queue with the band around the viewport"""
-
         on_screen = {self.texture(row).uuid for row in showing}
 
         self._decodes.refill(map(self.texture, rows), on_screen)

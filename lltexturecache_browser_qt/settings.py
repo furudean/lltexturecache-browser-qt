@@ -17,8 +17,6 @@ FILTERS_KEY = "colorFilters"
 
 
 def stored_blob(settings: QSettings, key: str) -> QByteArray:
-    """A saved geometry or splitter state, or nothing if the key holds anything else"""
-
     stored = settings.value(key)
 
     return stored if isinstance(stored, QByteArray) else QByteArray()

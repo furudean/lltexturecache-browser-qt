@@ -34,8 +34,6 @@ class FullDecodes:
         return self._ready.get(uuid)
 
     def wanted(self, texture: Texture) -> bool:
-        """Whether a decode is worth starting, or one is already out for it"""
-
         if not texture.whole() or texture.uuid in self._running:
             return False
 
@@ -83,11 +81,9 @@ class PreviewDecodes:
         self._showing: str | None = None
         self._running: set[str] = set()
 
-    def asking(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
-        """Mark this as the texture the preview is on, and hand over any decode in hand
-
-        Asking is what makes a decode the selection has already walked past
-        droppable when it lands.
+    def now_showing(self, texture: Texture) -> tuple[QPixmap, QSize] | None:
+        """Saying which texture the preview is on is what makes a decode the
+        selection has walked past droppable when it lands.
         """
 
         self._showing = texture.uuid
@@ -106,8 +102,6 @@ class PreviewDecodes:
         return True
 
     def landed(self, uuid: str, image: QImage, natural: QSize) -> bool:
-        """Take a decode, and say whether the preview is still on that texture"""
-
         self._running.discard(uuid)
 
         if uuid != self._showing:
