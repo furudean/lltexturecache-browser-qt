@@ -28,13 +28,6 @@ class PreviewClient(Protocol):
 
 
 class PreviewHost:
-    """The one preview window, and the window it is currently following
-
-    `clients` is asked for the windows open right now rather than handed a
-    list, since windows come and go under the host and a list taken once would
-    be stale by the time the preview needed rehoming.
-    """
-
     def __init__(self, clients: Callable[[], list[PreviewClient]], closed: Callable[[], None]) -> None:
         self._clients = clients
         self._closed = closed

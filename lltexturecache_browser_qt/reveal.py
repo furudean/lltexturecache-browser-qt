@@ -14,16 +14,8 @@ def quoted(text: str) -> str:
 
 
 def ran(command: list[str]) -> bool:
-    """Run a file manager command and say whether it worked
-
-    Every command here is a fixed argument list built in this module, run
-    without a shell, and the only part of it that varies is a path the app
-    itself wrote and `reveal` has already checked is absolute. Nothing a
-    user types reaches it.
-    """
-
     try:
-        finished = subprocess.run(  # nosec B603 - fixed argv, no shell, paths checked by `reveal`
+        finished = subprocess.run(  # nosec B603
             command,
             capture_output=True,
             timeout=REVEAL_TIMEOUT_S,

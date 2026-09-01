@@ -21,9 +21,6 @@ from lltexturecache_browser_qt.view.checkerboard import sync_checkerboard
 
 log = logging.getLogger(__name__)
 
-# what the app says about itself when nothing has asked for more. a viewer's
-# texture cache is full of half-written entries, so the ones the app steps
-# around are only worth a line when something has gone looking for them
 LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
 LOG_LEVEL_VAR = "LLTEXTURECACHE_LOG"
 
@@ -103,12 +100,6 @@ def start_logging() -> None:
 
 
 def main() -> int:
-    """Run the app, and hand back what it exited with
-
-    The console script and the module entry point below both turn this into
-    the process's exit status, so nothing in here has to reach for one.
-    """
-
     start_logging()
 
     app = QApplication(sys.argv)

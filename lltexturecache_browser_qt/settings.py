@@ -1,9 +1,3 @@
-"""Reading back what the app put away
-
-QSettings hands back whatever was stored under a key, including whatever a
-store written by another version or edited by hand happens to hold, so nothing
-read out of it can be taken at its word without being checked first.
-"""
 
 from pathlib import Path
 
@@ -23,12 +17,6 @@ def stored_blob(settings: QSettings, key: str) -> QByteArray:
 
 
 def stored_paths(settings: QSettings, key: str) -> list[Path]:
-    """A stored list of paths
-
-    A list of one comes back out of the store as the string it held rather
-    than as a list, which is Qt's own doing and has to be undone here.
-    """
-
     stored = settings.value(key) or []
 
     if isinstance(stored, str):
