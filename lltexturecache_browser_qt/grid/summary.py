@@ -9,7 +9,15 @@ from lltexturecache_browser_qt.view.formatting import format_count
 
 
 def narrowed_summary(model: TextureModel) -> str:
-    return f"Showing {format_count(model.rowCount())} of {format_count(model.total())} textures matching filters"
+    shown = format_count(model.rowCount())
+
+    return f"Showing {shown} of {format_count(model.total())} textures matching filters"
+
+
+def ranked_summary(model: TextureModel, name: str | None) -> str:
+    shown = format_count(model.rowCount())
+
+    return f"Showing the {shown} textures most like {name or 'the image'}"
 
 
 def grid_summary(model: TextureModel, entries: int, *, counting_incomplete: bool) -> str:

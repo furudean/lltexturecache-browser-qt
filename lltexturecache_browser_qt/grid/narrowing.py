@@ -1,48 +1,61 @@
 """Which textures the grid is showing, and in what order
 
-A cache is filtered by colour and by whether a texture holds a picture at all.
-Both answers come out of the colour scan, which arrives long after the grid
-has been filled, so what is being asked for is kept here and applied whenever
-there is something to apply it against.
+A cache is filtered by colour or ranked against a picture, and either way the
+textures holding no picture at all can be left out of it. All three answers
+come out of the scan, which arrives long after the grid has been filled, so
+what is being asked for is kept here and applied whenever there is something
+to apply it against.
 """
 
 from dataclasses import dataclass, field
 
 from PySide6.QtGui import QColor
 
-from lltexturecache_browser_qt.cache.color import MATCH_FLOOR, ColorIndex
+from lltexturecache_browser_qt.cache.color import MATCH_FLOOR
+from lltexturecache_browser_qt.cache.likeness import Descriptor
+from lltexturecache_browser_qt.cache.scan import Scan
+
+SHORTLIST = 200
 
 
 @dataclass
 class Narrowing:
     colors: list[QColor] = field(default_factory=list)
 
+    # the picture the cache is being searched for, as the little of it that
+    # survives being squashed down to the size a thumbnail can answer at
+    reference: Descriptor | None = None
+
     # whether the textures holding one solid colour, or nothing visible at all,
     # are being left out of the grid rather than only ringed in it
     simple_hidden: bool = False
 
-    # what the colour scan found, which is nothing until it lands
-    index: ColorIndex | None = None
+    # what the scan found, which is nothing until it lands
+    scan: Scan | None = None
 
     @property
     def asking(self) -> bool:
-        return bool(self.colors) or self.simple_hidden
+        return bool(self.colors) or self.reference is not None or self.simple_hidden
 
     @property
     def narrowed(self) -> bool:
-        return bool(self.colors) and self.index is not None
+        return (bool(self.colors) or self.reference is not None) and self.scan is not None
+
+    @property
+    def matching(self) -> bool:
+        return self.reference is not None and self.scan is not None
 
     def hidden(self) -> int:
-        if not self.simple_hidden or self.index is None:
+        if not self.simple_hidden or self.scan is None:
             return 0
 
-        return len(self.index.flat)
+        return len(self.scan.colors.flat)
 
     def flat_uuids(self, uuids: list[str]) -> set[str]:
-        if self.index is None:
+        if self.scan is None:
             return set()
 
-        return {uuids[row] for row in self.index.flat}
+        return {uuids[row] for row in self.scan.colors.flat}
 
     def shown_rows(self, count: int) -> list[int] | None:
         """Nothing at all when something is being asked for that only the scan can
@@ -53,23 +66,53 @@ class Narrowing:
         if not self.asking:
             return list(range(count))
 
-        if self.index is None:
+        if self.scan is None:
             return None
 
-        flat = self.index.flat if self.simple_hidden else set()
+        flat = self.scan.colors.flat if self.simple_hidden else set()
 
         kept = [row for row in range(count) if row not in flat]
 
-        if not self.colors:
-            return kept
+        # a picture is asked instead of the colours rather than inside them.
+        # what a texture holds and what it looks like are different questions,
+        # and taking either of them up on the bar puts the other one down
+        if self.reference is not None:
+            return self.by_likeness(kept)
 
-        scores = self.index.scores(self.colors)
+        if self.colors:
+            return self.by_color(kept)
+
+        return kept
+
+    def by_color(self, rows: list[int]) -> list[int]:
+        scan = self.scan
+
+        if scan is None:
+            return rows
+
+        scores = scan.colors.scores(self.colors)
 
         # a texture has to hold some of every colour asked for, and the more
         # colours are asked for the less of each one any texture can be
         floor = MATCH_FLOOR / len(self.colors)
 
-        kept = [row for row in kept if scores[row] >= floor]
+        kept = [row for row in rows if scores[row] >= floor]
         kept.sort(key=lambda row: -scores[row])
 
         return kept
+
+    def by_likeness(self, rows: list[int]) -> list[int]:
+        scan = self.scan
+
+        if scan is None or self.reference is None:
+            return rows
+
+        scores = scan.likeness.scores(self.reference)
+
+        # every texture the scan could read is ranked, and where to cut the
+        # ranking is the one question the scores cannot answer: they are worth
+        # comparing to each other and to nothing else. so it is held to a count
+        kept = [row for row in rows if row in scores]
+        kept.sort(key=lambda row: -scores[row])
+
+        return kept[:SHORTLIST]

@@ -4,6 +4,7 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
+- find a texture from a similar image. useful for screenshots
 - right click menu on the inspector, with the alpha mode shown in it
 - drag and drop in the inspector
 - better tooltip for the inspector preview

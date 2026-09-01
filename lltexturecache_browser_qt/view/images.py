@@ -1,4 +1,5 @@
 from functools import cache
+from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader, QPixmap
@@ -83,3 +84,36 @@ def placeholder() -> QPixmap:
     pixmap.fill(QColor(0xFF, 0x00, 0x00))
 
     return pixmap
+
+
+def image_file(path: Path) -> QImage:
+    """Whatever qt can read out of the file, or a null image if it is not a picture"""
+
+    reader = QImageReader(str(path))
+    reader.setAutoTransform(True)
+
+    return reader.read()
+
+
+def readable_image(path: Path) -> bool:
+    """Whether the file is one qt would have a reader for
+
+    Off the file rather than off its name: a screenshot dragged out of another
+    app arrives under whatever name that app gave it, and qt sniffs the bytes.
+    """
+
+    return path.is_file() and QImageReader(str(path)).canRead()
+
+
+def image_filter() -> str:
+    """The file dialog's filters, over whatever formats this build of qt reads
+
+    With everything else behind them, since the reader goes by the bytes and
+    the filter can only go by the name: a screenshot saved by another app
+    arrives under whatever name that app gave it, extension or none.
+    """
+
+    suffixes = sorted({QByteArray(format).toStdString() for format in QImageReader.supportedImageFormats()})
+    images = " ".join(f"*.{suffix}" for suffix in suffixes)
+
+    return f"Images ({images});;All Files (*)"

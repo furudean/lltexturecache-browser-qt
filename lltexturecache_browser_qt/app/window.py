@@ -24,6 +24,7 @@ from PySide6.QtGui import (
     QDragMoveEvent,
     QDropEvent,
     QGuiApplication,
+    QImage,
     QPixmap,
     QPixmapCache,
 )
@@ -50,10 +51,10 @@ from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, Tex
 from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
 from lltexturecache_browser_qt.grid.prefetch import prefetch
 from lltexturecache_browser_qt.grid.selection import KeptSelection
-from lltexturecache_browser_qt.grid.summary import empty_message, narrowed_summary
+from lltexturecache_browser_qt.grid.summary import empty_message, narrowed_summary, ranked_summary
 from lltexturecache_browser_qt.grid.summary import grid_summary as summary_of
 from lltexturecache_browser_qt.panes.dropzone import DropZone
-from lltexturecache_browser_qt.panes.filters import ColorFilterBar
+from lltexturecache_browser_qt.panes.filters import FilterBar
 from lltexturecache_browser_qt.panes.inspector import INSPECTOR_WIDTH, InspectorPane
 from lltexturecache_browser_qt.panes.preview import PreviewWindow
 from lltexturecache_browser_qt.panes.sidebar import paint as paint_pane
@@ -71,7 +72,7 @@ from lltexturecache_browser_qt.view.checkerboard import (
     sync_checkerboard,
 )
 from lltexturecache_browser_qt.view.formatting import format_count
-from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE, image_file, image_filter, readable_image
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
@@ -92,7 +93,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(APP_DISPLAY_NAME)
 
-        # a directory dropped anywhere on the window is opened in it
+        # a directory dropped anywhere on the window is opened in it, and a
+        # picture dropped on it is searched for
         self.setAcceptDrops(True)
 
         # default window size
@@ -168,13 +170,20 @@ class MainWindow(QMainWindow):
         # laid over the central widget while a cache is held over the window
         self._zone = DropZone(self)
 
-        self._filters = ColorFilterBar(self)
+        # what the last thing held over the window would do if it were dropped,
+        # since working that out reads the file and drag events arrive far too
+        # fast to read it on every one of them
+        self._offered: tuple[Path, str | None] | None = None
+
+        self._filters = FilterBar(self)
 
         # the strip comes back up as it was left, before anything is listening,
         # so the colors are already on it when a cache arrives to be ranked
         self._filters.revive(settings.value(FILTERS_KEY))
 
         self._filters.changed.connect(self.filter_action)
+        self._filters.matched.connect(self.match_action)
+        self._filters.picking.connect(self.pick_action)
         self._filters.visibilityChanged.connect(self.filters_shown_action)
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self._filters)
@@ -187,6 +196,10 @@ class MainWindow(QMainWindow):
         self._actions.reopened.connect(self.open_cache)
         self._actions.reloaded.connect(self.refresh_action)
         self._actions.exported.connect(self.export_action)
+        self._actions.color_picked.connect(self.filter_color_action)
+        self._actions.picture_picked.connect(self.pick_action)
+        self._actions.picture_pasted.connect(self.paste_action)
+        self._actions.filters_disabled.connect(self._filters.disable_action)
         self._actions.previewed.connect(self.preview_action)
         self._actions.preview_toggled.connect(self.toggle_preview_action)
         self._actions.inspected.connect(self.inspector_action)
@@ -209,6 +222,7 @@ class MainWindow(QMainWindow):
         self.sync_inspector()
         self.sync_preview()
         self.sync_filters()
+        self.sync_find()
         self.sync_incomplete()
         self.sync_simple()
 
@@ -541,6 +555,66 @@ class MainWindow(QMainWindow):
         self._actions.filters.setEnabled(opened)
         self._filters.setVisible(opened and self._actions.filters.isChecked())
 
+    def filter_color_action(self) -> None:
+        """Pick a colour off the menu, with the strip up to show what was picked"""
+
+        if self._filters.add_action():
+            self._actions.filters.setChecked(True)
+
+    def pick_action(self) -> None:
+        """Pick a picture off disk to search the cache for"""
+
+        path, _ = QFileDialog.getOpenFileName(self, "Match Image", QDir.homePath(), image_filter())
+
+        if path:
+            self.match_file(Path(path))
+
+    def match_file(self, path: Path) -> None:
+        image = image_file(path)
+
+        if image.isNull():
+            self._status.flash(f"Could not read {path.name} as an image")
+            return
+
+        self.match_picture(image, path.name)
+
+    def paste_action(self) -> None:
+        image = QGuiApplication.clipboard().image()
+
+        if image.isNull():
+            self._status.flash("There is no image on the clipboard")
+            return
+
+        self.match_picture(image, "the pasted image")
+
+    def match_picture(self, image: QImage, name: str) -> None:
+        # the chip is what says a picture is being asked for, so the strip comes
+        # up if it was away, rather than the grid reordering itself for no
+        # reason anyone can see
+        self._actions.filters.setChecked(True)
+
+        self._filters.set_reference(image, name)
+
+    def match_action(self) -> None:
+        """Take up, or let go of, the picture the strip is holding"""
+
+        self.sync_find()
+
+        model = self._model
+
+        if model is None:
+            return
+
+        if model.set_reference(self._filters.reference()):
+            self.ranked_action()
+        else:
+            # the scan that has to answer for the picture is still out, and what
+            # was asked for here is applied the moment it lands
+            self._status.flash("Please wait...")
+
+    def sync_find(self) -> None:
+        self._actions.sync_find(opened=self._cache is not None, asking=self._filters.asking())
+
     def incomplete_action(self, shown: bool) -> None:
         if self._cache is None:
             return
@@ -608,9 +682,13 @@ class MainWindow(QMainWindow):
         return model is not None and model.narrowed
 
     def ranking(self) -> bool:
-        return bool(self._filters.colors())
+        """Whether the grid is in an order something asked for, rather than the cache's"""
+
+        return bool(self._filters.colors()) or self._filters.reference() is not None
 
     def filter_action(self, colors: list[QColor]) -> None:
+        self.sync_find()
+
         model = self._model
 
         if model is None:
@@ -627,15 +705,37 @@ class MainWindow(QMainWindow):
 
         self._status.set_summary(self.summary())
 
-        self.scroll_ranked()
+        model = self._model
+
+        if model is not None and model.matching:
+            self.show_ranking()
+        else:
+            self.scroll_ranked()
+
+    def show_ranking(self) -> None:
+        """Take the grid to the top of the ranking, where the likest textures are
+
+        Nothing is selected there. A ranking is a reordering of the grid rather
+        than an answer to pick out of it, so which row the user ends up on stays
+        theirs to say.
+        """
+
+        if self._model is None:
+            return
+
+        self._view.unpin()
+        self._view.scrollToTop()
 
     def summary(self) -> str:
         model = self._model
 
-        if model is not None and model.narrowed:
-            return narrowed_summary(model)
+        if model is None or not model.narrowed:
+            return self.grid_summary()
 
-        return self.grid_summary()
+        if model.matching:
+            return ranked_summary(model, self._filters.reference_name())
+
+        return narrowed_summary(model)
 
     def grid_summary(self) -> str:
         model = self._model
@@ -895,14 +995,14 @@ class MainWindow(QMainWindow):
         self.dragMoveEvent(event)
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
-        urls = event.mimeData().urls()
+        dropped = self.dropped_path(event)
 
-        if self._job is not None or len(urls) != 1:
+        if dropped is None:
             return
 
-        cache_dir = Path(urls[0].toLocalFile())
+        offer = self.offer_for(dropped)
 
-        if not cache_dir.is_dir():
+        if offer is None:
             return
 
         actions = event.possibleActions()
@@ -919,29 +1019,69 @@ class MainWindow(QMainWindow):
         central = self.centralWidget()
 
         if central is not None:
-            self._zone.offer(f"Drop to open {cache_dir.name}", central.geometry())
+            self._zone.offer(offer, central.geometry())
 
-    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
-        self._zone.withdraw()
-
-        super().dragLeaveEvent(event)
-
-    def dropEvent(self, event: QDropEvent) -> None:
-        self._zone.withdraw()
+    def dropped_path(self, event: QDropEvent) -> Path | None:
+        """The one file or directory being held over the window, if it is only one"""
 
         urls = event.mimeData().urls()
 
         if self._job is not None or len(urls) != 1:
-            return
+            return None
 
-        cache_dir = Path(urls[0].toLocalFile())
+        return Path(urls[0].toLocalFile())
 
-        if not cache_dir.is_dir():
+    def offer_for(self, dropped: Path) -> str | None:
+        """What dropping this would do, and nothing when it would do nothing
+
+        Remembered until the drag ends, since a drag over the window is a run
+        of events about the one path and answering takes a look at the disk.
+        """
+
+        if self._offered is None or self._offered[0] != dropped:
+            self._offered = (dropped, self.offer_of(dropped))
+
+        return self._offered[1]
+
+    def offer_of(self, dropped: Path) -> str | None:
+        """A directory is a cache to open, and a picture is one to search an open cache for"""
+
+        if dropped.is_dir():
+            return f"Drop to open {dropped.name}"
+
+        if self._cache is not None and readable_image(dropped):
+            return f"Drop to match {dropped.name}"
+
+        return None
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self._zone.withdraw()
+        self.forget_offer()
+
+        super().dragLeaveEvent(event)
+
+    def forget_offer(self) -> None:
+        # whatever comes over the window next is a fresh question, and the file
+        # this one was about may not even be the same file by then
+        self._offered = None
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        self._zone.withdraw()
+
+        dropped = self.dropped_path(event)
+        offered = dropped is not None and self.offer_for(dropped) is not None
+
+        self.forget_offer()
+
+        if dropped is None or not offered:
             return
 
         event.accept()
 
-        self.open_cache(cache_dir, replace=True)
+        if dropped.is_dir():
+            self.open_cache(dropped, replace=True)
+        else:
+            self.match_file(dropped)
 
     def new_window(self, cache: TextureCache | None = None) -> "MainWindow":
         window = MainWindow()
@@ -962,6 +1102,7 @@ class MainWindow(QMainWindow):
         self.sync_inspector()
         self.sync_preview()
         self.sync_filters()
+        self.sync_find()
         self.sync_incomplete()
         self.sync_simple()
         self._status.set_opened(True)
@@ -1024,11 +1165,14 @@ class MainWindow(QMainWindow):
             preview.clear()
 
         model.set_simple_hidden(not self.showing_simple())
+        model.set_reference(self._filters.reference())
         model.set_filters(self._filters.colors())
 
         self.sync_export()
 
-        if not self.ranking():
+        if model.matching:
+            self.show_ranking()
+        elif not self.ranking():
             self.scroll_to_end()
 
         self._summary = self.grid_summary()

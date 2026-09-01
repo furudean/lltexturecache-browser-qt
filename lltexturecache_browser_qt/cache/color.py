@@ -1,18 +1,10 @@
-import logging
-import threading
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import cache
 from math import cbrt, dist, exp, hypot
 
-from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QColor, QImage
-from texture_courier import Texture, TextureCacheError, Thumbnail
-
-from lltexturecache_browser_qt.view.images import read_image
-
-log = logging.getLogger(__name__)
 
 type Lab = tuple[float, float, float]
 
@@ -448,89 +440,3 @@ class ColorIndex:
                 match[row] += weights[entry] * exp(-distance * falloff)
 
         return match
-
-
-class ScanSignals(QObject):
-    done = Signal(object)
-
-
-class ColorScan(QRunnable):
-    """Reads the colors of every texture in a cache, off the ui thread"""
-
-    def __init__(self, textures: list[Texture], thumbnails: threading.Lock, signals: ScanSignals) -> None:
-        super().__init__()
-
-        self._textures = textures
-        self._thumbnails = thumbnails
-        self._signals = signals
-        self._stopped = threading.Event()
-
-    def cancel(self) -> None:
-        self._stopped.set()
-
-    @Slot()
-    def run(self) -> None:
-        index = ColorIndex(len(self._textures))
-
-        for row, texture in enumerate(self._textures):
-            if self._stopped.is_set():
-                return
-
-            signature = self.read(texture)
-
-            if signature is not None:
-                index.add(row, signature)
-
-        if self._stopped.is_set():
-            return
-
-        try:
-            self._signals.done.emit(index)
-        except RuntimeError:
-            # the model this was reading for went out from under it between the
-            # check above and here, taking the signals it reports through along
-            log.debug("colour scan finished after its model closed", exc_info=True)
-
-    def read(self, texture: Texture) -> Signature | None:
-        try:
-            # the thumbnails all come out of the one file, the same as the reads
-            # the grid makes, so this waits its turn among them
-            with self._thumbnails:
-                kept = texture.thumbnail
-        except (TextureCacheError, OSError) as e:
-            # a texture with no readable thumbnail has no colours to file it
-            # under, which leaves it out of the index rather than stopping the scan
-            log.debug("no colours for %s: %s", texture.uuid, e)
-
-            return None
-
-        if kept is None:
-            return None
-
-        found = signature(read_image(QByteArray(kept.png())))
-
-        # the thumbnail is the only look at the texture this gets, and sixteen
-        # pixels average a weave away to one flat color as readily as they
-        # report a blank. what the encoder needed is the second opinion, and
-        # it is the one that stands
-        if found is not None and found.flat and self.dense(texture, kept):
-            return replace(found, flat=False)
-
-        return found
-
-    def dense(self, texture: Texture, kept: Thumbnail | None) -> bool:
-        """Whether the texture pays too many bytes for its pixels to be holding no picture
-
-        The thumbnail was taken at one of the texture's mip levels and says
-        which, so the size it was reduced from is the size of the texture
-        itself. Nothing says so when the cache has no thumbnail kept, and an
-        entry with none of its own never reaches this.
-        """
-
-        if kept is None or not kept.width or not kept.height:
-            return False
-
-        width, height = kept.source_dimensions
-        pixels = width * height
-
-        return texture.image_size > FLAT_BASE_BYTES + pixels * FLAT_MAX_DENSITY

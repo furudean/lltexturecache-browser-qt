@@ -17,7 +17,8 @@ the app's icon, slcachegirl, is designed by [@sferics32.bsky.social](https://bsk
 ## features
 
 - browse and filter through a large amount of textures
-- save textures to disk in commonly-used image formats
+- find a texture by a screenshot
+- save to disk in commonly-used image formats
 - drag and drop support
 - it's fast
 - it's not an electron app

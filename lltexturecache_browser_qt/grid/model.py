@@ -17,7 +17,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
-from lltexturecache_browser_qt.cache.color import ColorIndex, ColorScan, ScanSignals
+from lltexturecache_browser_qt.cache.likeness import describe
+from lltexturecache_browser_qt.cache.scan import CacheScan, Scan, ScanSignals
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
@@ -131,8 +132,8 @@ class TextureModel(QAbstractListModel):
         self._lookup = {texture.uuid: texture for texture in self._textures}
         self._filtered_textures = self._textures
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(self._filtered_textures)}
-        # what is being asked of the grid, and what the colour scan found to
-        # answer it with
+        # what is being asked of the grid, and what the scan found to answer
+        # it with
         self._narrowing = Narrowing()
         # the textures the scan found no picture in, which are left out of the
         # grid or ringed in it depending on what the menu says
@@ -165,7 +166,7 @@ class TextureModel(QAbstractListModel):
         self._scan_signals = ScanSignals(self)
         self._scan_signals.done.connect(self.scanned)
 
-        self._scan = ColorScan(self._textures, self._thumbnails, self._scan_signals)
+        self._scan = CacheScan(self._textures, self._thumbnails, self._scan_signals)
 
         QThreadPool.globalInstance().start(self._scan)
 
@@ -188,6 +189,12 @@ class TextureModel(QAbstractListModel):
     @property
     def narrowed(self) -> bool:
         return self._narrowing.narrowed
+
+    @property
+    def matching(self) -> bool:
+        """Whether the grid is ranked against a picture rather than filtered"""
+
+        return self._narrowing.matching
 
     @property
     def colors(self) -> list[QColor]:
@@ -392,6 +399,13 @@ class TextureModel(QAbstractListModel):
 
         return self.apply_filters()
 
+    def set_reference(self, image: QImage | None) -> bool:
+        """Rank the grid against a picture, or against nothing when there is none"""
+
+        self._narrowing.reference = describe(image) if image is not None else None
+
+        return self.apply_filters()
+
     def set_simple_hidden(self, hidden: bool) -> bool:
         self._narrowing.simple_hidden = hidden
 
@@ -421,8 +435,8 @@ class TextureModel(QAbstractListModel):
         self.endResetModel()
 
     @Slot(object)
-    def scanned(self, index: ColorIndex) -> None:
-        self._narrowing.index = index
+    def scanned(self, scan: Scan) -> None:
+        self._narrowing.scan = scan
         self._simple = self._narrowing.flat_uuids([texture.uuid for texture in self._textures])
 
         if self._narrowing.asking and self.apply_filters():

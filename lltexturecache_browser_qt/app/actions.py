@@ -97,6 +97,10 @@ class WindowActions(QObject):
     reopened = Signal(Path)
     reloaded = Signal()
     exported = Signal(Format, bool)
+    color_picked = Signal()
+    picture_picked = Signal()
+    picture_pasted = Signal()
+    filters_disabled = Signal()
     inspected = Signal(bool)
     filtered = Signal(bool)
     previewed = Signal(bool)
@@ -114,6 +118,7 @@ class WindowActions(QObject):
 
         self.build_file_menu(window, menu.addMenu("&File"))
         self.build_export_menu(menu.addMenu("&Export"))
+        self.build_find_menu(window, menu.addMenu("Fi&nd"))
         self.build_view_menu(window, menu.addMenu("&View"))
         self.build_app_menu(menu.addMenu("About"))
 
@@ -177,6 +182,40 @@ class WindowActions(QObject):
         # neither of them to count yet, and the titles are what the entries come
         # up as until a window has something to say about it
         self.sync_export(0, 0, idle=True)
+
+    def build_find_menu(self, window: QMainWindow, find_menu: QMenu) -> None:
+        self.filter_color = QAction("Filter &Color...", window)
+        self.filter_color.setStatusTip("Add a color to filter textures by")
+        self.filter_color.setEnabled(False)
+        triggers(self.filter_color, self.color_picked.emit)
+
+        self.match = QAction("Match &Image...", window)
+        self.match.setShortcut(QKeySequence(QKeySequence.StandardKey.Find))
+        self.match.setStatusTip("Show the textures that look like a picture on disk")
+        self.match.setEnabled(False)
+        triggers(self.match, self.picture_picked.emit)
+
+        self.paste = QAction("Match Clipboard Image", window)
+        self.paste.setShortcut(QKeySequence(QKeySequence.StandardKey.Paste))
+        self.paste.setStatusTip("Show the textures that look like the picture in the clipboard")
+        self.paste.setEnabled(False)
+        triggers(self.paste, self.picture_pasted.emit)
+
+        self.disable = QAction("&Disable Filters", window)
+        self.disable.setStatusTip("Put down whatever the grid is being asked for")
+        self.disable.setEnabled(False)
+        triggers(self.disable, self.filters_disabled.emit)
+
+        find_menu.addAction(self.filter_color)
+
+        # a colour and a picture are two ways of asking, and taking one up puts
+        # the other down, so the menu keeps them apart the way the bar does
+        find_menu.addSeparator()
+        find_menu.addAction(self.match)
+        find_menu.addAction(self.paste)
+
+        find_menu.addSeparator()
+        find_menu.addAction(self.disable)
 
     def build_view_menu(self, window: QMainWindow, view_menu: QMenu) -> None:
         self.build_toggles(window)
@@ -306,6 +345,14 @@ class WindowActions(QObject):
         entries.setEnabled(idle)
 
         return menu
+
+    def sync_find(self, *, opened: bool, asking: bool) -> None:
+        """Nothing can be asked of a cache that is not open, or put down unless it was asked"""
+
+        self.filter_color.setEnabled(opened)
+        self.match.setEnabled(opened)
+        self.paste.setEnabled(opened)
+        self.disable.setEnabled(asking)
 
     def sync_export(self, selected: int, total: int, *, idle: bool) -> None:
         self._selected_export.setTitle(export_title(selected, everything=False))
