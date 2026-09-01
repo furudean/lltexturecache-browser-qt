@@ -1,6 +1,9 @@
+import logging
 import subprocess  # nosec B404 - see `ran`
 import sys
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 REVEAL_LIMIT = 100
 REVEAL_TIMEOUT_S = 2.0
@@ -26,8 +29,15 @@ def ran(command: list[str]) -> bool:
             timeout=REVEAL_TIMEOUT_S,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        # not every desktop has a file manager to talk to, and the caller
+        # falls back to opening the directory instead
+        log.info("could not reach the file manager with %s: %s", command[0], e)
+
         return False
+
+    if finished.returncode != 0:
+        log.info("%s could not reveal the files: %s", command[0], finished.stderr.decode(errors="replace").strip())
 
     return finished.returncode == 0
 
