@@ -39,6 +39,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.about import AboutDialog
 from lltexturecache_browser_qt.actions import WindowActions
+from lltexturecache_browser_qt.app_session import AppSession
 from lltexturecache_browser_qt.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.checkerboard import (
     CheckerboardChanges,
@@ -65,10 +66,8 @@ from lltexturecache_browser_qt.selection import KeptSelection
 from lltexturecache_browser_qt.settings import (
     FILTERS_KEY,
     GEOMETRY_KEY,
-    SESSION_KEY,
     SPLITTER_KEY,
     stored_blob,
-    stored_paths,
 )
 from lltexturecache_browser_qt.stack import stack_pixmap
 from lltexturecache_browser_qt.status import WindowStatus
@@ -80,18 +79,18 @@ NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 
 class MainWindow(QMainWindow):
-    _windows: ClassVar[list["MainWindow"]] = []
-    _quitting: ClassVar[bool] = False
     _about: ClassVar["AboutDialog | None"] = None
 
-    # the preview belongs to the app rather than to any window, so what it is
-    # doing is kept beside the windows rather than in one of them
+    # the windows the app has open and the preview they share both belong to
+    # the app rather than to any one window, so they are kept beside the
+    # windows rather than inside one of them
+    _session: ClassVar[AppSession] = AppSession()
     _preview_host: ClassVar[PreviewHost]
 
     def __init__(self) -> None:
         super().__init__()
 
-        MainWindow._windows.append(self)
+        MainWindow._session.add(self)
 
         settings = QSettings()
 
@@ -106,6 +105,10 @@ class MainWindow(QMainWindow):
         self.restoreGeometry(stored_blob(settings, GEOMETRY_KEY))
 
         self._cache: TextureCache | None = None
+
+        # the model the grid is on. the view hands back a QAbstractItemModel,
+        # which every caller would otherwise have to narrow again
+        self._model: TextureModel | None = None
         self._stack: list[Texture] = []
         self._job: ExportRun | None = None
 
@@ -213,29 +216,26 @@ class MainWindow(QMainWindow):
         self.sync_incomplete()
         self.sync_simple()
 
+    def opened_cache(self) -> Path | None:
+        """The cache this window is showing, which is what the session saves"""
+
+        return self._cache.cache_dir if self._cache is not None else None
+
     @classmethod
     def session(cls) -> list[Path]:
-        return stored_paths(QSettings(), SESSION_KEY)
+        return cls._session.stored()
 
     @classmethod
     def save_session(cls) -> None:
-        QSettings().setValue(
-            SESSION_KEY,
-            [str(window._cache.cache_dir) for window in cls._windows if window._cache is not None],
-        )
+        cls._session.save()
 
     @classmethod
     def any_open(cls) -> bool:
-        return bool(cls._windows)
+        return cls._session.any_open()
 
     @classmethod
     def quitting(cls) -> None:
-        if cls._quitting:
-            return
-
-        cls.save_session()
-
-        cls._quitting = True
+        cls._session.quit()
 
     @classmethod
     def shared_preview(cls) -> "PreviewWindow":
@@ -282,19 +282,18 @@ class MainWindow(QMainWindow):
         if self._job is not None:
             self._job.shutdown()
 
-        model = self._view.model()
+        model = self._model
 
-        if isinstance(model, TextureModel):
+        if model is not None:
             model.shutdown()
 
-        if self in MainWindow._windows:
-            MainWindow._windows.remove(self)
+        MainWindow._session.remove(self)
 
         # the preview is left with whichever window is still open to take it
         if MainWindow._preview_host.release(self):
             MainWindow.follow_preview()
 
-        if not MainWindow._quitting:
+        if not MainWindow._session.quitting:
             MainWindow.save_session()
 
         super().closeEvent(event)
@@ -323,9 +322,9 @@ class MainWindow(QMainWindow):
 
         self.paint_inspector()
 
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel) or not model.restyle():
+        if model is None or not model.restyle():
             return
 
         # a cell has the checkerboard painted into it, so it is decoded again
@@ -398,9 +397,9 @@ class MainWindow(QMainWindow):
             self._view.pin_to(place)
 
     def export_action(self, format: Format, everything: bool) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel) or self._job is not None:
+        if model is None or self._job is not None:
             return
 
         textures = self.export_textures(model, everything)
@@ -417,9 +416,9 @@ class MainWindow(QMainWindow):
         self.drag_action(self._inspector)
 
     def drag_action(self, source: QWidget | None = None) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         textures = self.export_textures(model, everything=False)
@@ -463,9 +462,9 @@ class MainWindow(QMainWindow):
         return stack_pixmap(grid_cards(model, stack_textures(model, index, selected)))
 
     def context_action(self, at: QPoint) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         selection = self._view.selectionModel()
@@ -480,7 +479,7 @@ class MainWindow(QMainWindow):
         self.show_context_menu(self._inspector, at)
 
     def show_context_menu(self, parent: QWidget, at: QPoint) -> None:
-        if not isinstance(self._view.model(), TextureModel):
+        if self._model is None:
             return
 
         selected = len(self._view.selectionModel().selectedIndexes())
@@ -499,11 +498,10 @@ class MainWindow(QMainWindow):
         menu.deleteLater()
 
     def sync_export(self) -> None:
-        model = self._view.model()
-        showing = isinstance(model, TextureModel)
+        model = self._model
 
-        selected = len(self._view.selectionModel().selectedIndexes()) if showing else 0
-        total = model.rowCount() if showing else 0
+        selected = len(self._view.selectionModel().selectedIndexes()) if model is not None else 0
+        total = model.rowCount() if model is not None else 0
 
         self._actions.sync_export(selected, total, idle=self._job is None)
 
@@ -578,9 +576,9 @@ class MainWindow(QMainWindow):
         return self._actions.incomplete.isChecked()
 
     def simple_action(self, shown: bool) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         place = self._view.place()
@@ -611,17 +609,17 @@ class MainWindow(QMainWindow):
         return self._actions.simple.isChecked()
 
     def narrowed(self) -> bool:
-        model = self._view.model()
+        model = self._model
 
-        return isinstance(model, TextureModel) and model.narrowed
+        return model is not None and model.narrowed
 
     def ranking(self) -> bool:
         return bool(self._filters.colors())
 
     def filter_action(self, colors: list[QColor]) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         if model.set_filters(colors):
@@ -640,9 +638,9 @@ class MainWindow(QMainWindow):
     def summary(self) -> str:
         """What the status bar rests on, which is the filters if any are asking"""
 
-        model = self._view.model()
+        model = self._model
 
-        if isinstance(model, TextureModel) and model.narrowed:
+        if model is not None and model.narrowed:
             return narrowed_summary(model)
 
         return self.grid_summary()
@@ -650,17 +648,17 @@ class MainWindow(QMainWindow):
     def grid_summary(self) -> str:
         """What the grid holds out of the cache, whatever is being asked of it"""
 
-        model = self._view.model()
+        model = self._model
 
-        if self._cache is None or not isinstance(model, TextureModel):
+        if self._cache is None or model is None:
             return self._summary
 
         return summary_of(model, len(self._cache), counting_incomplete=self.showing_incomplete())
 
     def sync_empty(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        self._view.set_message(empty_message(model if isinstance(model, TextureModel) else None))
+        self._view.set_message(empty_message(model))
 
     def scroll_ranked(self) -> None:
         current = self._view.currentIndex()
@@ -675,9 +673,9 @@ class MainWindow(QMainWindow):
             self.scroll_to_end()
 
     def keep_selection(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         current = self.selected_index()
@@ -689,9 +687,9 @@ class MainWindow(QMainWindow):
         )
 
     def restore_selection(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         kept, self._kept = self._kept, KeptSelection()
@@ -759,13 +757,13 @@ class MainWindow(QMainWindow):
     def fill_preview(self) -> None:
         """Show whatever is selected in the preview window, if it is following this one"""
 
-        model = self._view.model()
+        model = self._model
         preview = MainWindow._preview_host.window
 
         if not MainWindow._preview_host.followed_by(self) or preview is None or not preview.isVisible():
             return
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         index = self.selected_index()
@@ -790,10 +788,10 @@ class MainWindow(QMainWindow):
         self.sync_selection()
 
     def sync_pane_tone(self) -> None:
-        model = self._view.model()
+        model = self._model
         index = self.selected_index()
 
-        standing = model.texture(index.row()).uuid if isinstance(model, TextureModel) and index.isValid() else ""
+        standing = model.texture(index.row()).uuid if model is not None and index.isValid() else ""
 
         # growing a selection, or walking the current index around inside one, is
         # still the same texture in the panes
@@ -809,9 +807,9 @@ class MainWindow(QMainWindow):
             self.paint_inspector()
 
     def settle_action(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         for texture in self._stack:
@@ -820,9 +818,9 @@ class MainWindow(QMainWindow):
         self.paint_inspector()
 
     def fill_inspector(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not self._inspector.isVisible() or not isinstance(model, TextureModel):
+        if not self._inspector.isVisible() or model is None:
             return
 
         index = self.selected_index()
@@ -850,9 +848,9 @@ class MainWindow(QMainWindow):
         self.paint_inspector()
 
     def paint_inspector(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if isinstance(model, TextureModel):
+        if model is not None:
             paint_pane(self._inspector, model, self._stack)
 
     def selected_index(self) -> QModelIndex:
@@ -867,15 +865,15 @@ class MainWindow(QMainWindow):
         return selected[-1] if selected else QModelIndex()
 
     def prefetch_action(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if isinstance(model, TextureModel):
+        if model is not None:
             prefetch(self._view, model)
 
     def select_texture(self, uuid: str) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         row = model.row(uuid)
@@ -987,9 +985,9 @@ class MainWindow(QMainWindow):
         self.populate_grid()
 
     def sync_selection(self) -> None:
-        model = self._view.model()
+        model = self._model
 
-        if not isinstance(model, TextureModel):
+        if model is None:
             return
 
         self._status.show_selection(len(self._view.selectionModel().selectedIndexes()), model.rowCount())
@@ -1012,6 +1010,8 @@ class MainWindow(QMainWindow):
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
         model.ranked.connect(self.ranked_action)
+
+        self._model = model
 
         self._view.setModel(model)
 
@@ -1059,6 +1059,6 @@ class MainWindow(QMainWindow):
 # the preview follows the windows, and the windows are the class's own list, so
 # the host is given a way to ask for them rather than a copy taken here
 MainWindow._preview_host = PreviewHost(
-    clients=lambda: list(MainWindow._windows),
+    clients=lambda: [window for window in MainWindow._session if isinstance(window, MainWindow)],
     closed=MainWindow.preview_closed_action,
 )
