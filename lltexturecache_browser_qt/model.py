@@ -1,3 +1,4 @@
+import logging
 import threading
 from collections.abc import Iterable
 
@@ -29,6 +30,8 @@ from lltexturecache_browser_qt.images import (
 from lltexturecache_browser_qt.queue import DecodeQueue
 
 FULL_SIZE = 800
+
+log = logging.getLogger(__name__)
 
 FULL_PRIORITY = 1
 PREVIEW_PRIORITY = 2
@@ -105,7 +108,12 @@ class DecodeTask(QRunnable):
                 codestream = self._texture.codestream()
 
             image = decode_image(codestream)
-        except (TextureCacheError, OSError):
+        except (TextureCacheError, OSError) as e:
+            # a cache is full of entries the viewer never finished writing, so
+            # one that will not decode is ordinary rather than news. the cell
+            # falls back to its thumbnail either way
+            log.debug("could not decode %s: %s", self._texture.uuid, e)
+
             return QImage(), QSize()
 
         return fit_image(image, self._size, upscale=self._upscale, checkerboard=self._board), image.size()
@@ -266,7 +274,11 @@ class TextureModel(QAbstractListModel):
         try:
             with self._thumbnails:
                 thumbnail = texture.thumbnail_png()
-        except (TextureCacheError, OSError):
+        except (TextureCacheError, OSError) as e:
+            # not every entry has a thumbnail beside it, and the placeholder
+            # stands in for the ones that do not
+            log.debug("no thumbnail for %s: %s", texture.uuid, e)
+
             thumbnail = None
 
         return thumbnail_image(thumbnail, checkerboard=checkerboard) if thumbnail is not None else QImage()

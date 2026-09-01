@@ -23,7 +23,9 @@ def model(app: QApplication, quiet_scan: None) -> Iterator[TextureModel]:
     built.shutdown()
 
 
-def card(color: str = "red") -> QPixmap:
+def swatch(color: str = "red") -> QPixmap:
+    """A card of one flat colour, which is all these tests need one to be"""
+
     pixmap = QPixmap(8, 8)
     pixmap.fill(QColor(color))
 
@@ -68,14 +70,14 @@ class TestStackTextures:
 
 class TestGridCards:
     def test_a_texture_with_a_cell_is_drawn_from_it(self, model: TextureModel) -> None:
-        QPixmapCache.insert("texture-0", card("blue"))
+        QPixmapCache.insert("texture-0", swatch("blue"))
 
         cards = grid_cards(model, [model.texture(0)])
 
         assert [uuid for uuid, _ in cards] == ["texture-0"]
 
     def test_a_texture_with_no_cell_falls_back_to_the_thumbnail(self, model: TextureModel) -> None:
-        QPixmapCache.insert(sidebar_key("texture-1"), card("green"))
+        QPixmapCache.insert(sidebar_key("texture-1"), swatch("green"))
 
         assert [uuid for uuid, _ in grid_cards(model, [model.texture(1)])] == ["texture-1"]
 

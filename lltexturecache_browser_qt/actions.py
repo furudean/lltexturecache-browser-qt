@@ -1,9 +1,10 @@
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSettings, Qt, Signal
+from PySide6.QtCore import QObject, QSettings, Qt, Signal, SignalInstance
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
 
@@ -26,6 +27,56 @@ TONES = {
     CheckerTone.DARK: ("&Checkerboard (Dark)", "Draw a dark checkerboard behind the transparent parts of a texture"),
     CheckerTone.NONE: ("&None", "Leave the transparent parts of a texture as they are"),
 }
+
+
+def store_toggle(key: str, shown: bool) -> None:
+    """Remember where a tick was left
+
+    `shown` is positional because this is connected to `QAction.toggled`,
+    which hands its argument over that way.
+    """
+
+    QSettings().setValue(key, shown)
+
+
+def stored_toggle(key: str, *, default: bool) -> bool:
+    """Where a tick was left, or where it opens when it has never been moved"""
+
+    return bool(QSettings().value(key, default, type=bool))
+
+
+@dataclass(frozen=True)
+class Toggle:
+    """One tick under the View menu
+
+    They are all the same entry with a different label: checkable, put away
+    and read back under a key of its own, and reported to the window that has
+    to act on it.
+    """
+
+    key: str
+    label: str
+    tip: str
+    on: bool = False
+    shortcut: str | None = None
+
+    def build(self, window: QMainWindow, reports: SignalInstance) -> QAction:
+        entry = QAction(self.label, window)
+
+        if self.shortcut is not None:
+            entry.setShortcut(QKeySequence(self.shortcut))
+
+        entry.setStatusTip(self.tip)
+        entry.setCheckable(True)
+        entry.setChecked(stored_toggle(self.key, default=self.on))
+
+        # a partial rather than a bound method of this Toggle: Qt keeps only a
+        # weak reference to a bound method's object, and the table these are
+        # built from is gone by the time the first tick is moved
+        entry.toggled.connect(partial(store_toggle, self.key))
+        entry.toggled.connect(reports)
+
+        return entry
 
 
 def triggers(entry: QAction, call: Callable[[], object]) -> None:
@@ -126,44 +177,48 @@ class WindowActions(QObject):
 
         view_menu = menu.addMenu("&View")
 
-        self.preview = QAction("Show &Preview Pane", window)
-        self.preview.setStatusTip("Show the selected texture in a window of its own")
-        self.preview.setCheckable(True)
-        self.preview.setChecked(bool(QSettings().value(PREVIEW_KEY, False, type=bool)))
-        self.preview.toggled.connect(self.store_preview)
-        self.preview.toggled.connect(self.previewed)
-
         # the command key "Ctrl" on mac and hands "Meta" to control
         inspector_key = "Shift+Ctrl+I" if sys.platform == "darwin" else "Shift+Alt+I"
 
-        self.inspector = QAction("Show &Inspector", window)
-        self.inspector.setShortcut(QKeySequence(inspector_key))
-        self.inspector.setStatusTip("Show details of the selected texture beside the grid")
-        self.inspector.setCheckable(True)
-        self.inspector.setChecked(bool(QSettings().value(INSPECTOR_KEY, True, type=bool)))
-        self.inspector.toggled.connect(self.store_inspector)
-        self.inspector.toggled.connect(self.inspected)
+        # every entry under View is the same entry with a different label: a
+        # tick that is put away and read back, and that says so to the window
+        toggles = (
+            Toggle(PREVIEW_KEY, "Show &Preview Pane", "Show the selected texture in a window of its own"),
+            Toggle(
+                INSPECTOR_KEY,
+                "Show &Inspector",
+                "Show details of the selected texture beside the grid",
+                on=True,
+                shortcut=inspector_key,
+            ),
+            Toggle(FILTERS_KEY, "Show &Filters", "Show the color filter bar", on=True),
+            Toggle(
+                INCOMPLETE_KEY,
+                "Show &Incomplete Textures",
+                "List entries the cache never finished downloading",
+            ),
+            Toggle(
+                SIMPLE_KEY,
+                "Show &Simple Textures",
+                "List textures that are one solid color or fully transparent",
+            ),
+        )
 
-        self.filters = QAction("Show &Filters", window)
-        self.filters.setStatusTip("Show the color filter bar")
-        self.filters.setCheckable(True)
-        self.filters.setChecked(bool(QSettings().value(FILTERS_KEY, True, type=bool)))
-        self.filters.toggled.connect(self.store_filters)
-        self.filters.toggled.connect(self.filtered)
+        reports = {
+            PREVIEW_KEY: self.previewed,
+            INSPECTOR_KEY: self.inspected,
+            FILTERS_KEY: self.filtered,
+            INCOMPLETE_KEY: self.incompleted,
+            SIMPLE_KEY: self.simple_shown,
+        }
 
-        self.incomplete = QAction("Show &Incomplete Textures", window)
-        self.incomplete.setStatusTip("List entries the cache never finished downloading")
-        self.incomplete.setCheckable(True)
-        self.incomplete.setChecked(bool(QSettings().value(INCOMPLETE_KEY, False, type=bool)))
-        self.incomplete.toggled.connect(self.store_incomplete)
-        self.incomplete.toggled.connect(self.incompleted)
+        self._toggles = {toggle.key: toggle.build(window, reports[toggle.key]) for toggle in toggles}
 
-        self.simple = QAction("Show &Simple Textures", window)
-        self.simple.setStatusTip("List textures that are one solid color or fully transparent")
-        self.simple.setCheckable(True)
-        self.simple.setChecked(bool(QSettings().value(SIMPLE_KEY, False, type=bool)))
-        self.simple.toggled.connect(self.store_simple)
-        self.simple.toggled.connect(self.simple_shown)
+        self.preview = self._toggles[PREVIEW_KEY]
+        self.inspector = self._toggles[INSPECTOR_KEY]
+        self.filters = self._toggles[FILTERS_KEY]
+        self.incomplete = self._toggles[INCOMPLETE_KEY]
+        self.simple = self._toggles[SIMPLE_KEY]
 
         self._tones: dict[CheckerTone, QAction] = {}
 
@@ -283,19 +338,13 @@ class WindowActions(QObject):
 
     @staticmethod
     def store_preview(shown: bool) -> None:
-        QSettings().setValue(PREVIEW_KEY, shown)
+        """Put the preview's tick away without a menu to hand
 
-    def store_inspector(self, shown: bool) -> None:
-        QSettings().setValue(INSPECTOR_KEY, shown)
+        The preview belongs to the app rather than to a window, so what it is
+        doing is settled somewhere no one WindowActions is in scope.
+        """
 
-    def store_filters(self, shown: bool) -> None:
-        QSettings().setValue(FILTERS_KEY, shown)
-
-    def store_incomplete(self, shown: bool) -> None:
-        QSettings().setValue(INCOMPLETE_KEY, shown)
-
-    def store_simple(self, shown: bool) -> None:
-        QSettings().setValue(SIMPLE_KEY, shown)
+        store_toggle(PREVIEW_KEY, shown)
 
 
 def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:

@@ -1,5 +1,5 @@
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtGui import QMouseEvent, QPalette
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 
@@ -54,3 +54,68 @@ def copyable(label: QLabel) -> QLabel:
     label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
     return label
+
+
+class ClickTracker:
+    """Whether a press and release together make a click
+
+    A widget that can also be dragged out of cannot act on the press: the
+    press is where a drag starts too, and only the release says which of the
+    two happened. A click is a press this widget took, followed by a release
+    of the same button still inside it.
+    """
+
+    def __init__(self) -> None:
+        self._pressed = False
+        self._origin = QPoint()
+
+    @property
+    def origin(self) -> QPoint:
+        """Where the press landed, which a drag is measured from"""
+
+        return self._origin
+
+    @property
+    def pressed(self) -> bool:
+        return self._pressed
+
+    def press(self, event: QMouseEvent, *, taking: bool = True) -> bool:
+        """Take a press, and say whether it was one worth taking"""
+
+        self._pressed = taking and event.button() == Qt.MouseButton.LeftButton
+        self._origin = event.position().toPoint()
+
+        return self._pressed
+
+    def dragged_past(self, event: QMouseEvent, reach: int) -> bool:
+        """Whether the pointer has moved far enough to mean a drag rather than a twitch
+
+        The press is spent either way: what follows is a drag, and the release
+        that ends it is not a click.
+        """
+
+        if not self._pressed or not (event.buttons() & Qt.MouseButton.LeftButton):
+            return False
+
+        if (event.position().toPoint() - self._origin).manhattanLength() < reach:
+            return False
+
+        self._pressed = False
+
+        return True
+
+    def cancel(self) -> None:
+        """Give up on the press without it counting as a click
+
+        A context menu comes up over the press, and whatever the user does
+        next is about the menu rather than about the widget under it.
+        """
+
+        self._pressed = False
+
+    def release(self, event: QMouseEvent, within: QRect) -> bool:
+        """Spend the press, and say whether it and this release make a click"""
+
+        pressed, self._pressed = self._pressed, False
+
+        return pressed and event.button() == Qt.MouseButton.LeftButton and within.contains(event.position().toPoint())

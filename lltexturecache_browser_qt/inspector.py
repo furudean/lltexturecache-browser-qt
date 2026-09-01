@@ -17,7 +17,7 @@ from texture_courier import Texture
 
 from lltexturecache_browser_qt.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.formatting import format_count, format_size, format_time
-from lltexturecache_browser_qt.widgets import bold, copyable, dim, height_for_width, wrapped
+from lltexturecache_browser_qt.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
 
 INSPECTOR_WIDTH = 260
 INSPECTOR_MIN_WIDTH = 200
@@ -41,8 +41,7 @@ class SidebarLabel(QLabel):
         super().__init__(parent)
 
         self._source = QPixmap()
-        self._pressed = False
-        self._origin = QPoint()
+        self._click = ClickTracker()
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -71,38 +70,30 @@ class SidebarLabel(QLabel):
         self.setToolTip("\n".join(actions))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._source.isNull()
-        self._origin = event.position().toPoint()
-
-        if self._pressed:
+        # an empty sidebar has nothing to click on and nothing to drag out
+        if self._click.press(event, taking=not self._source.isNull()):
             event.accept()
             return
 
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if not self._pressed or not (event.buttons() & Qt.MouseButton.LeftButton):
+        if not self._click.pressed:
             super().mouseMoveEvent(event)
             return
 
-        if (event.position().toPoint() - self._origin).manhattanLength() < QApplication.startDragDistance():
-            return
-
-        self._pressed = False
-
-        self.dragged.emit()
+        if self._click.dragged_past(event, QApplication.startDragDistance()):
+            self.dragged.emit()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        pressed, self._pressed = self._pressed, False
-
-        if pressed and event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+        if self._click.release(event, self.rect()):
             self.clicked.emit()
             return
 
         super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
-        self._pressed = False
+        self._click.cancel()
 
         event.accept()
         self.menued.emit(event.globalPos())

@@ -508,7 +508,11 @@ class ColorScan(QRunnable):
             with self._thumbnails:
                 kept = self.kept(texture)
                 thumbnail = texture.thumbnail_png()
-        except (TextureCacheError, OSError):
+        except (TextureCacheError, OSError) as e:
+            # a texture with no readable thumbnail has no colours to file it
+            # under, which leaves it out of the index rather than stopping the scan
+            log.debug("no colours for %s: %s", texture.uuid, e)
+
             return None
 
         if thumbnail is None:

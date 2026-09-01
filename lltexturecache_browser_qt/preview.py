@@ -21,6 +21,7 @@ from lltexturecache_browser_qt.checkerboard import (
     set_picked_lightness,
 )
 from lltexturecache_browser_qt.formatting import format_count, format_size
+from lltexturecache_browser_qt.widgets import ClickTracker
 
 WINDOW_SIZE = 480
 MIN_PANE_SIZE = 32
@@ -67,7 +68,7 @@ class PreviewWindow(QWidget):
         self._pixmap = QPixmap()
         self._message = ""
         self._lightness: float | None = None
-        self._pressed = False
+        self._click = ClickTracker()
 
         # the texture the window has been shaped to, which is what keeps a
         # decode landing on top of the stand-in for the same texture from
@@ -218,18 +219,15 @@ class PreviewWindow(QWidget):
         painter.end()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        self._pressed = event.button() == Qt.MouseButton.LeftButton and not self._pixmap.isNull()
-
-        if self._pressed:
+        # an empty window has no texture to cycle the checkerboard behind
+        if self._click.press(event, taking=not self._pixmap.isNull()):
             event.accept()
             return
 
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        pressed, self._pressed = self._pressed, False
-
-        if pressed and event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+        if self._click.release(event, self.rect()):
             cycle_pane_tone()
             return
 
