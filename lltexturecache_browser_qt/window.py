@@ -1,4 +1,3 @@
-from functools import partial
 from pathlib import Path
 from threading import Lock
 from typing import ClassVar
@@ -20,7 +19,6 @@ from PySide6.QtGui import (
     QAction,
     QCloseEvent,
     QColor,
-    QDesktopServices,
     QDrag,
     QDragEnterEvent,
     QDragLeaveEvent,
@@ -34,7 +32,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
     QMainWindow,
-    QProgressDialog,
     QSplitter,
     QWidget,
 )
@@ -53,7 +50,8 @@ from lltexturecache_browser_qt.checkerboard import (
 )
 from lltexturecache_browser_qt.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.dropzone import DropZone
-from lltexturecache_browser_qt.export import ExportJob, Format
+from lltexturecache_browser_qt.export import Format
+from lltexturecache_browser_qt.exporting import ExportRun, ask_for_directory
 from lltexturecache_browser_qt.filters import ColorFilterBar
 from lltexturecache_browser_qt.formatting import format_count
 from lltexturecache_browser_qt.grid import CELL_PADDING, CellDelegate, TextureGrid
@@ -64,7 +62,6 @@ from lltexturecache_browser_qt.prefetch import prefetch
 from lltexturecache_browser_qt.preview import PreviewWindow
 from lltexturecache_browser_qt.previewing import PreviewHost
 from lltexturecache_browser_qt.recents import RecentCaches
-from lltexturecache_browser_qt.reveal import reveal
 from lltexturecache_browser_qt.settings import (
     FILTERS_KEY,
     GEOMETRY_KEY,
@@ -78,8 +75,6 @@ from lltexturecache_browser_qt.status import WindowStatus
 from lltexturecache_browser_qt.suggested import paths as suggested_paths
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
-
-DELAY_MESSAGE_DURATION_MS = 250
 
 
 def color_spans(model: TextureModel, rows: list[int]) -> QItemSelection:
@@ -139,7 +134,7 @@ class MainWindow(QMainWindow):
 
         self._cache: TextureCache | None = None
         self._stack: list[Texture] = []
-        self._job: ExportJob | None = None
+        self._job: ExportRun | None = None
 
         self._summary = ""
 
@@ -440,12 +435,10 @@ class MainWindow(QMainWindow):
         if not textures:
             return
 
-        dialog = QFileDialog(self, f"Export {format_count(len(textures))} textures as {format.label}")
-        dialog.setFileMode(QFileDialog.FileMode.Directory)
-        dialog.setLabelText(QFileDialog.DialogLabel.Accept, "Export")
+        out_dir = ask_for_directory(self, textures, format)
 
-        if dialog.exec():
-            self.export(textures, Path(dialog.selectedFiles()[0]), format, model.reads)
+        if out_dir is not None:
+            self.export(textures, out_dir, format, model.reads)
 
     def inspector_drag_action(self) -> None:
         self.drag_action(self._inspector)
@@ -550,53 +543,22 @@ class MainWindow(QMainWindow):
         return [model.texture(row) for row in rows]
 
     def export(self, textures: list[Texture], out_dir: Path, format: Format, reads: Lock) -> None:
-        progress = QProgressDialog(
-            f"Exporting {format_count(len(textures))} textures as {format.label}...",
-            "Cancel",
-            0,
-            len(textures),
-            self,
-        )
-        progress.setWindowTitle("Export")
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.setMinimumDuration(DELAY_MESSAGE_DURATION_MS)
-        progress.setValue(0)
-
-        job = ExportJob(textures, out_dir, format, reads, self)
-        job.progressed.connect(progress.setValue)
-        job.finished.connect(partial(self.exported, out_dir, progress))
-
-        progress.canceled.connect(job.cancel)
-
-        self._job = job
+        self._job = ExportRun(self, textures, out_dir, format, reads, done=self.exported)
 
         # a refresh reads the cache's files in again and puts the new ones in
         # place of the ones the export is halfway through reading
         self._actions.reload.setEnabled(False)
         self.sync_export()
 
-        job.start()
+        self._job.start()
 
-    def exported(self, out_dir: Path, progress: QProgressDialog, written: int, failed: int, cancelled: bool) -> None:
-        progress.reset()
-        progress.deleteLater()
-
-        written_paths = self._job.written_paths if self._job is not None else []
-
-        if self._job is not None:
-            self._job.deleteLater()
-            self._job = None
+    def exported(self, summary: str) -> None:
+        self._job = None
 
         self._actions.reload.setEnabled(self._cache is not None)
         self.sync_export()
 
-        note = "Cancelled export of" if cancelled else "Exported"
-        summary = f"{note} {format_count(written)} texture(s) to {out_dir}"
-
-        self._status.flash(f"{summary} ({format_count(failed)} could not be written)" if failed else summary)
-
-        if written and not cancelled and not reveal(written_paths):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(out_dir)))
+        self._status.flash(summary)
 
     def filters_action(self, shown: bool) -> None:
         self.sync_filters()
