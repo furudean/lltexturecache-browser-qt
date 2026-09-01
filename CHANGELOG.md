@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - ships a `.dmg` next to the zip
+- on mac, share menu bar for all windows
 
 ## v0.5.0 - 2026-09-01
 

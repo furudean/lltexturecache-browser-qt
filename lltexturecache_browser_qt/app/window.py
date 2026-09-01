@@ -39,7 +39,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.app.about import AboutDialog
-from lltexturecache_browser_qt.app.actions import WindowActions
+from lltexturecache_browser_qt.app.actions import AppMenu, WindowActions
 from lltexturecache_browser_qt.app.alerts import warn
 from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
@@ -191,7 +191,7 @@ class MainWindow(QMainWindow):
 
         self._status = WindowStatus(self)
 
-        self._actions = WindowActions(self)
+        self._actions = WindowActions(self, self.menuBar())
         self._actions.new_window.connect(self.new_window)
         self._actions.opened.connect(self.open_action)
         self._actions.reopened.connect(self.open_cache)
@@ -208,6 +208,7 @@ class MainWindow(QMainWindow):
         self._actions.incompleted.connect(self.incomplete_action)
         self._actions.simple_shown.connect(self.simple_action)
         self._actions.abouted.connect(self.about_action)
+        self._actions.close_window.connect(self.close)
 
         # how much is selected and how much is in the cache both move around
         # under the menu, and only this end knows either of them
@@ -272,6 +273,14 @@ class MainWindow(QMainWindow):
     def preview_closed_action(cls) -> None:
         cls.set_preview_shown(False)
 
+    @classmethod
+    def about(cls) -> None:
+        cls._app.show_about(AboutDialog)
+
+    @classmethod
+    def set_app_menu(cls, menu: AppMenu) -> None:
+        cls._app.menu = menu
+
     def save_layout(self) -> None:
         settings = QSettings()
 
@@ -298,6 +307,11 @@ class MainWindow(QMainWindow):
 
         MainWindow._app.session.remove(self)
 
+        menu = MainWindow._app.menu
+
+        if menu is not None:
+            menu.forget(self._actions)
+
         # the preview is left with whichever window is still open to take it
         if MainWindow._app.preview.release(self):
             MainWindow.follow_preview()
@@ -313,9 +327,22 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.PaletteChange:
             self.restyle()
 
-        # the shared preview follows the window being worked in
-        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
-            MainWindow.follow_preview(self)
+        if event.type() == QEvent.Type.ActivationChange:
+            self.activation_action()
+
+    def activation_action(self) -> None:
+        menu = MainWindow._app.menu
+
+        if not self.isActiveWindow():
+            if menu is not None:
+                menu.resync(self._actions)
+
+            return
+
+        MainWindow.follow_preview(self)
+
+        if menu is not None:
+            menu.follow(self._actions)
 
     def restyle(self) -> None:
         sync_checkerboard()
@@ -1190,7 +1217,7 @@ class MainWindow(QMainWindow):
         self._status.set_summary(note if note else self.summary())
 
     def about_action(self) -> None:
-        MainWindow._app.show_about(AboutDialog)
+        MainWindow.about()
 
 
 # a preview closed by hand puts every window's menu tick down, which is the one

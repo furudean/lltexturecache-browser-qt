@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME, APP_NAME, __version__
-from lltexturecache_browser_qt.app.actions import fallback_menu
+from lltexturecache_browser_qt.app.actions import AppMenu
 from lltexturecache_browser_qt.app.alerts import fail
 from lltexturecache_browser_qt.app.window import MainWindow
 from lltexturecache_browser_qt.cache.suggested import resolve as resolve_suggested
@@ -121,7 +121,9 @@ def main() -> int:
 
     app.setQuitOnLastWindowClosed(not mac)
 
-    _menu = fallback_menu(lambda: MainWindow().show()) if mac else None
+    # on mac a dialog or a windowless app leaves the menu bar to the app's own
+    if mac:
+        MainWindow.set_app_menu(AppMenu(lambda: MainWindow().show(), MainWindow.about))
 
     watcher = AppWatcher(app)
     app.installEventFilter(watcher)

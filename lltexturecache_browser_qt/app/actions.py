@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSettings, Qt, Signal, SignalInstance
+from PySide6.QtCore import QObject, QSettings, QSignalBlocker, Qt, Signal, SignalInstance
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
-from PySide6.QtWidgets import QMainWindow, QMenu, QMenuBar, QWidget
+from PySide6.QtWidgets import QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS, Format
@@ -27,6 +27,30 @@ TONES = {
     CheckerTone.DARK: ("&Checkerboard (Dark)", "Draw a dark checkerboard behind the transparent parts of a texture"),
     CheckerTone.NONE: ("&None", "Leave the transparent parts of a texture as they are"),
 }
+
+
+FORWARDED = (
+    "new_window",
+    "opened",
+    "reopened",
+    "reloaded",
+    "exported",
+    "color_picked",
+    "picture_picked",
+    "picture_pasted",
+    "filters_disabled",
+    "preview_toggled",
+    "close_window",
+    "abouted",
+)
+"""What the app-wide bar hands on to the window in front, as it was asked
+
+The ticks are not among them: one of those is moved on the window's own entry
+instead, so that its menu goes on saying what its panes are doing.
+"""
+
+MIRRORED = ("reload", "filter_color", "match", "paste", "disable")
+"""The entries a window enables and disables as it goes, which the app-wide bar copies"""
 
 
 def store_toggle(key: str, shown: bool) -> None:
@@ -58,8 +82,8 @@ class Toggle:
     on: bool = False
     shortcut: str | None = None
 
-    def build(self, window: QMainWindow, reports: SignalInstance) -> QAction:
-        entry = QAction(self.label, window)
+    def build(self, owner: QWidget, reports: SignalInstance) -> QAction:
+        entry = QAction(self.label, owner)
 
         if self.shortcut is not None:
             entry.setShortcut(QKeySequence(self.shortcut))
@@ -108,27 +132,26 @@ class WindowActions(QObject):
     incompleted = Signal(bool)
     simple_shown = Signal(bool)
     abouted = Signal()
+    close_window = Signal()
 
-    def __init__(self, window: QMainWindow) -> None:
-        super().__init__(window)
+    def __init__(self, owner: QWidget, menu: QMenuBar) -> None:
+        super().__init__(owner)
 
-        # the entries belong to the window rather than to this, since a shortcut
+        # the entries belong to the owner rather than to this, since a shortcut
         # is only answered by a window the action can be reached from
-        menu = window.menuBar()
-
-        self.build_file_menu(window, menu.addMenu("&File"))
+        self.build_file_menu(owner, menu.addMenu("&File"))
         self.build_export_menu(menu.addMenu("&Export"))
-        self.build_find_menu(window, menu.addMenu("Fi&nd"))
-        self.build_view_menu(window, menu.addMenu("&View"))
+        self.build_find_menu(owner, menu.addMenu("Fi&nd"))
+        self.build_view_menu(owner, menu.addMenu("&View"))
         self.build_app_menu(menu.addMenu("About"))
 
-    def build_file_menu(self, window: QMainWindow, file_menu: QMenu) -> None:
-        new = QAction("&New Window", window)
+    def build_file_menu(self, owner: QWidget, file_menu: QMenu) -> None:
+        new = QAction("&New Window", owner)
         new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
         new.setStatusTip("Open another window")
         triggers(new, self.new_window.emit)
 
-        open = QAction("&Open...", window)
+        open = QAction("&Open...", owner)
         open.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
         open.setStatusTip("Open a texture cache")
         triggers(open, self.opened.emit)
@@ -136,16 +159,16 @@ class WindowActions(QObject):
         # the standard refresh key is f5 off mac, which we want to rewrite
         refresh_keys = [*QKeySequence.keyBindings(QKeySequence.StandardKey.Refresh), QKeySequence("Ctrl+R")]
 
-        self.reload = QAction("&Reload", window)
+        self.reload = QAction("&Reload", owner)
         self.reload.setShortcuts(list(dict.fromkeys(refresh_keys)))
         self.reload.setStatusTip("Reload the open texture cache from disk")
         self.reload.setEnabled(False)
         triggers(self.reload, self.reloaded.emit)
 
-        close = QAction("&Close Window", window)
+        close = QAction("&Close Window", owner)
         close.setShortcut(QKeySequence(QKeySequence.StandardKey.Close))
         close.setStatusTip("Close this window")
-        triggers(close, window.close)
+        triggers(close, self.close_window.emit)
 
         file_menu.addAction(open)
 
@@ -183,25 +206,25 @@ class WindowActions(QObject):
         # up as until a window has something to say about it
         self.sync_export(0, 0, idle=True)
 
-    def build_find_menu(self, window: QMainWindow, find_menu: QMenu) -> None:
-        self.filter_color = QAction("Filter &Color...", window)
+    def build_find_menu(self, owner: QWidget, find_menu: QMenu) -> None:
+        self.filter_color = QAction("Filter &Color...", owner)
         self.filter_color.setStatusTip("Add a color to filter textures by")
         self.filter_color.setEnabled(False)
         triggers(self.filter_color, self.color_picked.emit)
 
-        self.match = QAction("Match &Image...", window)
+        self.match = QAction("Match &Image...", owner)
         self.match.setShortcut(QKeySequence(QKeySequence.StandardKey.Find))
         self.match.setStatusTip("Show the textures that look like a picture on disk")
         self.match.setEnabled(False)
         triggers(self.match, self.picture_picked.emit)
 
-        self.paste = QAction("Match Clipboard Image", window)
+        self.paste = QAction("Match Clipboard Image", owner)
         self.paste.setShortcut(QKeySequence(QKeySequence.StandardKey.Paste))
         self.paste.setStatusTip("Show the textures that look like the picture in the clipboard")
         self.paste.setEnabled(False)
         triggers(self.paste, self.picture_pasted.emit)
 
-        self.disable = QAction("&Disable Filters", window)
+        self.disable = QAction("&Disable Filters", owner)
         self.disable.setStatusTip("Put down whatever the grid is being asked for")
         self.disable.setEnabled(False)
         triggers(self.disable, self.filters_disabled.emit)
@@ -217,9 +240,9 @@ class WindowActions(QObject):
         find_menu.addSeparator()
         find_menu.addAction(self.disable)
 
-    def build_view_menu(self, window: QMainWindow, view_menu: QMenu) -> None:
-        self.build_toggles(window)
-        self.build_tones(window)
+    def build_view_menu(self, owner: QWidget, view_menu: QMenu) -> None:
+        self.build_toggles(owner)
+        self.build_tones(owner)
 
         view_menu.addAction(self.preview)
         view_menu.addAction(self.inspector)
@@ -238,7 +261,7 @@ class WindowActions(QObject):
         view_menu.addSeparator()
         # any native system menus under here
 
-    def build_toggles(self, window: QMainWindow) -> None:
+    def build_toggles(self, owner: QWidget) -> None:
         # the command key "Ctrl" on mac and hands "Meta" to control
         inspector_key = "Shift+Ctrl+I" if sys.platform == "darwin" else "Shift+Alt+I"
 
@@ -272,7 +295,7 @@ class WindowActions(QObject):
             SIMPLE_KEY: self.simple_shown,
         }
 
-        self._toggles = {toggle.key: toggle.build(window, reports[toggle.key]) for toggle in toggles}
+        self._toggles = {toggle.key: toggle.build(owner, reports[toggle.key]) for toggle in toggles}
 
         self.preview = self._toggles[PREVIEW_KEY]
         self.inspector = self._toggles[INSPECTOR_KEY]
@@ -280,14 +303,14 @@ class WindowActions(QObject):
         self.incomplete = self._toggles[INCOMPLETE_KEY]
         self.simple = self._toggles[SIMPLE_KEY]
 
-    def build_tones(self, window: QMainWindow) -> None:
+    def build_tones(self, owner: QWidget) -> None:
         self._tones = {}
 
-        tones = QActionGroup(window)
+        tones = QActionGroup(owner)
         tones.setExclusive(True)
 
         for tone, (label, tip) in TONES.items():
-            entry = QAction(label, window)
+            entry = QAction(label, owner)
             entry.setStatusTip(tip)
             entry.setCheckable(True)
             entry.setActionGroup(tones)
@@ -311,6 +334,35 @@ class WindowActions(QObject):
 
     def sync_checkerboard(self) -> None:
         self._tones[grid_tone()].setChecked(True)
+
+    def ticks(self) -> tuple[str, ...]:
+        return tuple(self._toggles)
+
+    def tick(self, key: str) -> QAction:
+        return self._toggles[key]
+
+    def mirror(self, source: "WindowActions | None") -> None:
+        for name in MIRRORED:
+            entry: QAction = getattr(self, name)
+            entry.setEnabled(source is not None and getattr(source, name).isEnabled())
+
+        for key, entry in self._toggles.items():
+            other = source.tick(key) if source is not None else None
+
+            entry.setEnabled(other is not None and other.isEnabled())
+
+            # copied rather than toggled: the window this comes from has
+            # already acted on it, and is not to be told to do so again
+            with QSignalBlocker(entry):
+                entry.setChecked(other is not None and other.isChecked())
+
+        for entries, name in ((self._selected_export, "_selected_export"), (self._all_export, "_all_export")):
+            theirs: QMenu | None = getattr(source, name) if source is not None else None
+
+            entries.setEnabled(theirs is not None and theirs.isEnabled())
+
+            if theirs is not None:
+                entries.setTitle(theirs.title())
 
     def format_menu(self, parent: QMenu, title: str, *, everything: bool) -> QMenu:
         menu = parent.addMenu(title)
@@ -400,13 +452,75 @@ class WindowActions(QObject):
         store_toggle(PREVIEW_KEY, shown)
 
 
-def fallback_menu(new_window: Callable[[], object]) -> QMenuBar:
-    bar = QMenuBar()
+class AppMenu:
+    def __init__(self, new_window: Callable[[], object], about: Callable[[], object]) -> None:
+        self.bar = QMenuBar()
 
-    # only the one entry: everything else an app can do it does to a cache or
-    # to a window, and both of those are a new window away
-    new = bar.addMenu("&File").addAction("&New Window")
-    new.setShortcut(QKeySequence(QKeySequence.StandardKey.New))
-    triggers(new, new_window)
+        # the bar owns the entries as well as showing them, since it outlives
+        # every window, which is the whole point of it
+        self.actions = WindowActions(self.bar, self.bar)
 
-    return bar
+        self._current: WindowActions | None = None
+
+        # the two entries that still mean something with no window to act on
+        self._windowless: dict[str, Callable[[], object]] = {"new_window": new_window, "abouted": about}
+
+        for name in FORWARDED:
+            asked: SignalInstance = getattr(self.actions, name)
+            asked.connect(partial(self.forward, name))
+
+        for key in self.actions.ticks():
+            self.actions.tick(key).toggled.connect(partial(self.retick, key))
+
+        # what the export entries are named depends on how much is selected,
+        # which the window only works out as its own menu opens
+        self.actions.exports.aboutToShow.connect(self.refresh)
+
+        self.follow(None)
+
+    def follow(self, actions: WindowActions | None) -> None:
+        self._current = actions
+
+        self.actions.mirror(actions)
+
+    def resync(self, actions: WindowActions) -> None:
+        if self._current is actions:
+            self.actions.mirror(actions)
+
+    def forget(self, actions: WindowActions) -> None:
+        if self._current is actions:
+            self.follow(None)
+
+    def refresh(self) -> None:
+        current = self._current
+
+        if current is None:
+            return
+
+        # the window names its export entries on the way into its own menu,
+        # which is the only place the counts behind them are worked out
+        current.exports.aboutToShow.emit()
+
+        self.actions.mirror(current)
+
+    def forward(self, name: str, *asked: object) -> None:
+        """Hand an entry to the window in front, as it was asked"""
+
+        current = self._current
+
+        if current is not None:
+            answers: SignalInstance = getattr(current, name)
+            answers.emit(*asked)
+
+            return
+
+        windowless = self._windowless.get(name)
+
+        if windowless is not None:
+            windowless()
+
+    def retick(self, key: str, shown: bool) -> None:
+        current = self._current
+
+        if current is not None:
+            current.tick(key).setChecked(shown)

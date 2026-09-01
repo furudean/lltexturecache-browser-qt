@@ -17,11 +17,11 @@ from lltexturecache_browser_qt.settings import SESSION_KEY, stored_paths
 
 if TYPE_CHECKING:
     from lltexturecache_browser_qt.app.about import AboutDialog
+    from lltexturecache_browser_qt.app.actions import AppMenu
 
 
 class SessionWindow(PreviewClient, Protocol):
-    """What the session needs of a window: the cache it is on, if any
-
+    """
     A window is also what the preview follows, so a session window is a
     preview client too rather than the two being tracked separately.
     """
@@ -94,12 +94,8 @@ class AppSession:
 
 
 class AppState:
-    """What the app holds that outlives any one window
-
-    The open windows, the preview they share, and the about box. Built once
-    on the way up rather than assembled at import time, so the wiring between
-    them reads in the order it happens.
-    """
+    """The open windows, the preview they share, the about box and the app-wide
+    menu bar"""
 
     def __init__(self) -> None:
         self.session = AppSession()
@@ -115,6 +111,11 @@ class AppState:
             clients=lambda: list(self.session),
             closed=lambda: self.preview_closed(),
         )
+
+        # the bar macOS falls back on when the window in front has none of
+        # its own, handed over by whoever builds it. there is no such bar on the
+        # platforms that keep a menu inside every window
+        self.menu: AppMenu | None = None
 
         self._about: AboutDialog | None = None
 
