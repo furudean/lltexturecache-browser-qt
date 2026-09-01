@@ -97,75 +97,24 @@ the release triggers a github workflow. which does the rest
 
 ## sign / notarize (mac only)
 
-signing needs a developer ID Application certificate from an apple developer
-program membership. create it in [certificates, identifiers &
-profiles](https://developer.apple.com/account/resources/certificates), or let
-xcode do it under settings > accounts > manage certificates
-
-the certificate has to live in a keychain the signing machine can read. locally
-that's your login keychain, in CI you want to base64 encode it
-
-```bash
-# import a .p12 exported certificate
-security import developer-id.p12 -k ~/Library/Keychains/login.keychain-db
-
-# check the identity is present
-security find-identity -v -p codesigning
-```
-
-fill in the required environment variables (see
-[signing environment](#signing-environment)), then
+signing needs a developer ID Application certificate in a keychain the signing
+machine can read, plus the environment below. then
 
 ```bash
 ./scripts/build.sh
 ./scripts/macos-sign.sh
-```
-
-the build reads no environment at all, the identity is only used at sign time.
-[scripts/macos-sign.sh](scripts/macos-sign.sh) re-signs the bundle with the
-hardened runtime, notarizes it and staples the ticket. notarization is skipped
-when the signature is ad-hoc or the apple credentials are unset, so it doubles
-as a plain signing step
-
-[scripts/macos-dmg.sh](scripts/macos-dmg.sh) makes the disk image users drag
-the app out of, then signs, notarizes and staples that as well. it runs as part
-of [scripts/package.sh](scripts/package.sh), so a mac release carries both a
-`.dmg` and a `.zip` of the same bundle
-
-```bash
 ./scripts/package.sh
 ```
 
-the first signature of a session makes macos ask for permission to use the key.
-allow always, or every later `codesign` run stops on the same prompt
+[macos-sign.sh](scripts/macos-sign.sh) re-signs the bundle with the hardened
+runtime, notarizes and staples it; [package.sh](scripts/package.sh) then makes
+the `.dmg` with another notarization pass.
 
-CI has no certificate in its login keychain, so
-[scripts/macos-keychain.sh](scripts/macos-keychain.sh) has to run first. it
-imports `MACOS_CERTIFICATE` into a throwaway keychain and authorises codesign to
-use the key without a prompt
+notarization is skipped when the credentials are unset, so it degrades to a
+plain signing step. in CI [macos-keychain.sh](scripts/macos-keychain.sh) runs
+first to make a throwaway keychain out of `MACOS_CERTIFICATE`.
 
-to validate the result:
-
-```bash
-# who signed it
-codesign --display --verbose=4 dist/lltexturecache-browser-qt.app
-
-# is the seal intact
-codesign --verify --deep --strict --verbose=2 dist/lltexturecache-browser-qt.app
-
-# is notarization stapled
-xcrun stapler validate dist/lltexturecache-browser-qt.app
-xcrun stapler validate staging/lltexturecache-browser-qt-*-macos-arm64.dmg
-
-# gatekeeper
-spctl --assess --type execute --verbose=4 dist/lltexturecache-browser-qt.app
-```
-
-### signing environment
-
-set the following environment variables to enable code signing and notarization:
-
-| secret                       | is a                                                            | needed         |
+| variable                     | is a                                                            | needed         |
 | ---------------------------- | --------------------------------------------------------------- | -------------- |
 | `MACOS_SIGN_IDENTITY`        | e.g. `Developer ID Application: Your Name (TEAMID)`             | signing        |
 | `APPLE_ID`                   | Apple ID the app-specific password belongs to                   | notarization   |
