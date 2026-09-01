@@ -10,6 +10,8 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QImage, QPixmap
 from texture_courier import Texture
 
+from lltexturecache_browser_qt.view.images import placeholder
+
 # how many inspector-sized decodes are kept. a selection walked with the arrow
 # keys comes back through the ones just left, and a screenful of them is more
 # than anyone walks back through
@@ -41,13 +43,27 @@ class FullDecodes:
 
         return True
 
-    def landed(self, uuid: str, pixmap: QPixmap, natural: QSize) -> None:
+    def landed(self, uuid: str, image: QImage, natural: QSize) -> bool:
+        """Take a decode, and say whether it is one the inspector still wants
+
+        Always, as it happens: unlike the preview, the inspector shows a pile
+        rather than one texture, and a decode that lands after the selection
+        has moved on is still one of the cards on some earlier pile. The bool
+        is here so the two stores read the same way at their call sites.
+        """
+
         self._running.discard(uuid)
+
+        # a texture that cannot be decoded caches its placeholder, or every
+        # reselect would set the same doomed decode going again
+        pixmap = placeholder() if image.isNull() else QPixmap.fromImage(image)
 
         self._ready[uuid] = (pixmap, natural)
 
         while len(self._ready) > FULL_CACHE:
             del self._ready[next(iter(self._ready))]
+
+        return True
 
     def clear(self) -> None:
         self._ready.clear()

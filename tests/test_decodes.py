@@ -35,7 +35,8 @@ class TestFullDecodes:
 
     def test_a_landed_decode_is_handed_back(self, app: QApplication) -> None:
         store = FullDecodes()
-        store.landed("one", fakes.card(), QSize(64, 64))
+
+        assert store.landed("one", image(), QSize(64, 64)) is True
 
         ready = store.ready("one")
 
@@ -47,7 +48,7 @@ class TestFullDecodes:
         texture = fakes.texture(uuid="one")
 
         store.wanted(texture)
-        store.landed("one", fakes.card(), QSize(64, 64))
+        store.landed("one", image(), QSize(64, 64))
 
         assert store.wanted(texture) is True
 
@@ -55,7 +56,7 @@ class TestFullDecodes:
         store = FullDecodes()
 
         for index in range(FULL_CACHE + 3):
-            store.landed(f"texture-{index}", fakes.card(), QSize(64, 64))
+            store.landed(f"texture-{index}", image(), QSize(64, 64))
 
         assert store.ready("texture-0") is None
         assert store.ready(f"texture-{FULL_CACHE + 2}") is not None
@@ -64,15 +65,26 @@ class TestFullDecodes:
         store = FullDecodes()
 
         for index in range(FULL_CACHE * 3):
-            store.landed(f"texture-{index}", fakes.card(), QSize(64, 64))
+            store.landed(f"texture-{index}", image(), QSize(64, 64))
 
         kept = sum(1 for index in range(FULL_CACHE * 3) if store.ready(f"texture-{index}") is not None)
 
         assert kept == FULL_CACHE
 
+    def test_a_texture_that_would_not_decode_keeps_a_placeholder(self, app: QApplication) -> None:
+        store = FullDecodes()
+        store.landed("one", QImage(), QSize())
+
+        ready = store.ready("one")
+
+        # cached either way, or every reselect would set the same doomed
+        # decode going again
+        assert ready is not None
+        assert ready[0].isNull() is False
+
     def test_clearing_lets_everything_go(self, app: QApplication) -> None:
         store = FullDecodes()
-        store.landed("one", fakes.card(), QSize(64, 64))
+        store.landed("one", image(), QSize(64, 64))
         store.clear()
 
         assert store.ready("one") is None

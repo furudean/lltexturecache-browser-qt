@@ -41,7 +41,7 @@ from lltexturecache_browser_qt.app.about import AboutDialog
 from lltexturecache_browser_qt.app.actions import WindowActions
 from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, drag_data, staged
 from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
-from lltexturecache_browser_qt.app.session import AppSession
+from lltexturecache_browser_qt.app.session import AppState
 from lltexturecache_browser_qt.cache.export import Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
@@ -56,7 +56,6 @@ from lltexturecache_browser_qt.panes.dropzone import DropZone
 from lltexturecache_browser_qt.panes.filters import ColorFilterBar
 from lltexturecache_browser_qt.panes.inspector import INSPECTOR_WIDTH, InspectorPane
 from lltexturecache_browser_qt.panes.preview import PreviewWindow
-from lltexturecache_browser_qt.panes.previewing import PreviewHost
 from lltexturecache_browser_qt.panes.sidebar import paint as paint_pane
 from lltexturecache_browser_qt.panes.status import WindowStatus
 from lltexturecache_browser_qt.settings import (
@@ -79,18 +78,15 @@ NEW_WINDOW_OFFSET = QPoint(32, 32)
 
 
 class MainWindow(QMainWindow):
-    _about: ClassVar["AboutDialog | None"] = None
-
-    # the windows the app has open and the preview they share both belong to
-    # the app rather than to any one window, so they are kept beside the
-    # windows rather than inside one of them
-    _session: ClassVar[AppSession] = AppSession()
-    _preview_host: ClassVar[PreviewHost]
+    # the windows the app has open, the preview they share and the about box
+    # all belong to the app rather than to any one window. every window reaches
+    # the same one, and the app builds it on the way up
+    _app: ClassVar[AppState] = AppState()
 
     def __init__(self) -> None:
         super().__init__()
 
-        MainWindow._session.add(self)
+        MainWindow._app.session.add(self)
 
         settings = QSettings()
 
@@ -223,25 +219,25 @@ class MainWindow(QMainWindow):
 
     @classmethod
     def session(cls) -> list[Path]:
-        return cls._session.stored()
+        return cls._app.session.stored()
 
     @classmethod
     def save_session(cls) -> None:
-        cls._session.save()
+        cls._app.session.save()
 
     @classmethod
     def any_open(cls) -> bool:
-        return cls._session.any_open()
+        return cls._app.session.any_open()
 
     @classmethod
     def quitting(cls) -> None:
-        cls._session.quit()
+        cls._app.session.quit()
 
     @classmethod
     def shared_preview(cls) -> "PreviewWindow":
         """The one preview window, which belongs to the app rather than a window"""
 
-        return cls._preview_host.shared()
+        return cls._app.preview.shared()
 
     @classmethod
     def set_preview_shown(cls, shown: bool) -> None:
@@ -251,13 +247,13 @@ class MainWindow(QMainWindow):
         # preview is doing is put away here instead
         WindowActions.store_preview(shown)
 
-        cls._preview_host.sync_ticks(shown=shown)
+        cls._app.preview.sync_ticks(shown=shown)
 
     @classmethod
     def follow_preview(cls, window: "MainWindow | None" = None) -> None:
         """Point the shared preview at a window, or at whichever one is left to take it"""
 
-        cls._preview_host.follow(window)
+        cls._app.preview.follow(window)
 
     @classmethod
     def preview_closed_action(cls) -> None:
@@ -270,7 +266,7 @@ class MainWindow(QMainWindow):
         settings.setValue(SPLITTER_KEY, self._splitter.saveState())
         settings.setValue(FILTERS_KEY, self._filters.state())
 
-        MainWindow._preview_host.save_geometry(settings)
+        MainWindow._app.preview.save_geometry(settings)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.save_layout()
@@ -287,13 +283,13 @@ class MainWindow(QMainWindow):
         if model is not None:
             model.shutdown()
 
-        MainWindow._session.remove(self)
+        MainWindow._app.session.remove(self)
 
         # the preview is left with whichever window is still open to take it
-        if MainWindow._preview_host.release(self):
+        if MainWindow._app.preview.release(self):
             MainWindow.follow_preview()
 
-        if not MainWindow._session.quitting:
+        if not MainWindow._app.session.quitting:
             MainWindow.save_session()
 
         super().closeEvent(event)
@@ -315,7 +311,7 @@ class MainWindow(QMainWindow):
         # behind it, so a new checkerboard is a repaint rather than a fresh
         # decode. the checkerboard they draw is their own, and moves without the
         # cells' checkerboard moving with it
-        preview = MainWindow._preview_host.window
+        preview = MainWindow._app.preview.window
 
         if preview is not None:
             preview.update()
@@ -730,7 +726,7 @@ class MainWindow(QMainWindow):
 
         MainWindow.follow_preview(self)
 
-        preview = MainWindow._preview_host.window
+        preview = MainWindow._app.preview.window
 
         if preview is not None:
             preview.present()
@@ -739,7 +735,7 @@ class MainWindow(QMainWindow):
         return self._cache is not None and self._actions.preview.isChecked()
 
     def holds_preview(self) -> bool:
-        return self.wants_preview() and MainWindow._preview_host.followed_by(self)
+        return self.wants_preview() and MainWindow._app.preview.followed_by(self)
 
     def preview_menu_entry(self) -> QAction:
         """The tick this window carries for the preview, which the host keeps in step"""
@@ -758,9 +754,9 @@ class MainWindow(QMainWindow):
         """Show whatever is selected in the preview window, if it is following this one"""
 
         model = self._model
-        preview = MainWindow._preview_host.window
+        preview = MainWindow._app.preview.window
 
-        if not MainWindow._preview_host.followed_by(self) or preview is None or not preview.isVisible():
+        if not MainWindow._app.preview.followed_by(self) or preview is None or not preview.isVisible():
             return
 
         if model is None:
@@ -1030,9 +1026,9 @@ class MainWindow(QMainWindow):
 
         # the window was showing a texture out of the model just retired, and
         # is filled again by whatever selection lands in the new one
-        preview = MainWindow._preview_host.window
+        preview = MainWindow._app.preview.window
 
-        if preview is not None and MainWindow._preview_host.followed_by(self):
+        if preview is not None and MainWindow._app.preview.followed_by(self):
             preview.clear()
 
         model.set_simple_hidden(not self.showing_simple())
@@ -1048,17 +1044,9 @@ class MainWindow(QMainWindow):
         self._status.set_summary(note if note else self.summary())
 
     def about_action(self) -> None:
-        if MainWindow._about is None:
-            MainWindow._about = AboutDialog()
-
-        MainWindow._about.show()
-        MainWindow._about.raise_()
-        MainWindow._about.activateWindow()
+        MainWindow._app.show_about(AboutDialog)
 
 
-# the preview follows the windows, and the windows are the class's own list, so
-# the host is given a way to ask for them rather than a copy taken here
-MainWindow._preview_host = PreviewHost(
-    clients=lambda: [window for window in MainWindow._session if isinstance(window, MainWindow)],
-    closed=MainWindow.preview_closed_action,
-)
+# a preview closed by hand puts every window's menu tick down, which is the one
+# thing the app-wide state cannot do for itself: the ticks belong to the menus
+MainWindow._app.preview_closed = MainWindow.preview_closed_action

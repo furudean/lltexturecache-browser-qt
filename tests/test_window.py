@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.app import window as module
-from lltexturecache_browser_qt.app.session import AppSession
+from lltexturecache_browser_qt.app.session import AppState
 from lltexturecache_browser_qt.app.window import MainWindow
 from lltexturecache_browser_qt.cache.color import ColorIndex, Signature, to_lab
 from lltexturecache_browser_qt.cache.export import FORMATS
@@ -26,21 +26,21 @@ from tests import fakes
 def windows(app: QApplication, settings: None, quiet_scan: None) -> Iterator[None]:
     """Leave the app's window list the way each test found it"""
 
-    kept = MainWindow._session
+    kept = MainWindow._app
 
-    MainWindow._session = AppSession()
+    MainWindow._app = AppState()
+    MainWindow._app.preview_closed = MainWindow.preview_closed_action
 
     yield
 
-    for window in list(MainWindow._session):
+    for window in list(MainWindow._app.session):
         if isinstance(window, MainWindow):
             window.close()
 
-    # the preview host outlives any one window, and a test that pointed it at
-    # one of these must not leave it pointed at a window that has since gone
-    MainWindow._preview_host.follow(None)
+    if MainWindow._app.preview.window is not None:
+        MainWindow._app.preview.window.close()
 
-    MainWindow._session = kept
+    MainWindow._app = kept
 
 
 class TestStoredBlob:
@@ -127,7 +127,7 @@ class TestWindowList:
         window = MainWindow()
 
         assert MainWindow.any_open() is True
-        assert window in list(MainWindow._session)
+        assert window in list(MainWindow._app.session)
 
     def test_a_closed_window_leaves_the_list(self, windows: None) -> None:
         window = MainWindow()
@@ -146,7 +146,7 @@ class TestQuitting:
     def test_quitting_saves_the_session_once(self, windows: None) -> None:
         MainWindow.quitting()
 
-        assert MainWindow._session.quitting is True
+        assert MainWindow._app.session.quitting is True
 
     def test_quitting_twice_changes_nothing(self, windows: None) -> None:
         window = MainWindow()
@@ -154,10 +154,10 @@ class TestQuitting:
 
         # a window closing on the way out would otherwise empty the session
         # that was just written
-        MainWindow._session.remove(window)
+        MainWindow._app.session.remove(window)
         MainWindow.quitting()
 
-        assert MainWindow._session.quitting is True
+        assert MainWindow._app.session.quitting is True
 
 
 class TestStoredPaths:
@@ -177,7 +177,7 @@ class TestStoredPaths:
 
 class TestPreviewWindow:
     def test_the_preview_belongs_to_the_app_rather_than_a_window(self, windows: None) -> None:
-        host = MainWindow._preview_host
+        host = MainWindow._app.preview
 
         try:
             assert MainWindow.shared_preview() is MainWindow.shared_preview()
@@ -279,7 +279,7 @@ class TestOpenCache:
         window.open_cache(tmp_path / "two")
 
         assert window.opened_cache() == tmp_path / "one"
-        assert len(MainWindow._session) == 2
+        assert len(MainWindow._app.session) == 2
 
     def test_a_replacing_open_takes_over_the_window(
         self, window: MainWindow, opening: Callable[[int], None], tmp_path: Path
@@ -290,7 +290,7 @@ class TestOpenCache:
         window.open_cache(tmp_path / "two", replace=True)
 
         assert window.opened_cache() == tmp_path / "two"
-        assert len(MainWindow._session) == 1
+        assert len(MainWindow._app.session) == 1
 
 
 class TestSetCache:
@@ -470,7 +470,7 @@ class TestNewWindow:
 
         try:
             assert opened is not window
-            assert len(MainWindow._session) == 2
+            assert len(MainWindow._app.session) == 2
         finally:
             opened.close()
 
@@ -671,7 +671,7 @@ class TestPreviewAction:
         opened.open_preview_action()
 
         assert opened.holds_preview() is True
-        assert MainWindow._preview_host.window is not None
+        assert MainWindow._app.preview.window is not None
 
     def test_toggling_it_again_puts_it_away(self, opened: MainWindow) -> None:
         opened.select_texture("texture-0")

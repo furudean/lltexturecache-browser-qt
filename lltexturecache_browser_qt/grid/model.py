@@ -506,13 +506,8 @@ class TextureModel(QAbstractListModel):
     def full_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
         self.learn(uuid, natural)
 
-        # a texture that cannot be decoded caches its placeholder, or every
-        # reselect would set the same doomed decode going again
-        pixmap = placeholder() if image.isNull() else QPixmap.fromImage(image)
-
-        self._fulls.landed(uuid, pixmap, natural)
-
-        self.full_ready.emit(uuid)
+        if self._fulls.landed(uuid, image, natural):
+            self.full_ready.emit(uuid)
 
     @Slot(str, QImage, QSize)
     def preview_decoded(self, uuid: str, image: QImage, natural: QSize) -> None:
