@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import cast
 
 from PySide6.QtGui import QColor, QPixmap
-from texture_courier import Texture, TextureCache, TextureCacheError
+from texture_courier import Texture, TextureCache, TextureCacheError, Thumbnail
 
 CACHED_AT = datetime(2024, 3, 7, 15, 4, 5, tzinfo=UTC)
 PAYLOAD = b"jpeg 2000 bytes"
@@ -33,7 +33,8 @@ class FakeTexture:
     def whole(self) -> bool:
         return self.complete
 
-    def thumbnail_png(self) -> bytes | None:
+    @property
+    def thumbnail(self) -> Thumbnail | None:
         return None
 
     def jpeg_2000(self) -> bytes:

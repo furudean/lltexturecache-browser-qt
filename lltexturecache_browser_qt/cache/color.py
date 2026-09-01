@@ -8,9 +8,8 @@ from math import cbrt, dist, exp, hypot
 
 from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QColor, QImage
-from texture_courier import Texture, TextureCache, TextureCacheError
+from texture_courier import Texture, TextureCacheError, Thumbnail
 
-from lltexturecache_browser_qt.cache.fastcache import Thumbnail, stored_thumbnail
 from lltexturecache_browser_qt.view.images import read_image
 
 log = logging.getLogger(__name__)
@@ -458,13 +457,10 @@ class ScanSignals(QObject):
 class ColorScan(QRunnable):
     """Reads the colors of every texture in a cache, off the ui thread"""
 
-    def __init__(
-        self, textures: list[Texture], cache: TextureCache, thumbnails: threading.Lock, signals: ScanSignals
-    ) -> None:
+    def __init__(self, textures: list[Texture], thumbnails: threading.Lock, signals: ScanSignals) -> None:
         super().__init__()
 
         self._textures = textures
-        self._cache = cache
         self._thumbnails = thumbnails
         self._signals = signals
         self._stopped = threading.Event()
@@ -500,8 +496,7 @@ class ColorScan(QRunnable):
             # the thumbnails all come out of the one file, the same as the reads
             # the grid makes, so this waits its turn among them
             with self._thumbnails:
-                kept = self.kept(texture)
-                thumbnail = texture.thumbnail_png()
+                kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # a texture with no readable thumbnail has no colours to file it
             # under, which leaves it out of the index rather than stopping the scan
@@ -509,10 +504,10 @@ class ColorScan(QRunnable):
 
             return None
 
-        if thumbnail is None:
+        if kept is None:
             return None
 
-        found = signature(read_image(QByteArray(thumbnail)))
+        found = signature(read_image(QByteArray(kept.png())))
 
         # the thumbnail is the only look at the texture this gets, and sixteen
         # pixels average a weave away to one flat color as readily as they
@@ -523,23 +518,19 @@ class ColorScan(QRunnable):
 
         return found
 
-    def kept(self, texture: Texture) -> Thumbnail | None:
-        """The thumbnail as the cache holds it, which knows what it was reduced from"""
-
-        return stored_thumbnail(self._cache, texture.index)
-
     def dense(self, texture: Texture, kept: Thumbnail | None) -> bool:
         """Whether the texture pays too many bytes for its pixels to be holding no picture
 
         The thumbnail was taken at one of the texture's mip levels and says
-        which, so doubling it back up that many times is the size of the
-        texture itself. Nothing says so when the cache has no thumbnail kept,
-        and an entry with none of its own never reaches this.
+        which, so the size it was reduced from is the size of the texture
+        itself. Nothing says so when the cache has no thumbnail kept, and an
+        entry with none of its own never reaches this.
         """
 
         if kept is None or not kept.width or not kept.height:
             return False
 
-        pixels = (kept.width << kept.discard_level) * (kept.height << kept.discard_level)
+        width, height = kept.source_dimensions
+        pixels = width * height
 
         return texture.image_size > FLAT_BASE_BYTES + pixels * FLAT_MAX_DENSITY

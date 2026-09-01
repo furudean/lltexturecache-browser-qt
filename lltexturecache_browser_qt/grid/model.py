@@ -165,7 +165,7 @@ class TextureModel(QAbstractListModel):
         self._scan_signals = ScanSignals(self)
         self._scan_signals.done.connect(self.scanned)
 
-        self._scan = ColorScan(self._textures, cache, self._thumbnails, self._scan_signals)
+        self._scan = ColorScan(self._textures, self._thumbnails, self._scan_signals)
 
         QThreadPool.globalInstance().start(self._scan)
 
@@ -270,15 +270,15 @@ class TextureModel(QAbstractListModel):
     def thumbnail(self, texture: Texture, *, checkerboard: bool = True) -> QImage:
         try:
             with self._thumbnails:
-                thumbnail = texture.thumbnail_png()
+                kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # not every entry has a thumbnail beside it, and the placeholder
             # stands in for the ones that do not
             log.debug("no thumbnail for %s: %s", texture.uuid, e)
 
-            thumbnail = None
+            kept = None
 
-        return thumbnail_image(thumbnail, checkerboard=checkerboard) if thumbnail is not None else QImage()
+        return thumbnail_image(kept.png(), checkerboard=checkerboard) if kept is not None else QImage()
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""

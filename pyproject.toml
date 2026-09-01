@@ -9,7 +9,7 @@ dependencies = [
     "imagecodecs>=2026.8.16",
     "pillow>=12.3.0",
     "pyside6>=6.11.2",
-    "texture-courier>=0.0.13",
+    "texture-courier>=0.0.15",
 ]
 
 [dependency-groups]

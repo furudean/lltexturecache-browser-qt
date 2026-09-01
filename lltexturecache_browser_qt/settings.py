@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QSettings
