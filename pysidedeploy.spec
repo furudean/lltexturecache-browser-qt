@@ -69,13 +69,13 @@ mode = onefile
 
 # specify any extra nuitka arguments
 #
-# a number of unused codecs are excluded to shrink the build: nothing is read
-# through a qt reader but png, which QtGui has built in, and pillow is only
-# asked to write png and tiff
+# a number of unused codecs are excluded to shrink the build: the readers kept
+# are the ones a picture handed to the match is likely to arrive in, and pillow
+# is only asked to write png and tiff
 #
 # nuitka copies whatever the qt plugins link, so a reader nothing calls drags a
 # framework in behind it.
-extra_args = --quiet --noinclude-qt-translations --include-package-data=lltexturecache_browser_qt '--noinclude-dlls=*qpdf*' '--noinclude-dlls=*qmacjp2*' '--noinclude-dlls=*qmacheif*' '--noinclude-dlls=*qtiff*' '--noinclude-dlls=*qtga*' '--noinclude-dlls=*qwbmp*' '--noinclude-dlls=*qicns*' '--noinclude-dlls=*qgif*' '--noinclude-dlls=*qwebp*' '--noinclude-dlls=*qjpeg*' '--noinclude-dlls=*qico.*' '--noinclude-dlls=*virtualkeyboard*' '--noinclude-dlls=*VirtualKeyboard*' '--noinclude-dlls=*Qt*Pdf*' '--noinclude-dlls=*Qt*Quick*' '--noinclude-dlls=*Qt*Qml*' --nofollow-import-to=PIL.AvifImagePlugin --nofollow-import-to=PIL.WebPImagePlugin
+extra_args = --quiet --noinclude-qt-translations --include-package-data=lltexturecache_browser_qt '--noinclude-dlls=*qpdf*' '--noinclude-dlls=*qtiff*' '--noinclude-dlls=*qtga*' '--noinclude-dlls=*qwbmp*' '--noinclude-dlls=*qicns*' '--noinclude-dlls=*qwebp*' '--noinclude-dlls=*qico.*' '--noinclude-dlls=*virtualkeyboard*' '--noinclude-dlls=*VirtualKeyboard*' '--noinclude-dlls=*Qt*Pdf*' '--noinclude-dlls=*Qt*Quick*' '--noinclude-dlls=*Qt*Qml*' --nofollow-import-to=PIL.AvifImagePlugin --nofollow-import-to=PIL.WebPImagePlugin
 
 [buildozer]
 
