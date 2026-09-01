@@ -128,7 +128,7 @@ class TestRestore:
 class TestLogging:
     def test_the_level_comes_from_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(module.LOG_LEVEL_VAR, "debug")
-        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+        monkeypatch.setattr(logging, "basicConfig", record_config := Recorder())
 
         module.start_logging()
 
@@ -136,7 +136,7 @@ class TestLogging:
 
     def test_an_unset_variable_keeps_the_app_quiet(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(module.LOG_LEVEL_VAR, raising=False)
-        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+        monkeypatch.setattr(logging, "basicConfig", record_config := Recorder())
 
         module.start_logging()
 
@@ -144,7 +144,7 @@ class TestLogging:
 
     def test_a_level_the_app_does_not_know_keeps_it_quiet(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(module.LOG_LEVEL_VAR, "chatty")
-        monkeypatch.setattr(module.logging, "basicConfig", record_config := Recorder())
+        monkeypatch.setattr(logging, "basicConfig", record_config := Recorder())
 
         module.start_logging()
 
