@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.5.1 - 2026-09-02
 
 - fixes a bug where the texture cache may not open due to integrity checks
 - ships a `.dmg` next to the zip
