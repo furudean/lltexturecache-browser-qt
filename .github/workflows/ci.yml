@@ -16,8 +16,11 @@ defaults:
 jobs:
   check:
     name: Lint, typecheck, and test
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=2cpu-linux-x64
     steps:
+      - name: RunsOn setup
+        uses: runs-on/action@454f69dd7216cb878a1a8b1728b4f9bfdfeaaec4 # v2.3.0
+
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
