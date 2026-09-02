@@ -2,6 +2,11 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- builds for intel macs
+- lowers the mac minimum os requirement to ventura for both architectures
+
 ## v0.5.1 - 2026-09-02
 
 - fixes a bug where the texture cache may not open due to integrity checks

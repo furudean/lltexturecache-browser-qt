@@ -16,6 +16,9 @@ if [ "$(uname -s)" = Darwin ]; then
 	extra_args="$extra_args '--macos-app-name=$DISPLAY_NAME'"
 	extra_args="$extra_args '--macos-signed-app-name=$BUNDLE_ID'"
 	extra_args="$extra_args '--macos-app-version=$VERSION'"
+
+	# pyside6's wheel is macosx_13_0 which is our baseline
+	export MACOSX_DEPLOYMENT_TARGET=13.0
 fi
 
 mkdir -p "$EXEC_DIRECTORY"
