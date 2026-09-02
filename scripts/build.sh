@@ -20,11 +20,12 @@ fi
 
 mkdir -p "$EXEC_DIRECTORY"
 
-# nuitka wants .icns on mac, .ico on windows and .png everywhere else
+# nuitka wants .icns on mac, .ico on windows; on linux the onefile binary
+# can't embed one anyway, and appimage.sh installs slcachegirl.png itself
 case "$(uname -s)" in
 	Darwin) icon=packaging/slcachegirl.icns ;;
 	CYGWIN* | MINGW* | MSYS* | Windows_NT) icon=packaging/slcachegirl.ico ;;
-	*) icon=packaging/slcachegirl.png ;;
+	*) icon= ;;
 esac
 
 awk -v extra="$extra_args" -v icon="$icon" '
