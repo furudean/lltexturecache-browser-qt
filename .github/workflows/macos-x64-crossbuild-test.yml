@@ -46,11 +46,15 @@ jobs:
       - name: Build
         run: ./scripts/build.sh
 
+      # nuitka names the bundled executable after the entry file (main.py ->
+      # main), not the project name, so find it rather than assuming $NAME
       - name: Confirm build output is x86_64
         run: |
           info="$(uv run python scripts/app-info)"
           eval "$info"
-          lipo -archs "$EXEC_DIRECTORY/$NAME.app/Contents/MacOS/$NAME"
+          binary="$(find "$EXEC_DIRECTORY/$NAME.app/Contents/MacOS" -type f -perm +111 | head -1)"
+          echo "binary: $binary"
+          lipo -archs "$binary"
 
       # the app has no CLI flags and runs a normal Qt event loop, so this
       # launches it, gives it a moment to come up under Rosetta, then sends
@@ -60,7 +64,8 @@ jobs:
         run: |
           info="$(uv run python scripts/app-info)"
           eval "$info"
-          QT_QPA_PLATFORM=offscreen "$EXEC_DIRECTORY/$NAME.app/Contents/MacOS/$NAME" &
+          binary="$(find "$EXEC_DIRECTORY/$NAME.app/Contents/MacOS" -type f -perm +111 | head -1)"
+          QT_QPA_PLATFORM=offscreen "$binary" &
           pid=$!
           sleep 3
           kill -TERM "$pid"
