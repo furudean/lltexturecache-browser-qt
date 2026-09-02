@@ -8,7 +8,7 @@ from lltexturecache_browser_qt.assets import APP_ICON
 from lltexturecache_browser_qt.view.widgets import bold, copyable, linked, wrapped
 
 SUMMARY = "A cross-platform tool to browse and export textures from the Second Life texture cache."
-HOMEPAGE = "https://github.com/furudean/lltexturecache-browser-qt"
+HOMEPAGE = "https://github.com/paisley-softworks/lltexturecache-browser-qt"
 
 ICON_SIZE = 160
 TITLE_SCALE = 1.5

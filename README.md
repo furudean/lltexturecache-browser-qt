@@ -27,13 +27,13 @@ the app's icon, slcachegirl, is designed by [@sferics32.bsky.social](https://bsk
 ## i want it
 
 windows, linux and mac builds are attached to
-[each release](https://github.com/furudean/lltexturecache-viewer-gui/releases).
+[each release](https://github.com/paisley-softworks/lltexturecache-browser-qt/releases).
 on mac, open the `.dmg` and drag the app into Applications.
 
 on mac, you may install with homebrew:
 
 ```bash
-brew install --cask furudean/tap/lltexturecache-browser-qt
+brew install --cask paisley-softworks/tap/lltexturecache-browser-qt
 ```
 
 ### platform requirements
