@@ -4,6 +4,7 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
+- fixes a bug where the texture cache may not open due to integrity checks
 - ships a `.dmg` next to the zip
 - on mac, share menu bar for all windows
 
