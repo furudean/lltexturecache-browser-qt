@@ -40,6 +40,7 @@ jobs:
           enable-cache: true
 
       - name: Install macOS build dependencies
+        shell: bash
         run: brew install ccache
 
       - name: Build
