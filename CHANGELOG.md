@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.5.2 - 2026-09-02
 
 - builds for intel macs
 - lowers the mac minimum os requirement to ventura for both architectures
