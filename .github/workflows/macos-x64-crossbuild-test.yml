@@ -16,6 +16,9 @@ jobs:
     runs-on: macos-15
     env:
       UV_PYTHON_PREFERENCE: only-system
+    defaults:
+      run:
+        shell: "arch -x86_64 /bin/bash --noprofile --norc -eo pipefail {0}"
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,37 +29,23 @@ jobs:
           python-version-file: ".python-version"
           architecture: x64
 
-      # GitHub's macOS Python builds are universal2 fat binaries now; the
-      # setup-python `architecture: x64` input only labels the toolcache
-      # path, it doesn't force Rosetta translation. Check whether the
-      # binary even has an x86_64 slice, then whether `arch -x86_64` makes
-      # it actually run as one.
-      - name: Inspect Python binary architecture
+      - name: Confirm Python is running as x86_64 under Rosetta
         run: |
           which python3
-          lipo -archs "$(which python3)" || file "$(which python3)"
-          echo "native: $(python3 -c 'import platform; print(platform.machine())')"
-          echo "forced: $(arch -x86_64 python3 -c 'import platform; print(platform.machine())')"
+          [ "$(python3 -c 'import platform; print(platform.machine())')" = "x86_64" ]
 
-      # everything below is disabled until the arch inspection above tells
-      # us whether `arch -x86_64` is actually needed/sufficient, so we don't
-      # burn macOS minutes on a full build with the wrong toolchain
       - name: Install uv
-        if: false
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
 
       - name: Install macOS build dependencies
-        if: false
         run: brew install ccache
 
       - name: Build
-        if: false
         run: ./scripts/build.sh
 
       - name: Confirm build output is x86_64
-        if: false
         run: |
           info="$(uv run python scripts/app-info)"
           eval "$info"
@@ -67,7 +56,6 @@ jobs:
       # SIGTERM (which it already handles for a clean shutdown) and checks
       # the exit code
       - name: Smoke test the built app under Rosetta
-        if: false
         run: |
           info="$(uv run python scripts/app-info)"
           eval "$info"
@@ -80,11 +68,9 @@ jobs:
       # target name is passed explicitly: uname -m on the (arm64) shell
       # process would misreport arch even though python/the build are x64
       - name: Package
-        if: false
         run: ./scripts/package.sh macos-x86_64
 
       - name: Upload artifact to workflow
-        if: false
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-x86_64-crossbuild-test
