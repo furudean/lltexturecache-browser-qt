@@ -2,6 +2,10 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- face lift for color filters
+
 ## v0.6.0 - 2026-09-03
 
 - one universal mac build instead of separate intel and apple silicon

@@ -9,12 +9,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
-from lltexturecache_browser_qt.panes.chips import CHIP_RADIUS, CHIP_SIZE, Chip
-
-# what a disabled picture is left showing of itself, the way a disabled colour
-# is left as a ring: enough to say which picture is being held on to, little
-# enough to say that nothing is being asked of it
-FADED = 0.3
+from lltexturecache_browser_qt.panes.chips import CHIP_RADIUS, CHIP_SIZE, FADED, Chip
 
 
 class ReferenceChip(Chip):

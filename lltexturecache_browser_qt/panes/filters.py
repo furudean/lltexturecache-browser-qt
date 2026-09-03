@@ -1,8 +1,8 @@
 from collections.abc import Callable, Iterable
 from functools import partial
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPen
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QColorDialog,
     QHBoxLayout,
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from lltexturecache_browser_qt.panes.chips import CHIP_GAP, CHIP_MARGIN, CHIP_SIZE, Chip
+from lltexturecache_browser_qt.panes.chips import CHIP_GAP, CHIP_MARGIN, CHIP_SIZE, FADED, Chip
 from lltexturecache_browser_qt.panes.reference import ReferenceChip
 
 DEFAULT_COLORS = (
@@ -26,13 +26,53 @@ DEFAULT_COLORS = (
 ON_MARK = "+"
 OFF_MARK = "-"
 
-# how heavy the ring a disabled color is left as
-OFF_WEIGHT = 2
+CHECK_TURNS = ((0.27, 0.53), (0.43, 0.70), (0.75, 0.31))
+CHECK_WEIGHT = 0.15
+
+CHECK_INKS = ("#ffffff", "#1a1a1a")
+
+CHANNEL_WEIGHTS = (0.2126729, 0.7151522, 0.0721750)
+CHANNEL_CURVE = 2.4
+
+BLACK_FLOOR = 0.022
+BLACK_LIFT = 1.414
+
+DARK_ON_LIGHT = (0.56, 0.57)
+LIGHT_ON_DARK = (0.65, 0.62)
+
+CONTRAST_SCALE = 1.14
+CONTRAST_TRIM = 0.027
+CONTRAST_CLIP = 0.1
+
+EDGE_DARKER = 118
+
+
+def luminance(color: QColor) -> float:
+    channels = (color.redF(), color.greenF(), color.blueF())
+
+    lit: float = sum(weight * channel**CHANNEL_CURVE for weight, channel in zip(CHANNEL_WEIGHTS, channels, strict=True))
+
+    if lit > BLACK_FLOOR:
+        return lit
+
+    lift: float = (BLACK_FLOOR - lit) ** BLACK_LIFT
+
+    return lit + lift
+
+
+def contrast(ink: QColor, ground: QColor) -> float:
+    written, behind = luminance(ink), luminance(ground)
+    behind_lean, written_lean = DARK_ON_LIGHT if behind > written else LIGHT_ON_DARK
+
+    reach: float = (behind**behind_lean - written**written_lean) * CONTRAST_SCALE
+
+    if abs(reach) < CONTRAST_CLIP:
+        return 0.0
+
+    return (abs(reach) - CONTRAST_TRIM) * 100
 
 
 class Swatch(Chip):
-    """One color a texture has to hold to be shown"""
-
     def __init__(self, color: QColor, parent: QWidget | None = None, *, on: bool = True) -> None:
         super().__init__(parent, on=on)
 
@@ -57,23 +97,48 @@ class Swatch(Chip):
         return "Change Color..."
 
     def paint_body(self, painter: QPainter, box: QRectF) -> None:
-        colors = self.palette()
+        painter.save()
 
-        # the edge belongs to the chip rather than to what it is holding, so it
-        # is drawn either way. a color no darker than the bar behind it has
-        # nothing else to show for itself, and white is on the strip by default
-        painter.setPen(QPen(colors.color(QPalette.ColorRole.Mid), 1))
-        painter.setBrush(self._color if self.isChecked() else colors.color(QPalette.ColorRole.Window))
+        # a disabled color is the same square gone faint, which is what a
+        # disabled picture is as well, rather than something else to read
+        painter.setOpacity(1.0 if self.isChecked() else FADED)
+
+        # the edge is the color's own, so it disappears into anything saturated
+        # and is only really there to hold the pale end of the strip together
+        painter.setPen(QPen(self._color.darker(EDGE_DARKER), 1))
+        painter.setBrush(self._color)
 
         self.stroked(painter, box, 1)
 
-        if not self.isChecked():
-            # a disabled color is left as a ring inside that edge, so the strip
-            # still says which color it is while showing none of it is asked for
-            painter.setPen(QPen(self._color, OFF_WEIGHT))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
+        if self.isChecked():
+            self.paint_check(painter, box)
 
-            self.stroked(painter, box, OFF_WEIGHT, inset=1)
+        painter.restore()
+
+    def paint_check(self, painter: QPainter, box: QRectF) -> None:
+        stroke = QPainterPath()
+
+        for index, (across, down) in enumerate(CHECK_TURNS):
+            at = QPointF(box.x() + box.width() * across, box.y() + box.height() * down)
+
+            if index:
+                stroke.lineTo(at)
+            else:
+                stroke.moveTo(at)
+
+        ink = max((QColor(name) for name in CHECK_INKS), key=lambda candidate: contrast(candidate, self._color))
+
+        painter.setPen(
+            QPen(
+                ink,
+                box.width() * CHECK_WEIGHT,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(stroke)
 
 
 class FilterBar(QToolBar):

@@ -13,7 +13,9 @@ from PySide6.QtWidgets import QAbstractButton, QMenu, QWidget
 
 CHIP_SIZE = 16
 CHIP_MARGIN = 4
-CHIP_RADIUS = 3
+CHIP_RADIUS = 5
+
+FADED = 0.35
 
 # what one chip stands off the next, on top of the margin each of them carries
 CHIP_GAP = 2
