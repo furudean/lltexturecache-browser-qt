@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.5.4 - 2026-09-03
 
 - builds for intel macs (one more try)
 
