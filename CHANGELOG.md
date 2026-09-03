@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.6.0 - 2026-09-03
 
 - one universal mac build instead of separate intel and apple silicon
 - tighten simple texture algorithm to include transparent textures, and fix a
