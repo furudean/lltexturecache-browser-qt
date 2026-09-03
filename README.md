@@ -40,7 +40,7 @@ brew install --cask furudean/tap/lltexturecache-browser-qt
 
 | platform | runs on                                     |
 | -------- | ------------------------------------------- |
-| mac      | macos 13 ventura or late,  any arch         |
+| mac      | macos 13 ventura or later, any arch         |
 | windows  | windows 10 or later, x86-64                 |
 | linux    | glibc 2.35 or later (ubuntu 22.04+), x86-64 |
 
