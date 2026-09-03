@@ -2,6 +2,11 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- tighten simple texture algorithm to include transparent textures, and fix a
+  few false positive cases.
+
 ## v0.5.4 - 2026-09-03
 
 - builds for intel macs (one more try)

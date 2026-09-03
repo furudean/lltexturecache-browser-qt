@@ -122,19 +122,19 @@ class TestPixelReading:
     def test_spans_of_a_flat_image_are_zero(self, app: object) -> None:
         distinct = set(memoryview(packed(filled(QColor(0x40, 0x40, 0x40)))).cast("I"))
 
-        assert spans(distinct, lit=True) == (0, 0)
+        assert spans(distinct) == (0, 0)
 
     def test_spans_report_the_widest_channel(self, app: object) -> None:
         distinct = set(memoryview(packed(halved(QColor(0, 0, 0), QColor(200, 10, 10)))).cast("I"))
-        color, opacity = spans(distinct, lit=True)
+        color, opacity = spans(distinct)
 
         assert color == 200
         assert opacity == 0
 
-    def test_spans_ignore_opacity_when_the_thumbnail_was_written_without_it(self, app: object) -> None:
-        distinct = {0x00FF0000, 0x00000000}
+    def test_spans_report_how_far_the_opacities_stand_apart(self, app: object) -> None:
+        distinct = {0xFFFF0000, 0x40FF0000}
 
-        assert spans(distinct, lit=False)[1] == 0
+        assert spans(distinct) == (0, 0xFF - 0x40)
 
 
 class TestSignature:
@@ -158,16 +158,35 @@ class TestSignature:
         # the quantisation moves the colour a little, but not out of its own neighbourhood
         assert abs(lab[0] - lab_of(QColor(0xC0, 0x39, 0x2B))[0]) < 5
 
-    def test_an_image_with_no_opacity_anywhere_is_read_as_opaque(self, app: object) -> None:
+    def test_an_image_with_no_opacity_anywhere_is_clear(self, app: object) -> None:
         image = QImage(4, 4, QImage.Format.Format_ARGB32)
         image.fill(QColor(0xFF, 0x00, 0x00, 0x00))
 
-        # a thumbnail the viewer wrote without opacity is not an invisible
-        # texture, so its colour is taken rather than thrown away
+        # the red is there in the pixels, but nobody can see it, so the texture
+        # is filed as showing nothing rather than as showing red
         found = signed(image)
 
+        assert found.clear is True
         assert found.flat is True
-        assert len(found.colors) == 1
+        assert found.colors == []
+
+    def test_an_image_too_faint_to_see_is_clear(self, app: object) -> None:
+        found = signed(filled(QColor(0xFF, 0x00, 0x00, 0x10)))
+
+        assert found.clear is True
+
+    def test_a_texture_anyone_can_see_is_not_clear(self, app: object) -> None:
+        assert signed(filled(QColor("red"))).clear is False
+
+    def test_a_solid_colour_cut_into_a_shape_is_not_flat(self, app: object) -> None:
+        # the color is the one color all over and the picture is in the
+        # opacity, which makes it a sprite rather than a blank
+        image = filled(QColor(0xFF, 0x00, 0x00, 0xFF))
+
+        for y in range(8):
+            image.setPixelColor(0, y, QColor(0xFF, 0x00, 0x00, 0x00))
+
+        assert signed(image).flat is False
 
     def test_a_clear_patch_in_a_lit_image_shows_no_colour(self, app: object) -> None:
         image = filled(QColor(0x00, 0xFF, 0x00, 0xFF), 4, 4)

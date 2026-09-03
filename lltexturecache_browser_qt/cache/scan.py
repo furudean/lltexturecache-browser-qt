@@ -27,6 +27,12 @@ from lltexturecache_browser_qt.view.images import read_image
 
 log = logging.getLogger(__name__)
 
+PLACEHOLDER_BYTE = 0x80
+
+
+def placeholder(kept: Thumbnail) -> bool:
+    return bool(kept.pixels) and kept.pixels.count(PLACEHOLDER_BYTE) == len(kept.pixels)
+
 
 @dataclass(frozen=True)
 class Scan:
@@ -100,7 +106,7 @@ class CacheScan(QRunnable):
             # the thumbnails all come out of the one file, the same as the reads
             # the grid makes, so this waits its turn among them
             with self._thumbnails:
-                return texture.thumbnail
+                kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # a texture with no readable thumbnail has nothing to be filed
             # under, which leaves it out of the indexes rather than stopping the scan
@@ -108,14 +114,17 @@ class CacheScan(QRunnable):
 
             return None
 
+        if kept is not None and placeholder(kept):
+            log.debug("thumbnail for %s is the viewer's fill", texture.uuid)
+
+            return None
+
+        return kept
+
     def signature(self, texture: Texture, kept: Thumbnail, image: QImage) -> Signature | None:
         found = signature(image)
 
-        # the thumbnail is the only look at the texture this gets, and sixteen
-        # pixels average a weave away to one flat color as readily as they
-        # report a blank. what the encoder needed is the second opinion, and
-        # it is the one that stands
-        if found is not None and found.flat and self.dense(texture, kept):
+        if found is not None and found.flat and not found.clear and self.dense(texture, kept):
             return replace(found, flat=False)
 
         return found

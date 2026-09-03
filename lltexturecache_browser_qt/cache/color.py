@@ -195,7 +195,7 @@ def counted(raw: bytes) -> Counter[int]:
     return Counter(memoryview(raw.translate(QUANTIZE)).cast("I"))
 
 
-def spans(distinct: set[int], *, lit: bool) -> tuple[int, int]:
+def spans(distinct: set[int]) -> tuple[int, int]:
     """How far the colors and the opacities in an image stand apart, in raw levels
 
     Off the pixels as they were decoded rather than the rounded ones the color
@@ -210,7 +210,7 @@ def spans(distinct: set[int], *, lit: bool) -> tuple[int, int]:
         for levels in ([(pixel >> shift) & 0xFF for pixel in distinct] for shift in (0, 8, 16))
     )
 
-    opacities = [pixel >> 24 for pixel in distinct] if lit else [0xFF]
+    opacities = [pixel >> 24 for pixel in distinct]
 
     return color, max(opacities) - min(opacities)
 
@@ -219,10 +219,8 @@ def spans(distinct: set[int], *, lit: bool) -> tuple[int, int]:
 class Signature:
     colors: list[tuple[Lab, float]] = field(default_factory=list)
 
-    # whether the texture is one solid color all over, or shows nothing at all.
-    # either way there is no picture in it to look at, only a color, which is
-    # what a cache is full of and what a viewer is rarely looking for
     flat: bool = False
+    clear: bool = False
 
 
 def signature(image: QImage) -> Signature | None:
@@ -235,13 +233,6 @@ def signature(image: QImage) -> Signature | None:
     if not distinct:
         return None
 
-    # the viewer does not always write the opacity of a thumbnail it keeps, and
-    # an image with none of it anywhere is one that was left out rather than one
-    # that is really invisible. taking those at their word hands a twentieth of
-    # a cache to whatever asks for a blank, and keeps their colors out of the
-    # index besides, since a clear pixel is one that shows no color
-    lit = any(pixel >> 24 for pixel in distinct)
-
     counts = counted(raw)
     gathered: dict[tuple[int, int, int], list[float]] = {}
 
@@ -251,7 +242,7 @@ def signature(image: QImage) -> Signature | None:
     for pixel, count in counts.items():
         total += count
 
-        alpha = (pixel >> 24) if lit else 0xFF
+        alpha = pixel >> 24
 
         if alpha < ALPHA_FLOOR:
             continue
@@ -275,9 +266,7 @@ def signature(image: QImage) -> Signature | None:
             bin[3] += blue_yellow * weight
 
     if not shown:
-        # nothing in it is opaque enough to show a color, so there is no color
-        # to file it under and nothing to see either
-        return Signature(flat=True)
+        return Signature(flat=True, clear=True)
 
     coverage = min(1.0, shown / (total * MIN_COVERAGE))
 
@@ -288,7 +277,7 @@ def signature(image: QImage) -> Signature | None:
         for weight, lightness, green_red, blue_yellow in top
     ]
 
-    color, opacity = spans(distinct, lit=lit)
+    color, opacity = spans(distinct)
 
     # the thumbnail is only half of it: the cache keeps some of them at a
     # single pixel, which is one solid color whatever it was reduced from, so
