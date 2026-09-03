@@ -29,22 +29,7 @@ fi
 
 changelog="CHANGELOG.md"
 
-if ! grep -q '^## unreleased$' "$changelog"; then
-	echo "err: no '## unreleased' section in $changelog" >&2
-	exit 1
-fi
-
-# body of the unreleased section, without surrounding blank lines
-notes="$(
-	awk '/^## unreleased$/ { f = 1; next } f && /^## / { exit } f { print }' "$changelog" |
-		awk 'NF { for (i = 0; i < held; i++) print ""; held = 0; print; seen = 1; next }
-		     seen { held++ }'
-)"
-
-if [ -z "$notes" ]; then
-	echo "err: the unreleased section in $changelog is empty" >&2
-	exit 1
-fi
+./scripts/changelog-notes.sh unreleased >/dev/null
 
 printf 'you are about to release %s (from v%s) on branch %s. continue? [y/N] ' \
 	"$tag" "$(uv version --short)" "$(git rev-parse --abbrev-ref HEAD)"
@@ -73,7 +58,4 @@ git tag "$tag"
 git push origin HEAD
 git push origin "$tag"
 
-notes_file="$(mktemp)"
-printf '%s\n' "$notes" >"$notes_file"
-gh release create "$tag" --notes-file "$notes_file" --prerelease
-rm -f "$notes_file"
+echo "pushed $tag, the release workflow builds and publishes the release"

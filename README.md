@@ -74,9 +74,9 @@ none of it is needed to run the result
 
 ## release
 
-publishing a github release builds for all platforms and attaches the binaries
-to it. write what changed under the `## unreleased` heading in `CHANGELOG.md`
-first, then run:
+pushing a version tag builds for all platforms and publishes the github release.
+write what changed under the `## unreleased` heading in `CHANGELOG.md` first,
+then run:
 
 ```bash
 ./scripts/release.sh major|minor|patch
@@ -88,10 +88,11 @@ the script will
 2. retitle `## unreleased` in [CHANGELOG.md](CHANGELOG.md) to the version and
    date being released
 3. commit that along with the bump, and tag it
-4. push
-5. create the release with notes from the changelog
+4. push the commit and the tag
 
-the release triggers a github workflow. which does the rest
+the tag triggers a github workflow, which builds every target, then creates the
+release with notes read back out of the changelog section for that version and
+the binaries attached.
 
 ## sign / notarize (mac only)
 
