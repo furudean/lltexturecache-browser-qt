@@ -5,7 +5,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 # captured first so a failure here is not swallowed by eval
-info="$(uv run python scripts/app-info)"
+info="$(uv run --no-project python scripts/app-info)"
 eval "$info"
 
 target="${1:-}"

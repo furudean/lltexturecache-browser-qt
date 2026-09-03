@@ -10,7 +10,7 @@ if [ "$(uname -s)" != Darwin ]; then
 fi
 
 # captured first so a failure is raised early
-info="$(uv run python scripts/app-info)"
+info="$(uv run --no-project python scripts/app-info)"
 eval "$info"
 
 app="$EXEC_DIRECTORY/$NAME.app"

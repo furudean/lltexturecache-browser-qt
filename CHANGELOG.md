@@ -4,6 +4,7 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
+- one universal mac build instead of separate intel and apple silicon
 - tighten simple texture algorithm to include transparent textures, and fix a
   few false positive cases.
 

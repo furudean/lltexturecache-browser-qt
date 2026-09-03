@@ -21,6 +21,7 @@ jobs:
       version: ${{ steps.info.outputs.version }}
       tag: ${{ steps.info.outputs.tag }}
       stable: ${{ steps.info.outputs.stable }}
+      exec_directory: ${{ steps.info.outputs.exec_directory }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,6 +58,7 @@ jobs:
             echo "version=$VERSION"
             echo "tag=$TAG"
             echo "stable=$stable"
+            echo "exec_directory=$EXEC_DIRECTORY"
           } >> "$GITHUB_OUTPUT"
 
   build:
@@ -81,12 +83,6 @@ jobs:
       # build against the CPython from setup-python, not a uv managed one,
       # because Nuitka does not support python-build-standalone interpreters
       UV_PYTHON_PREFERENCE: only-system
-      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     defaults:
       run:
         shell: ${{ matrix.rosetta && 'arch -x86_64 /bin/bash --noprofile --norc -eo pipefail {0}' || 'bash' }}
@@ -138,30 +134,103 @@ jobs:
 
           set | findstr /v /b "=" >> "%GITHUB_ENV%"
 
-      - name: Import signing certificate
-        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
-        run: ./scripts/macos-keychain.sh
-
       - name: Build
         run: ./scripts/build.sh
 
+      # the two mac bundles are merged into a universal one by the next job,
+      # which is where they get signed, notarized and packaged. ditto keeps the
+      # permissions and symlinks that upload-artifact would otherwise drop
+      - name: Archive the bundle for merging
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "$EXEC_DIRECTORY/$NAME.app" app.zip
+        env:
+          NAME: ${{ needs.meta.outputs.name }}
+          EXEC_DIRECTORY: ${{ needs.meta.outputs.exec_directory }}
+
+      - name: Upload the bundle to the workflow
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-${{ matrix.target }}
+          path: app.zip
+          if-no-files-found: error
+
+      - name: Package
+        if: runner.os != 'macOS'
+        run: ./scripts/package.sh "${{ matrix.target }}"
+
+      - name: Upload artifact to workflow
+        if: runner.os != 'macOS'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-${{ matrix.target }}
+          path: staging
+          if-no-files-found: error
+
+  universal:
+    name: Create universal macOS app from build
+    needs: [meta, build]
+    runs-on: macos-15
+    env:
+      NAME: ${{ needs.meta.outputs.name }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Download the macOS bundles
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: app-macos-*
+          path: bundles
+
+      - name: Unpack the bundles
+        run: |
+          for arch in arm64 x86_64; do
+            ditto -x -k "bundles/app-macos-$arch/app.zip" "bundles/$arch"
+          done
+
+      - name: Import signing certificate
+        if: env.MACOS_SIGN_IDENTITY != ''
+        run: ./scripts/macos-keychain.sh
+
+      - name: Merge the two architectures
+        run: |
+          ./scripts/macos-lipo.sh \
+            "bundles/arm64/$NAME.app" "bundles/x86_64/$NAME.app"
+
       - name: Sign and notarize
-        if: runner.os == 'macOS' && env.MACOS_SIGN_IDENTITY != ''
+        if: env.MACOS_SIGN_IDENTITY != ''
         run: ./scripts/macos-sign.sh
 
       - name: Package
-        run: ./scripts/package.sh "${{ matrix.target }}"
+        run: ./scripts/package.sh macos-universal
 
       - name: Upload artifact to workflow
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.target }}
+          name: dist-macos-universal
           path: staging
           if-no-files-found: error
 
   release:
     name: Publish the release
-    needs: [meta, build]
+    needs: [meta, build, universal]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -177,6 +246,7 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          pattern: dist-*
           path: artifacts
           merge-multiple: true
 
@@ -191,7 +261,24 @@ jobs:
             prerelease=true
           fi
 
-          gh release create "$TAG" artifacts/* \
+          assets=()
+          for path in artifacts/*; do
+            case "${path##*/}" in
+              *macos-universal.dmg) label="macOS App, universal (disk image)" ;;
+              *macos-universal.zip) label="macOS App, universal (archive)" ;;
+              *windows-x86_64.exe) label="Windows Executable, x86-64" ;;
+              *linux-x86_64.AppImage) label="Linux AppImage, x86-64" ;;
+              *linux-x86_64) label="Linux Executable, x86-64" ;;
+              *)
+                echo "::warning::no label for $path"
+                assets+=("$path")
+                continue
+                ;;
+            esac
+            assets+=("$path#$label")
+          done
+
+          gh release create "$TAG" "${assets[@]}" \
             --notes-file notes.md --prerelease="$prerelease" --latest="$STABLE"
 
   homebrew:
@@ -200,12 +287,11 @@ jobs:
     if: needs.meta.outputs.stable == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download the macOS builds
+      - name: Download the macOS build
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: macos-*
+          name: dist-macos-universal
           path: artifacts
-          merge-multiple: true
 
       - name: Check out the tap
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -219,18 +305,14 @@ jobs:
           NAME: ${{ needs.meta.outputs.name }}
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
-          arm_asset="artifacts/$NAME-$VERSION-macos-arm64.zip"
-          intel_asset="artifacts/$NAME-$VERSION-macos-x86_64.zip"
-          arm_sha256="$(sha256sum "$arm_asset" | cut -d' ' -f1)"
-          intel_sha256="$(sha256sum "$intel_asset" | cut -d' ' -f1)"
+          asset="artifacts/$NAME-$VERSION-macos-universal.zip"
+          sha256="$(sha256sum "$asset" | cut -d' ' -f1)"
           cask="tap/Casks/$NAME.rb"
 
-          echo "$arm_asset is $arm_sha256"
-          echo "$intel_asset is $intel_sha256"
+          echo "$asset is $sha256"
 
           sed -i -E "s|^  version \".*\"|  version \"$VERSION\"|" "$cask"
-          sed -i -E "s|^(\s*sha256 arm:\s*)\".*\",|\1\"$arm_sha256\",|" "$cask"
-          sed -i -E "s|^(\s*intel:\s*)\".*\"|\1\"$intel_sha256\"|" "$cask"
+          sed -i -E "s|^(\s*sha256\s+)\".*\"|\1\"$sha256\"|" "$cask"
 
           if git -C tap diff --quiet; then
             echo "::notice::cask already up to date"
