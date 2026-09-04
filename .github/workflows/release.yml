@@ -264,11 +264,11 @@ jobs:
           assets=()
           for path in artifacts/*; do
             case "${path##*/}" in
-              *macos-universal.dmg) label="macOS App, universal (disk image)" ;;
-              *macos-universal.zip) label="macOS App, universal (archive)" ;;
-              *windows-x86_64.exe) label="Windows Executable, x86-64" ;;
-              *linux-x86_64.AppImage) label="Linux AppImage, x86-64" ;;
-              *linux-x86_64) label="Linux Executable, x86-64" ;;
+              *macos-universal.dmg) label="macOS Application (universal, disk image)" ;;
+              *macos-universal.zip) label="macOS Application (universal, archive)" ;;
+              *windows-x86_64.exe) label="Windows Executable (x86-64)" ;;
+              *linux-x86_64.AppImage) label="Linux AppImage (x86-64)" ;;
+              *linux-x86_64) label="Linux Executable (x86-64)" ;;
               *)
                 echo "::warning::no label for $path"
                 assets+=("$path")
