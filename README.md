@@ -44,8 +44,7 @@ brew install --cask furudean/tap/lltexturecache-browser-qt
 | windows  | windows 10 or later, x86-64                 |
 | linux    | glibc 2.35 or later (ubuntu 22.04+), x86-64 |
 
-to run from source or build your own, see [develop](#develop) and
-[build](#build).
+to build from source or run as dev, see below.
 
 ## developing
 
