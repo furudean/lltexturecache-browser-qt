@@ -95,22 +95,24 @@ the binaries attached.
 
 ## sign / notarize (mac only)
 
-signing needs a developer ID Application certificate in a keychain the signing
-machine can read, plus the environment below. then
+signing needs a developer ID Application certificate in a keychain, as documented in the environment variables below
 
 ```bash
+# build as normal
 ./scripts/build.sh
+
+# re-sign the bundle with the hardened runtime and notarize it
 ./scripts/macos-sign.sh
+
+# makes the dmg/zip for release (notarizing the dmg again)
 ./scripts/package.sh
 ```
 
-[macos-sign.sh](scripts/macos-sign.sh) re-signs the bundle with the hardened
-runtime, notarizes and staples it; [package.sh](scripts/package.sh) then makes
-the `.dmg` with another notarization pass.
-
 notarization is skipped when the credentials are unset, so it degrades to a
-plain signing step. in CI [macos-keychain.sh](scripts/macos-keychain.sh) runs
-first to make a throwaway keychain out of `MACOS_CERTIFICATE`.
+plain code signing step. modern gatekeeper will need both to pass cleanly. 
+
+in CI [macos-keychain.sh](scripts/macos-keychain.sh) runs first to make a 
+throwaway keychain out of `MACOS_CERTIFICATE`.
 
 | variable                     | is a                                                            | needed         |
 | ---------------------------- | --------------------------------------------------------------- | -------------- |
