@@ -191,6 +191,10 @@ class TextureModel(QAbstractListModel):
         return self._narrowing.narrowed
 
     @property
+    def scanning(self) -> bool:
+        return self._narrowing.asking and self._narrowing.scan is None
+
+    @property
     def matching(self) -> bool:
         """Whether the grid is ranked against a picture rather than filtered"""
 

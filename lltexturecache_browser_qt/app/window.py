@@ -78,6 +78,8 @@ from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
+SCANNING_MESSAGE = "Identifying simple textures..."
+
 
 class MainWindow(QMainWindow):
     # the windows the app has open, the preview they share and the about box
@@ -689,9 +691,7 @@ class MainWindow(QMainWindow):
         place = self._view.place()
 
         if not model.set_simple_hidden(not shown):
-            # the scan that says which textures hold a picture is still out, and
-            # what was asked for here is applied the moment it lands
-            self._status.flash("Please wait...")
+            self._status.set_summary(SCANNING_MESSAGE)
             return
 
         self.sync_empty()
@@ -765,6 +765,8 @@ class MainWindow(QMainWindow):
 
     def summary(self) -> str:
         model = self._model
+        if model is not None and model.scanning:
+            return SCANNING_MESSAGE
 
         if model is None or not model.narrowed:
             return self.grid_summary()

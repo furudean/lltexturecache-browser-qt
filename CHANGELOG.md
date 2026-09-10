@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - face lift for color filters
+- fix message shown while processing which textures are considered simple
 
 ## v0.6.0 - 2026-09-03
 
