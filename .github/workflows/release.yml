@@ -83,6 +83,8 @@ jobs:
       # build against the CPython from setup-python, not a uv managed one,
       # because Nuitka does not support python-build-standalone interpreters
       UV_PYTHON_PREFERENCE: only-system
+      NUITKA_CACHE_DIR: ${{ github.workspace }}/.nuitka-cache
+      CCACHE_MAXSIZE: 500M
     defaults:
       run:
         shell: ${{ matrix.rosetta && 'arch -x86_64 /bin/bash --noprofile --norc -eo pipefail {0}' || 'bash' }}
@@ -133,6 +135,15 @@ jobs:
           )
 
           set | findstr /v /b "=" >> "%GITHUB_ENV%"
+
+      - name: Restore Nuitka cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.nuitka-cache
+          key: nuitka-${{ matrix.target }}-${{ hashFiles('uv.lock', 'pysidedeploy.spec', '.python-version') }}-${{ github.sha }}
+          restore-keys: |
+            nuitka-${{ matrix.target }}-${{ hashFiles('uv.lock', 'pysidedeploy.spec', '.python-version') }}-
+            nuitka-${{ matrix.target }}-
 
       - name: Build
         run: ./scripts/build.sh
