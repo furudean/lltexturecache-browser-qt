@@ -382,8 +382,11 @@ class MainWindow(QMainWindow):
     def resize_cells(self) -> None:
         size = cell_size()
 
+        anchor = self._view.anchor()
+
         self._view.setIconSize(QSize(size, size))
         self._view.doItemsLayout()
+        self._view.restore_anchor(anchor)
 
         model = self._model
 

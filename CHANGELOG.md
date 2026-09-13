@@ -11,6 +11,7 @@ all notable changes to this project are documented in this file.
 - can resize grid with default OS zoom-in/zoom-out keybind
 - mac build will now use the macos 26+ icon if supported
 - show system-appropriate icon in about
+- stable scrolling position as viewport changes
 
 ## v0.6.0 - 2026-09-03
 

@@ -1,4 +1,16 @@
-from PySide6.QtCore import QAbstractItemModel, QPoint, QRect, QRectF, QSize, Qt, Signal
+from dataclasses import dataclass
+
+from PySide6.QtCore import (
+    QAbstractItemModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    QPoint,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import (
     QColor,
     QIcon,
@@ -146,6 +158,12 @@ class EmptyState(QLabel):
         self.adjustSize()
 
 
+@dataclass(frozen=True)
+class Anchor:
+    index: Index
+    offset: int
+
+
 class TextureGrid(QListView):
     dragged = Signal()
     previewed = Signal()
@@ -154,6 +172,7 @@ class TextureGrid(QListView):
         super().__init__(parent)
 
         self._pin: int | None = None
+        self._anchor: Anchor | None = None
         self._dragged = False
 
         # the splitter the grid sits in makes it draw its frame, which on macOS
@@ -218,10 +237,60 @@ class TextureGrid(QListView):
             self.verticalScrollBar().setValue(self._pin)
 
     def unpin(self) -> None:
+        # the view has been moved on purpose, so neither the place it was held
+        # at nor the cell it was looking at describes it any more
         self._pin = None
+        self._anchor = None
 
     def place(self) -> int:
         return self.verticalScrollBar().value()
+
+    def anchor(self) -> Anchor | None:
+        if self._pin is not None:
+            return None
+
+        if self._anchor is None or not self._anchor.index.isValid():
+            self._anchor = self.take_anchor()
+
+        return self._anchor
+
+    def take_anchor(self) -> Anchor | None:
+        if self.model() is None:
+            return None
+
+        index: Index = self.currentIndex()
+        viewport = self.viewport().rect()
+
+        if not (index.isValid() and viewport.intersects(self.visualRect(index))):
+            index = self.topmost()
+
+        if not index.isValid():
+            return None
+
+        return Anchor(QPersistentModelIndex(index), self.visualRect(index).top() - viewport.top())
+
+    def restore_anchor(self, anchor: Anchor | None) -> None:
+        if anchor is None or not anchor.index.isValid():
+            return
+
+        bar = self.verticalScrollBar()
+        top = self.visualRect(anchor.index).top() - self.viewport().rect().top()
+
+        bar.setValue(bar.value() + top - anchor.offset)
+
+    def topmost(self) -> Index:
+        viewport = self.viewport().rect()
+        stride = self.spacing() + 1
+        reach = cell_size() + stride
+
+        for y in range(viewport.top(), viewport.top() + reach, stride):
+            for x in range(viewport.left(), viewport.left() + reach, stride):
+                index = self.indexAt(QPoint(x, y))
+
+                if index.isValid():
+                    return index
+
+        return QModelIndex()
 
     def scrollTo(self, index: Index, hint: QListView.ScrollHint = QListView.ScrollHint.EnsureVisible) -> None:
         # something has a particular texture it wants in view, which outranks
@@ -236,7 +305,12 @@ class TextureGrid(QListView):
         self.apply_pin()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
+        anchor = self.anchor()
+
         super().resizeEvent(event)
+
+        self.executeDelayedItemsLayout()
+        self.restore_anchor(anchor)
 
         self.apply_pin()
         self.centre_empty()
