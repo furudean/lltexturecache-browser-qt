@@ -1,5 +1,6 @@
 import logging
 import os
+import plistlib
 import signal
 import sys
 import traceback
@@ -7,7 +8,7 @@ from pathlib import Path
 from types import TracebackType
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal, Slot
-from PySide6.QtGui import QPixmapCache
+from PySide6.QtGui import QIcon, QPixmapCache
 from PySide6.QtWidgets import QApplication
 from texture_courier import TextureCache, TextureCacheError
 
@@ -15,6 +16,7 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME, APP_NAME, __version__
 from lltexturecache_browser_qt.app.actions import AppMenu
 from lltexturecache_browser_qt.app.alerts import fail
 from lltexturecache_browser_qt.app.window import MainWindow
+from lltexturecache_browser_qt.assets import APP_ICON
 from lltexturecache_browser_qt.cache.suggested import resolve as resolve_suggested
 from lltexturecache_browser_qt.grid.model import PIXMAP_CACHE_KB
 from lltexturecache_browser_qt.signals import SignalWatcher
@@ -24,6 +26,18 @@ log = logging.getLogger(__name__)
 
 LOG_FORMAT = "%(levelname)s %(name)s: %(message)s"
 LOG_LEVEL_VAR = "LLTEXTURECACHE_LOG"
+
+
+def bundled_icon() -> bool:
+    info = Path(sys.executable).parent.parent / "Info.plist"
+
+    try:
+        with info.open("rb") as f:
+            keys = plistlib.load(f)
+    except (OSError, plistlib.InvalidFileException):
+        return False
+
+    return bool(keys.get("CFBundleIconName") or keys.get("CFBundleIconFile"))
 
 
 class AppWatcher(QObject):
@@ -110,6 +124,9 @@ def main() -> int:
     app.setDesktopFileName(APP_NAME)
     app.setOrganizationName("paisley softworks")
     app.setApplicationVersion(__version__)
+
+    if not bundled_icon():
+        app.setWindowIcon(QIcon(str(APP_ICON)))
 
     QPixmapCache.setCacheLimit(PIXMAP_CACHE_KB)
 
