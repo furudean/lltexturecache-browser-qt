@@ -79,7 +79,7 @@ from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
-SCANNING_MESSAGE = "Identifying simple textures..."
+SCANNING_MESSAGE = "Identifying texture characteristics..."
 
 
 class MainWindow(QMainWindow):
