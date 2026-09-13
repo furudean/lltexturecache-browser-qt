@@ -22,6 +22,7 @@ from lltexturecache_browser_qt.cache.scan import CacheScan, Scan, ScanSignals
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
+from lltexturecache_browser_qt.view.cellsize import cell_size
 from lltexturecache_browser_qt.view.checkerboard import checkerboard_generation
 from lltexturecache_browser_qt.view.formatting import format_size, format_time
 from lltexturecache_browser_qt.view.images import (
@@ -145,6 +146,7 @@ class TextureModel(QAbstractListModel):
         # asked for is the only one worth the room a full sized decode takes
         self._previews = PreviewDecodes()
         self._generation = checkerboard_generation()
+        self._cell_size = cell_size()
         self._thumbnails = threading.Lock()
 
         self._decodes = DecodeQueue(self, start=self.start_decode)
@@ -398,6 +400,18 @@ class TextureModel(QAbstractListModel):
 
         return True
 
+    def resize_cells(self) -> bool:
+        size = cell_size()
+
+        if size == self._cell_size:
+            return False
+
+        self._cell_size = size
+
+        self._decodes.restyle()
+
+        return True
+
     def set_filters(self, colors: list[QColor]) -> bool:
         self._narrowing.colors = list(colors)
 
@@ -456,7 +470,9 @@ class TextureModel(QAbstractListModel):
             )
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        self._decodes.pool.start(DecodeTask(texture, self.reads, self._signals), priority)
+        task = DecodeTask(texture, self.reads, self._signals, self._cell_size)
+
+        self._decodes.pool.start(task, priority)
 
     def request(self, texture: Texture) -> None:
         self._decodes.request(texture)

@@ -66,6 +66,7 @@ from lltexturecache_browser_qt.settings import (
     SPLITTER_KEY,
     stored_blob,
 )
+from lltexturecache_browser_qt.view.cellsize import CellSizeChanges, cell_size
 from lltexturecache_browser_qt.view.checkerboard import (
     CheckerboardChanges,
     reset_pane_tone,
@@ -73,7 +74,7 @@ from lltexturecache_browser_qt.view.checkerboard import (
     sync_checkerboard,
 )
 from lltexturecache_browser_qt.view.formatting import format_count
-from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE, image_file, image_filter, readable_image
+from lltexturecache_browser_qt.view.images import image_file, image_filter, readable_image
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
@@ -128,9 +129,14 @@ class MainWindow(QMainWindow):
         self._settle.setInterval(150)  # wait for layout to settle
         self._settle.timeout.connect(self.settle_action)
 
+        self._zoomed = QTimer(self)
+        self._zoomed.setSingleShot(True)
+        self._zoomed.setInterval(150)
+        self._zoomed.timeout.connect(self.prefetch_action)
+
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
-        self._view.setIconSize(QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE))
+        self._view.setIconSize(QSize(cell_size(), cell_size()))
         self._view.setSpacing(CELL_PADDING // 2)
         self._view.setItemDelegate(CellDelegate(self._view))
         self._view.setResizeMode(QListView.ResizeMode.Adjust)
@@ -220,6 +226,8 @@ class MainWindow(QMainWindow):
         # window is a repaint in every one of them
         CheckerboardChanges.shared().changed.connect(self.restyle)
 
+        CellSizeChanges.shared().changed.connect(self.resize_cells)
+
         # both entries come up out of their stored settings, before anything is
         # listening to them, so the pane and the window are put where the menu
         # already says they are here
@@ -298,6 +306,7 @@ class MainWindow(QMainWindow):
         self._actions.shutdown()
 
         CheckerboardChanges.shared().changed.disconnect(self.restyle)
+        CellSizeChanges.shared().changed.disconnect(self.resize_cells)
 
         if self._job is not None:
             self._job.shutdown()
@@ -369,6 +378,21 @@ class MainWindow(QMainWindow):
         self._view.viewport().update()
 
         self._settle.start()
+
+    def resize_cells(self) -> None:
+        size = cell_size()
+
+        self._view.setIconSize(QSize(size, size))
+        self._view.doItemsLayout()
+
+        model = self._model
+
+        if model is None or not model.resize_cells():
+            return
+
+        self._view.viewport().update()
+
+        self._zoomed.start()
 
     def open_action(self) -> None:
         dialog = QFileDialog(self, "Select a texturecache directory")

@@ -8,6 +8,7 @@ all notable changes to this project are documented in this file.
 - fix message shown while processing which textures are considered simple
 - slightly tweak simple textures algorithm for less false-positives, especially
   with sprite sheets
+- can resize grid with default OS zoom-in/zoom-out keybind
 
 ## v0.6.0 - 2026-09-03
 

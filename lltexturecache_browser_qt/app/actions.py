@@ -12,6 +12,14 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS, Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
+from lltexturecache_browser_qt.view.cellsize import (
+    DEFAULT_CELL_SIZE,
+    CellSizeChanges,
+    can_step,
+    cell_size,
+    set_cell_size,
+    step_cell_size,
+)
 from lltexturecache_browser_qt.view.checkerboard import CheckerboardChanges, CheckerTone, grid_tone, set_grid_tone
 from lltexturecache_browser_qt.view.formatting import format_count
 
@@ -242,17 +250,21 @@ class WindowActions(QObject):
 
     def build_view_menu(self, owner: QWidget, view_menu: QMenu) -> None:
         self.build_toggles(owner)
+        self.build_zoom(owner)
         self.build_tones(owner)
 
         view_menu.addAction(self.preview)
         view_menu.addAction(self.inspector)
         view_menu.addAction(self.filters)
 
-        # what the grid holds rather than which panes are up, so it sits apart
-        # from the three entries above it
         view_menu.addSeparator()
         view_menu.addAction(self.incomplete)
         view_menu.addAction(self.simple)
+
+        view_menu.addSeparator()
+        view_menu.addAction(self.zoom_in)
+        view_menu.addAction(self.zoom_out)
+        view_menu.addAction(self.zoom_reset)
 
         view_menu.addSeparator()
         checkerboard = view_menu.addMenu("&Alpha Mode")
@@ -303,6 +315,28 @@ class WindowActions(QObject):
         self.incomplete = self._toggles[INCOMPLETE_KEY]
         self.simple = self._toggles[SIMPLE_KEY]
 
+    def build_zoom(self, owner: QWidget) -> None:
+        in_keys = [*QKeySequence.keyBindings(QKeySequence.StandardKey.ZoomIn), QKeySequence("Ctrl+=")]
+
+        self.zoom_in = QAction("Zoom &In", owner)
+        self.zoom_in.setShortcuts(list(dict.fromkeys(in_keys)))
+        self.zoom_in.setStatusTip("Draw textures larger")
+        triggers(self.zoom_in, partial(step_cell_size, 1))
+
+        self.zoom_out = QAction("Zoom &Out", owner)
+        self.zoom_out.setShortcuts(QKeySequence.keyBindings(QKeySequence.StandardKey.ZoomOut))
+        self.zoom_out.setStatusTip("Draw textures smaller")
+        triggers(self.zoom_out, partial(step_cell_size, -1))
+
+        self.zoom_reset = QAction("&Reset Zoom", owner)
+        self.zoom_reset.setShortcut(QKeySequence("Ctrl+0"))
+        self.zoom_reset.setStatusTip("Draw textures at the original size")
+        triggers(self.zoom_reset, partial(set_cell_size, DEFAULT_CELL_SIZE))
+
+        CellSizeChanges.shared().changed.connect(self.sync_zoom)
+
+        self.sync_zoom()
+
     def build_tones(self, owner: QWidget) -> None:
         self._tones = {}
 
@@ -331,6 +365,13 @@ class WindowActions(QObject):
     def shutdown(self) -> None:
         RecentCaches.shared().changed.disconnect(self.populate_recents)
         CheckerboardChanges.shared().changed.disconnect(self.sync_checkerboard)
+        CellSizeChanges.shared().changed.disconnect(self.sync_zoom)
+
+    def sync_zoom(self) -> None:
+        # the ladder has ends, and an entry that would do nothing says so
+        self.zoom_in.setEnabled(can_step(1))
+        self.zoom_out.setEnabled(can_step(-1))
+        self.zoom_reset.setEnabled(cell_size() != DEFAULT_CELL_SIZE)
 
     def sync_checkerboard(self) -> None:
         self._tones[grid_tone()].setChecked(True)

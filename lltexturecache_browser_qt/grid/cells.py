@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index
-from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
+from lltexturecache_browser_qt.view.cellsize import cell_size
 
 CELL_PADDING = 14
 
@@ -119,7 +119,9 @@ class CellDelegate(QStyledItemDelegate):
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: Index) -> QSize:
-        return QSize(THUMBNAIL_SIZE, THUMBNAIL_SIZE)
+        size = cell_size()
+
+        return QSize(size, size)
 
 
 class EmptyState(QLabel):
