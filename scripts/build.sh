@@ -47,6 +47,10 @@ rm -rf "$EXEC_DIRECTORY/$NAME.app" "$EXEC_DIRECTORY/$NAME.exe" "$EXEC_DIRECTORY/
 
 uv run pyside6-deploy --config-file "$generated_spec" --name "$NAME" --force
 
+if [ "$(uname -s)" = Darwin ]; then
+	./scripts/macos-icon.sh
+fi
+
 if [ "$(uname -s)" = Linux ]; then
 	./scripts/appimage.sh
 fi

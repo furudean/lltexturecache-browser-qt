@@ -9,6 +9,7 @@ all notable changes to this project are documented in this file.
 - slightly tweak simple textures algorithm for less false-positives, especially
   with sprite sheets
 - can resize grid with default OS zoom-in/zoom-out keybind
+- mac build will now use the macos 26+ icon if supported
 
 ## v0.6.0 - 2026-09-03
 
