@@ -86,16 +86,32 @@ FLAT_RANGE = 4
 FLAT_ALPHA_RANGE = 4
 
 # what a texture with no picture in it is allowed to cost, as the markers every
-# codestream opens with plus what its pixels come to. a thumbnail is sixteen
-# pixels at the most, which is few enough to average a weave or a grain away to
-# nothing, so what the thumbnail says has to be borne out by what the encoder
-# needed. the two terms are both wanted: without the base a small blank is
-# damned by the header it could not avoid paying for, and without the rate a
-# large one has no room to hold its own size. the base is kept near the
-# smallest codestream a cache holds, since past that it stops telling a small
-# blank apart from a small texture, both of which are mostly header
-FLAT_BASE_BYTES = 384
-FLAT_MAX_DENSITY = 0.03
+# codestream opens with plus a little for the pixels themselves. a thumbnail is
+# sixteen pixels at the most, which is few enough to average a weave or a grain
+# away to nothing, so what the thumbnail says has to be borne out by what the
+# encoder needed. the base carries almost all of the bar, since a blank costs
+# about what its header costs however large it is. the rate is only there so a
+# blank at cache sizes is not damned by the few bytes its size alone adds, and
+# it is kept small because a codestream grows nothing like as fast as a pixel
+# count does, which at any generous rate hands a large texture room to hide a
+# whole picture in
+FLAT_BASE_BYTES = 448
+FLAT_MAX_DENSITY = 0.001
+
+# how large a texture has to be before the bytes are allowed to overrule a
+# thumbnail that shows nothing at all. a thumbnail loses a sprite sheet's few
+# opaque marks by averaging them against everything around them, which only
+# happens when the texture is very much larger than the sixteen pixels it was
+# reduced to. a small texture that comes back empty was empty, whatever it
+# cost, and past this the bar above separates the two cleanly on its own
+CLEAR_MIN_PIXELS = 1024 * 1024
+
+# what a texture is allowed to cost when its thumbnail is a single pixel. the
+# cache keeps a good few of them that way, and one pixel is one color whatever
+# it was reduced from, so it is not evidence of anything and the bytes decide
+# alone. they can be held much tighter here than where a thumbnail has a say,
+# since a texture kept at one pixel is small and a blank one is all header
+BLIND_BASE_BYTES = 304
 
 # bits of each channel a color is rounded to before it is counted, which is
 # 32768 colors and an error too small to move a texture in the ranking

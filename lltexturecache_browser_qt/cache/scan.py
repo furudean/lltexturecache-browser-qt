@@ -16,6 +16,8 @@ from PySide6.QtGui import QImage
 from texture_courier import Texture, TextureCacheError, Thumbnail
 
 from lltexturecache_browser_qt.cache.color import (
+    BLIND_BASE_BYTES,
+    CLEAR_MIN_PIXELS,
     FLAT_BASE_BYTES,
     FLAT_MAX_DENSITY,
     ColorIndex,
@@ -124,24 +126,22 @@ class CacheScan(QRunnable):
     def signature(self, texture: Texture, kept: Thumbnail, image: QImage) -> Signature | None:
         found = signature(image)
 
-        if found is not None and found.flat and not found.clear and self.dense(texture, kept):
-            return replace(found, flat=False)
+        if found is not None and found.flat and self.dense(texture, kept, clear=found.clear):
+            return replace(found, flat=False, clear=False)
 
         return found
 
-    def dense(self, texture: Texture, kept: Thumbnail) -> bool:
-        """Whether the texture pays too many bytes for its pixels to be holding no picture
-
-        The thumbnail was taken at one of the texture's mip levels and says
-        which, so the size it was reduced from is the size of the texture
-        itself. Nothing says so when the cache has no thumbnail kept, and an
-        entry with none of its own never reaches this.
-        """
-
+    def dense(self, texture: Texture, kept: Thumbnail, *, clear: bool = False) -> bool:
         if not kept.width or not kept.height:
             return False
 
+        if kept.width * kept.height == 1:
+            return texture.image_size > BLIND_BASE_BYTES
+
         width, height = kept.source_dimensions
         pixels = width * height
+
+        if clear and pixels < CLEAR_MIN_PIXELS:
+            return False
 
         return texture.image_size > FLAT_BASE_BYTES + pixels * FLAT_MAX_DENSITY

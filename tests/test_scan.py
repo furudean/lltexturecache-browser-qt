@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 from texture_courier import Entry, Texture, Thumbnail
 
-from lltexturecache_browser_qt.cache.color import FLAT_BASE_BYTES
+from lltexturecache_browser_qt.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
 from lltexturecache_browser_qt.cache.scan import PLACEHOLDER_BYTE, CacheScan, ScanSignals, placeholder
 
 
@@ -34,6 +34,10 @@ def kept(width: int = 16, height: int = 16, discard_level: int = 2, fill: int = 
     )
 
 
+def reduced() -> Thumbnail:
+    return kept(discard_level=6)
+
+
 def filled(color: QColor) -> QImage:
     image = QImage(16, 16, QImage.Format.Format_ARGB32)
     image.fill(color)
@@ -51,6 +55,24 @@ class TestDense:
     def test_a_thumbnail_with_no_size_cannot_answer(self, app: QApplication) -> None:
         assert scan().dense(entry(FLAT_BASE_BYTES * 8), kept(width=0)) is False
 
+    def test_a_large_texture_showing_nothing_still_answers_to_the_bytes(self, app: QApplication) -> None:
+        assert scan().dense(entry(FLAT_BASE_BYTES * 32), reduced(), clear=True) is True
+
+    def test_a_small_one_is_taken_at_its_word(self, app: QApplication) -> None:
+        # nothing was lost reducing it, so the bytes are never asked
+        assert scan().dense(entry(FLAT_BASE_BYTES * 32), kept(), clear=True) is False
+
+    def test_a_thumbnail_of_one_pixel_leaves_it_to_the_bytes(self, app: QApplication) -> None:
+        single = kept(width=1, height=1, discard_level=5)
+
+        assert scan().dense(entry(BLIND_BASE_BYTES + 1), single) is True
+        assert scan().dense(entry(BLIND_BASE_BYTES), single) is False
+
+    def test_one_pixel_is_no_evidence_even_when_it_shows_nothing(self, app: QApplication) -> None:
+        single = kept(width=1, height=1, discard_level=5)
+
+        assert scan().dense(entry(BLIND_BASE_BYTES + 1), single, clear=True) is True
+
 
 class TestSignature:
     def test_the_bytes_overrule_a_thumbnail_that_reports_one_colour(self, app: QApplication) -> None:
@@ -65,14 +87,22 @@ class TestSignature:
         assert found is not None
         assert found.flat is True
 
-    def test_the_bytes_do_not_overrule_a_texture_nobody_can_see(self, app: QApplication) -> None:
+    def test_a_texture_nobody_can_see_is_allowed_the_bytes_its_colors_cost(self, app: QApplication) -> None:
         # the colors are in the codestream and were paid for at full price, but
-        # they are under an opacity plane that shows none of them
-        found = scan().signature(entry(FLAT_BASE_BYTES * 8), kept(), filled(QColor(0xFF, 0x00, 0x00, 0x00)))
+        # they are under an opacity plane that shows none of them, and it is too
+        # small for the reduction to have hidden anything
+        found = scan().signature(entry(FLAT_BASE_BYTES * 32), kept(), filled(QColor(0xFF, 0x00, 0x00, 0x00)))
 
         assert found is not None
         assert found.clear is True
         assert found.flat is True
+
+    def test_a_texture_paying_far_past_that_is_a_sprite_sheet_the_thumbnail_lost(self, app: QApplication) -> None:
+        found = scan().signature(entry(FLAT_BASE_BYTES * 32), reduced(), filled(QColor(0xFF, 0x00, 0x00, 0x00)))
+
+        assert found is not None
+        assert found.flat is False
+        assert found.clear is False
 
     def test_a_thumbnail_that_cannot_be_read_has_no_signature(self, app: QApplication) -> None:
         assert scan().signature(entry(FLAT_BASE_BYTES * 8), kept(), QImage()) is None
