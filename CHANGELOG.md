@@ -10,6 +10,7 @@ all notable changes to this project are documented in this file.
   with sprite sheets
 - can resize grid with default OS zoom-in/zoom-out keybind
 - mac build will now use the macos 26+ icon if supported
+- show system-appropriate icon in about
 
 ## v0.6.0 - 2026-09-03
 
