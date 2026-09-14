@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v0.7.2 - 2026-09-14
 
 - fix a build error (again)
 
