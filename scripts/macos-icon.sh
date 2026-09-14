@@ -29,12 +29,15 @@ if ! xcrun --find actool >/dev/null 2>&1; then
 fi
 
 plist="$app/Contents/Info.plist"
+staging="$(mktemp -d -t icon-catalogue)"
 partial="$(mktemp -t icon-plist)"
+
+trap 'rm -rf "$staging" "$partial"' EXIT
 
 # macos 26 and up draw the icon out of Assets.car
 status=0
 result="$(xcrun actool \
-	--compile "$app/Contents/Resources" \
+	--compile "$staging" \
 	--platform macosx \
 	--minimum-deployment-target "${MACOSX_DEPLOYMENT_TARGET:-13.0}" \
 	--app-icon "$icon" \
@@ -42,16 +45,20 @@ result="$(xcrun actool \
 	"$source" 2>&1)" || status=$?
 
 if [ "$status" -ne 0 ]; then
-	echo "$result" >&2
-	rm -f "$partial"
+	echo "err: actool failed on $source under $(xcode-select -p)" >&2
+
+	if [ -n "$result" ]; then
+		echo "$result" >&2
+	fi
+
 	exit "$status"
 fi
+
+cp -R "$staging"/. "$app/Contents/Resources/"
 
 for key in CFBundleIconName CFBundleIconFile; do
 	value="$(plutil -extract "$key" raw -o - "$partial")"
 	plutil -replace "$key" -string "$value" "$plist"
 done
-
-rm -f "$partial"
 
 echo "compiled $source into $app"
