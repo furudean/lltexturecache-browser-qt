@@ -2,6 +2,10 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- don't swallow exit code during icon compilation
+
 ## v0.7.0 - 2026-09-13
 
 - face lift for color filters

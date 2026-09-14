@@ -32,15 +32,19 @@ plist="$app/Contents/Info.plist"
 partial="$(mktemp -t icon-plist)"
 
 # macos 26 and up draw the icon out of Assets.car
-if ! result="$(xcrun actool \
+status=0
+result="$(xcrun actool \
 	--compile "$app/Contents/Resources" \
 	--platform macosx \
 	--minimum-deployment-target "${MACOSX_DEPLOYMENT_TARGET:-13.0}" \
 	--app-icon "$icon" \
 	--output-partial-info-plist "$partial" \
-	"$source" 2>&1)"; then
+	"$source" 2>&1)" || status=$?
+
+if [ "$status" -ne 0 ]; then
 	echo "$result" >&2
-	exit 1
+	rm -f "$partial"
+	exit "$status"
 fi
 
 for key in CFBundleIconName CFBundleIconFile; do
