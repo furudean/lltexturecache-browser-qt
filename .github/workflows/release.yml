@@ -119,23 +119,6 @@ jobs:
         shell: bash
         run: brew install ccache
 
-      # actool only reads the icon composer bundle from xcode 26 onwards, and
-      # the image default is older. the deployment target is pinned in
-      # build.sh, so the newer sdk does not raise the minimum macos version
-      - name: Select Xcode
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          developer="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
-
-          if [ -z "$developer" ]; then
-            echo "::error::xcode 26 is not installed, found $(ls -d /Applications/Xcode*.app | tr '\n' ' ')"
-            exit 1
-          fi
-
-          sudo xcode-select -s "$developer"
-          xcodebuild -version
-
       # without this Nuitka falls back to a downloaded zig, which is slower
       - name: Set up MSVC
         if: runner.os == 'Windows'
@@ -198,7 +181,8 @@ jobs:
   universal:
     name: Create universal macOS app from build
     needs: [meta, build]
-    runs-on: macos-15
+    # deliberately use macos-26 to give us newer icon composition
+    runs-on: macos-26
     env:
       NAME: ${{ needs.meta.outputs.name }}
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
@@ -241,6 +225,9 @@ jobs:
         run: |
           ./scripts/macos-lipo.sh \
             "bundles/arm64/$NAME.app" "bundles/x86_64/$NAME.app"
+
+      - name: Compile the icon catalogue
+        run: ./scripts/macos-icon.sh
 
       - name: Sign and notarize
         if: env.MACOS_SIGN_IDENTITY != ''

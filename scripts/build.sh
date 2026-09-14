@@ -48,7 +48,14 @@ rm -rf "$EXEC_DIRECTORY/$NAME.app" "$EXEC_DIRECTORY/$NAME.exe" "$EXEC_DIRECTORY/
 uv run pyside6-deploy --config-file "$generated_spec" --name "$NAME" --force
 
 if [ "$(uname -s)" = Darwin ]; then
-	./scripts/macos-icon.sh
+	macos="$(sw_vers -productVersion)"
+
+	# actool renders an icon composer bundle only on macos 26
+	if [ "${macos%%.*}" -ge 26 ]; then
+		./scripts/macos-icon.sh
+	else
+		echo "note: skipping the icon catalogue, macos 26 is needed="
+	fi
 fi
 
 if [ "$(uname -s)" = Linux ]; then
