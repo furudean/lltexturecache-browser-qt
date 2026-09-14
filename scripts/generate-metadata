@@ -10,29 +10,41 @@ ROOT: Path = app_info["ROOT"]
 read = app_info["read"]
 
 
-def is_dirty(root: Path) -> bool:
+def git(root: Path, *args: str) -> str | None:
     try:
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
     except OSError:
-        return False
+        return None
 
-    if status.returncode != 0:
-        return False
+    if result.returncode != 0:
+        return None
 
-    return bool(status.stdout.strip())
+    return result.stdout.strip()
+
+
+def is_dirty(root: Path) -> bool:
+    return bool(git(root, "status", "--porcelain"))
+
+
+def is_release_commit(root: Path, version: str) -> bool:
+    head = git(root, "rev-parse", "--verify", "HEAD")
+    tagged = git(root, "rev-parse", "--verify", "--quiet", f"refs/tags/v{version}^{{commit}}")
+
+    return head is not None and head == tagged
 
 
 def main() -> None:
     info = read()
     version = info.version
+    dirty = is_dirty(ROOT)
 
-    if is_dirty(ROOT):
+    # a build off the release commit carries the version, anything else carries the hash it came from
+    if dirty or not is_release_commit(ROOT, version):
+        head = git(ROOT, "rev-parse", "--short", "HEAD")
+        if head:
+            version = head
+
+    if dirty:
         version += "-dirty"
 
     out = ROOT / info.package / "_meta.py"
