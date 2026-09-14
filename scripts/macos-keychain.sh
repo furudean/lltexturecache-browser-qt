@@ -18,19 +18,37 @@ if ! echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"; then
 	exit 1
 fi
 
-# be loud about errors!!!
-if ! openssl pkcs12 -in "$certificate" -info -noout \
-	-passin env:MACOS_CERTIFICATE_PASSWORD 2>/dev/null; then
-	echo "err: the decoded MACOS_CERTIFICATE is not a .p12 openssl can open" >&2
-	echo "     $(wc -c < "$certificate") bytes decoded, check the secret was" >&2
-	echo "     set from the full base64 and MACOS_CERTIFICATE_PASSWORD matches" >&2
+# a .p12 is DER, so it opens with a SEQUENCE whose declared length covers the
+# rest of the file. a truncated or half-pasted secret is caught here, where
+# the byte count says so, instead of reaching the import as a password problem
+header="$(od -An -tx1 -N4 < "$certificate" | tr -d ' \n')"
+size="$(wc -c < "$certificate")"
+
+if [ "${header#3082}" = "$header" ]; then
+	echo "err: the decoded MACOS_CERTIFICATE is not a .p12" >&2
+	echo "     $size bytes starting ${header:-nothing}, check the secret holds" >&2
+	echo "     the whole base64 of the exported certificate" >&2
 	rm -f "$certificate"
 	exit 1
 fi
 
-security import "$certificate" -k "$keychain" -f pkcs12 \
+if [ "$size" -ne "$(( 4 + 0x${header#3082} ))" ]; then
+	echo "err: the decoded MACOS_CERTIFICATE is an incomplete .p12" >&2
+	echo "     $size bytes decoded, the header declares $(( 4 + 0x${header#3082} ))" >&2
+	rm -f "$certificate"
+	exit 1
+fi
+
+# be loud about errors!!!
+if ! security import "$certificate" -k "$keychain" -f pkcs12 \
 	-P "$MACOS_CERTIFICATE_PASSWORD" \
-	-T /usr/bin/codesign -T /usr/bin/security
+	-T /usr/bin/codesign -T /usr/bin/security; then
+	echo "err: macos could not import the decoded MACOS_CERTIFICATE" >&2
+	echo "     the .p12 is well formed, so check MACOS_CERTIFICATE_PASSWORD" >&2
+	rm -f "$certificate"
+	exit 1
+fi
+
 rm "$certificate"
 
 # let codesign use the key without an interactive prompt
