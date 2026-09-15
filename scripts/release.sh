@@ -9,38 +9,28 @@ bump="${1:-}"
 case "$bump" in
 	major | minor | patch) ;;
 	*)
-		echo "usage: $0 major|minor|patch" >&2
+		echo "usage: $0 <major|minor|patch>" >&2
 		exit 2
 		;;
 esac
 
 if [ -n "$(git status --porcelain)" ]; then
-	echo "err: working tree is dirty" >&2
+	echo "error: git working tree is dirty. commit or stash changes first" >&2
 	exit 1
 fi
 
+prev_version="$(uv version --short)"
 version="$(uv version --bump "$bump" --dry-run --short)"
 tag="v$version"
 
 if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
-	echo "err: tag $tag already exists" >&2
+	echo "error: tag $tag already exists" >&2
 	exit 1
 fi
 
 changelog="CHANGELOG.md"
 
 ./scripts/changelog-notes.sh unreleased >/dev/null
-
-printf 'you are about to release %s (from v%s) on branch %s. continue? [y/N] ' \
-	"$tag" "$(uv version --short)" "$(git rev-parse --abbrev-ref HEAD)"
-read -r reply </dev/tty
-case "$reply" in
-	y | Y | yes | YES) ;;
-	*)
-		echo "aborted" >&2
-		exit 1
-		;;
-esac
 
 uv version --bump "$bump"
 
@@ -54,8 +44,14 @@ mv "$tmp" "$changelog"
 git add pyproject.toml uv.lock "$changelog"
 git commit -m "release $tag"
 git tag "$tag"
+commit="$(git rev-parse --short HEAD)"
+branch="$(git rev-parse --abbrev-ref HEAD)"
 
-git push origin HEAD
-git push origin "$tag"
-
-echo "pushed $tag, the release workflow builds and publishes the release"
+echo ""
+echo "made commit for $tag (from v$prev_version) on branch $branch"
+echo ""
+echo "to push the commit and tag, which triggers the release workflow, run:"
+echo "  git push origin HEAD && git push origin $tag"
+echo ""
+echo "to undo the commit and remove the tag, run:"
+echo "  git tag -d $tag && git reset $commit^"
