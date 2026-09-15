@@ -37,6 +37,9 @@ lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
 [tool.app]
 display-name = "lltexturecache-browser-qt"
 bundle-id = "com.furudean.lltexturecache-browser-qt"
+company-name = "paisley softworks"
+copyright = "Copyright (c) 2026 meri p"
+macos-category = "public.app-category.utilities"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

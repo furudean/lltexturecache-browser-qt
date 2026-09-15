@@ -12,10 +12,18 @@ generated_spec=pysidedeploy.generated.spec
 
 extra_args="--assume-yes-for-downloads"
 
+extra_args="$extra_args '--company-name=$COMPANY_NAME'"
+extra_args="$extra_args '--product-name=$DISPLAY_NAME'"
+extra_args="$extra_args '--file-description=$DESCRIPTION'"
+extra_args="$extra_args '--file-version=$VERSION'"
+extra_args="$extra_args '--product-version=$VERSION'"
+extra_args="$extra_args '--copyright=$COPYRIGHT'"
+
 if [ "$(uname -s)" = Darwin ]; then
 	extra_args="$extra_args '--macos-app-name=$DISPLAY_NAME'"
 	extra_args="$extra_args '--macos-signed-app-name=$BUNDLE_ID'"
 	extra_args="$extra_args '--macos-app-version=$VERSION'"
+	extra_args="$extra_args '--macos-app-category-type=$MACOS_CATEGORY'"
 
 	# pyside6's wheel is macosx_13_0 which is our baseline
 	export MACOSX_DEPLOYMENT_TARGET=13.0

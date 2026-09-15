@@ -2,6 +2,10 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- wire up some executable metadata fields
+
 ## v0.7.3 - 2026-09-14
 
 - fix a build error (again x2)
