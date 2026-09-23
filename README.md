@@ -70,8 +70,6 @@ a script makes the app for the host platform. mac gets a `.app` windows
 | `patchelf`       | linux | nuitka to fix up the rpaths of the bundled qt libraries |
 | `libxcb-cursor0` | linux | nuitka to have a copy to bundle into the binary         |
 
-none of it is needed to run the result
-
 ## release
 
 pushing a version tag builds for all platforms and publishes the github release.
