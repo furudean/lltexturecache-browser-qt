@@ -26,8 +26,8 @@ def read_image(data: QByteArray) -> QImage:
     return QImageReader(buffer).read()
 
 
-def decode_image(codestream: bytes) -> QImage:
-    decoded = decode_texture(codestream)
+def decode_image(codestream: bytes, *, target_size: int | None = None) -> QImage:
+    decoded = decode_texture(codestream, target_size=target_size)
 
     # the rows are packed tight, which is not the alignment QImage assumes when
     # it is left to work the stride out for itself

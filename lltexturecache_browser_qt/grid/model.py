@@ -87,6 +87,7 @@ class DecodeTask(QRunnable):
         *,
         upscale: bool = True,
         checkerboard: bool = True,
+        reduced: bool = False,
     ):
         super().__init__()
 
@@ -96,6 +97,7 @@ class DecodeTask(QRunnable):
         self._size = size
         self._upscale = upscale
         self._board = checkerboard
+        self._reduced = reduced
 
     @Slot()
     def run(self) -> None:
@@ -109,7 +111,7 @@ class DecodeTask(QRunnable):
             with self._reads:
                 codestream = self._texture.codestream()
 
-            image = decode_image(codestream)
+            image = decode_image(codestream, target_size=self._size if self._reduced else None)
         except (TextureCacheError, OSError) as e:
             # a cache is full of entries the viewer never finished writing, so
             # one that will not decode is ordinary rather than news. the cell
@@ -470,7 +472,7 @@ class TextureModel(QAbstractListModel):
             )
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        task = DecodeTask(texture, self.reads, self._signals, self._cell_size)
+        task = DecodeTask(texture, self.reads, self._signals, self._cell_size, reduced=True)
 
         self._decodes.pool.start(task, priority)
 

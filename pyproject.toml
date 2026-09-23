@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
-    "imagecodecs>=2026.8.16",
+    "imagecodecs",
     "pillow>=12.3.0",
     "pyside6>=6.11.2",
     "texture-courier>=0.0.16",
@@ -58,3 +58,11 @@ line-length = 120
 # build output is a copy of the package, and dist is what was shipped from it,
 # so scanning either only reports every finding a second time
 exclude_dirs = ["build", "dist", ".venv", "tests"]
+
+# install via brew
+# brew install little-cms2 libdeflate webp snappy liblerc bzip2 zlib charls jxrlib brotli
+
+# pass paths explicitly
+# CFLAGS="-I/opt/homebrew/include -I/opt/homebrew/opt/bzip2/include -I/opt/homebrew/opt/zlib/include -I/opt/homebrew/opt/libdeflate/include -I/opt/homebrew/include/openjpeg-2.5 -I/opt/homebrew/include/jxrlib" LDFLAGS="-L/opt/homebrew/lib -L/opt/homebrew/opt/bzip2/lib -L/opt/homebrew/opt/zlib/lib -L/opt/homebrew/opt/libdeflate/lib" uv sync
+[tool.uv.sources]
+imagecodecs = { git = "https://github.com/furudean/imagecodecs", rev = "77f9ea29a31cadc77ac9aea1be63a36da410a528" }

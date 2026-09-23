@@ -1,10 +1,11 @@
+import struct
 from dataclasses import dataclass
 
 import imagecodecs
 
 # imagecodecs reaches its codecs through a module level __getattr__ that imports
 # them by name. it is referenced so its included in the build by static analysis
-from imagecodecs import _jpeg2k, _shared_cython  # noqa: F401
+from imagecodecs import _jpeg2k  # noqa: F401
 from texture_courier import TextureCacheError
 
 GREYSCALE = 1
@@ -28,26 +29,48 @@ class Decoded:
         return self.width * self.components
 
 
-def decode_texture(codestream: bytes) -> Decoded:
-    """Pixels from a codestream, in the nearest component count anything else understands"""
+# start-of-codestream immediately followed by the image/tile size marker, which
+# is how second life hands out textures: a bare j2k codestream, never jp2-boxed
+SOC_SIZ = b"\xff\x4f\xff\x51"
 
-    # Everything decodes through openjpeg because qt only reads jpeg 2000 on macOS,
-    # where it loads `qmacjp2` over Apple's ImageIO. Nothing equivalent ships in the qt
-    # builds the pyside6 wheels repackage, so a reader path would come back null on
-    # linux and windows.
 
-    # It also takes the codestreams nothing else will: second life tags some of its
-    # material textures `LL_RGBHM` and gives them five components, which pillow cannot
-    # even name a mode for. The first three are colour and the fourth is opacity, and
-    # the viewer drops whatever follows just as this does.
+def header_declared_size(codestream: bytes) -> tuple[int, int] | None:
+    if codestream[:4] != SOC_SIZ:
+        return None
+
+    xsiz, ysiz, xosiz, yosiz = struct.unpack_from(">IIII", codestream, 8)
+
+    return xsiz - xosiz, ysiz - yosiz
+
+
+def reduced_size(size: tuple[int, int], target: int) -> int:
+    smallest = min(size)
+    levels = 0
+
+    while smallest // 2 >= target:
+        smallest //= 2
+        levels += 1
+
+    return levels
+
+
+def decode_texture(codestream: bytes, *, target_size: int | None = None) -> Decoded:
+    # Everything decodes through openjpeg because qt only reads jpeg 2000 on
+    # macOS, where it loads `qmacjp2` over Apple's ImageIO
+
+    # additionally, second life tags some of its material textures LL_RGBHM and
+    # gives them five components, which pillow cannot even name a mode for. The
+    # first three are colour and the fourth is opacity, and the viewer drops
+    # whatever follows just as this does.
+
+    reduce = None
+
+    if target_size is not None and (size := header_declared_size(codestream)) is not None:
+        reduce = reduced_size(size, target_size)
 
     try:
-        # openjpeg lets go of the gil while it works, so this runs in the decode
-        # pool as happily as qt's reader did
-        decoded = imagecodecs.jpeg2k_decode(codestream)
+        decoded = imagecodecs.jpeg2k_decode(codestream, reduce=reduce)
     except imagecodecs.Jpeg2kError as e:
-        # a RuntimeError on the way out of a decode thread says nothing about
-        # which texture stopped it, and none of the callers are watching for one
         raise TextureCacheError(f"openjpeg could not decode the codestream: {e}") from e
 
     if decoded.dtype != "uint8":

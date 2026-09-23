@@ -4,6 +4,7 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
+- speed up image decode in thumbnail view
 - wire up some executable metadata fields
 
 ## v0.7.3 - 2026-09-14
