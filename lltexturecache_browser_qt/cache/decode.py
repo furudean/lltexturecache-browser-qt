@@ -5,6 +5,7 @@ import imagecodecs
 # imagecodecs reaches its codecs through a module level __getattr__ that imports
 # them by name. it is referenced so its included in the build by static analysis
 from imagecodecs import _jpeg2k, _shared_cython  # noqa: F401
+from PySide6.QtCore import QThread
 from texture_courier import TextureCacheError
 
 GREYSCALE = 1
@@ -44,7 +45,7 @@ def decode_texture(codestream: bytes) -> Decoded:
     try:
         # openjpeg lets go of the gil while it works, so this runs in the decode
         # pool as happily as qt's reader did
-        decoded = imagecodecs.jpeg2k_decode(codestream)
+        decoded = imagecodecs.jpeg2k_decode(codestream, numthreads=QThread.idealThreadCount())
     except imagecodecs.Jpeg2kError as e:
         # a RuntimeError on the way out of a decode thread says nothing about
         # which texture stopped it, and none of the callers are watching for one

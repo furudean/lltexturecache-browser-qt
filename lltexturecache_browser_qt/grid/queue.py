@@ -9,7 +9,7 @@ own, kept here rather than among the model's rows.
 import threading
 from collections.abc import Callable, Iterable
 
-from PySide6.QtCore import QObject, QThreadPool
+from PySide6.QtCore import QObject, QThread, QThreadPool
 from PySide6.QtGui import QPixmap, QPixmapCache
 from texture_courier import Texture
 
@@ -18,7 +18,7 @@ from texture_courier import Texture
 CELL_PRIORITY = 0
 AHEAD_PRIORITY = -1
 
-DECODE_THREADS = 4
+DECODE_THREADS = QThread.idealThreadCount()
 
 # how many decodes are allowed out at once. more than the threads, so a thread
 # that finishes has its next one already waiting rather than idling while the
