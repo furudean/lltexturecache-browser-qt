@@ -8,6 +8,7 @@ all notable changes to this project are documented in this file.
 - decode textures using an ideal number of threads
 - remember calculated traits when changing filters
 - fix scroll position being pinned to bottom after calculating texture characteristics
+- don't consider drag and drop from inside the application as a match target
 
 ## v0.7.3 - 2026-09-14
 

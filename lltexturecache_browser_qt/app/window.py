@@ -1103,6 +1103,11 @@ class MainWindow(QMainWindow):
     def dropped_path(self, event: QDropEvent) -> Path | None:
         """The one file or directory being held over the window, if it is only one"""
 
+        if event.source() is not None:
+            # a texture dragged out of any of the app's windows should not be
+            # considered a drop target
+            return None
+
         urls = event.mimeData().urls()
 
         if self._job is not None or len(urls) != 1:
