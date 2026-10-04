@@ -12,6 +12,7 @@ all notable changes to this project are documented in this file.
 - choose a default export format under export menu
 - show a progress bar while drag out is happening
 - render a border around textures
+- bump texture-courier, pulling in faster and more correct texture parsing
 
 ## v0.7.3 - 2026-09-14
 
