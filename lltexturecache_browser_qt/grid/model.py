@@ -1,6 +1,6 @@
 import logging
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from PySide6.QtCore import (
     QAbstractListModel,
@@ -87,6 +87,7 @@ class DecodeTask(QRunnable):
         *,
         upscale: bool = True,
         checkerboard: bool = True,
+        threads: Callable[[], int] | None = None,
     ):
         super().__init__()
 
@@ -96,6 +97,7 @@ class DecodeTask(QRunnable):
         self._size = size
         self._upscale = upscale
         self._board = checkerboard
+        self._threads = threads
 
     @Slot()
     def run(self) -> None:
@@ -109,7 +111,11 @@ class DecodeTask(QRunnable):
             with self._reads:
                 codestream = self._texture.codestream()
 
-            image = decode_image(codestream)
+            # counted as the decode starts, since the pool may have filled or
+            # drained since the task was queued
+            threads = self._threads() if self._threads else 1
+
+            image = decode_image(codestream, threads)
         except (TextureCacheError, OSError) as e:
             # a cache is full of entries the viewer never finished writing, so
             # one that will not decode is ordinary rather than news. the cell
@@ -320,7 +326,15 @@ class TextureModel(QAbstractListModel):
         if decode and self._fulls.wanted(texture):
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
-            task = DecodeTask(texture, self.reads, self._full_signals, FULL_SIZE, upscale=False, checkerboard=False)
+            task = DecodeTask(
+                texture,
+                self.reads,
+                self._full_signals,
+                FULL_SIZE,
+                upscale=False,
+                checkerboard=False,
+                threads=self._decodes.spare_threads,
+            )
 
             self._decodes.pool.start(task, FULL_PRIORITY)
 
@@ -380,7 +394,14 @@ class TextureModel(QAbstractListModel):
             return ready
 
         if self._previews.wanted(texture):
-            task = DecodeTask(texture, self.reads, self._preview_signals, None, checkerboard=False)
+            task = DecodeTask(
+                texture,
+                self.reads,
+                self._preview_signals,
+                None,
+                checkerboard=False,
+                threads=self._decodes.spare_threads,
+            )
 
             self._decodes.pool.start(task, PREVIEW_PRIORITY)
 

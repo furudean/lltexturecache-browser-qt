@@ -12,6 +12,8 @@ GREYSCALE = 1
 RGB = 3
 RGBA = 4
 
+POOL_THREADS = max(1, QThread.idealThreadCount() - 2)
+
 
 @dataclass(frozen=True)
 class Decoded:
@@ -29,7 +31,7 @@ class Decoded:
         return self.width * self.components
 
 
-def decode_texture(codestream: bytes) -> Decoded:
+def decode_texture(codestream: bytes, threads: int = 1) -> Decoded:
     """Pixels from a codestream, in the nearest component count anything else understands"""
 
     # Everything decodes through openjpeg because qt only reads jpeg 2000 on macOS,
@@ -45,7 +47,7 @@ def decode_texture(codestream: bytes) -> Decoded:
     try:
         # openjpeg lets go of the gil while it works, so this runs in the decode
         # pool as happily as qt's reader did
-        decoded = imagecodecs.jpeg2k_decode(codestream, numthreads=QThread.idealThreadCount())
+        decoded = imagecodecs.jpeg2k_decode(codestream, numthreads=threads)
     except imagecodecs.Jpeg2kError as e:
         # a RuntimeError on the way out of a decode thread says nothing about
         # which texture stopped it, and none of the callers are watching for one

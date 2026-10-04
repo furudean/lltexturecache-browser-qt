@@ -5,13 +5,11 @@ from threading import Lock
 from typing import Any, ClassVar, Self
 
 from PIL import Image
-from PySide6.QtCore import QObject, QRunnable, QSettings, QThread, QThreadPool, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, QSettings, QThreadPool, Signal, Slot
 from texture_courier import Texture, TextureCacheError
 
-from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
+from lltexturecache_browser_qt.cache.decode import GREYSCALE, POOL_THREADS, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
-
-CONCURRENCY = QThread.idealThreadCount()
 
 # what a texture is called while it is still being written
 PARTIAL_SUFFIX = ".partial"
@@ -181,7 +179,7 @@ class ExportJob(QObject):
         self._finished = False
 
         self._pool = QThreadPool(self)
-        self._pool.setMaxThreadCount(CONCURRENCY)
+        self._pool.setMaxThreadCount(POOL_THREADS)
 
         self._signals = ExportSignals(self)
         self._signals.done.connect(self.wrote)
@@ -213,7 +211,7 @@ class ExportJob(QObject):
         self._cancelled = True
 
     def pump(self) -> None:
-        while not self._cancelled and self._next < len(self._textures) and self._running < CONCURRENCY:
+        while not self._cancelled and self._next < len(self._textures) and self._running < POOL_THREADS:
             texture = self._textures[self._next]
 
             self._next += 1

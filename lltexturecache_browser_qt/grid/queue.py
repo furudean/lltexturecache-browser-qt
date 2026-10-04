@@ -9,21 +9,21 @@ own, kept here rather than among the model's rows.
 import threading
 from collections.abc import Callable, Iterable
 
-from PySide6.QtCore import QObject, QThread, QThreadPool
+from PySide6.QtCore import QObject, QThreadPool
 from PySide6.QtGui import QPixmap, QPixmapCache
 from texture_courier import Texture
+
+from lltexturecache_browser_qt.cache.decode import POOL_THREADS
 
 # the priority a cell goes to the pool at. a row on screen outranks one in the
 # band either side of it, which is decoded only once the screen is filled
 CELL_PRIORITY = 0
 AHEAD_PRIORITY = -1
 
-DECODE_THREADS = QThread.idealThreadCount()
-
 # how many decodes are allowed out at once. more than the threads, so a thread
 # that finishes has its next one already waiting rather than idling while the
 # event loop gets round to handing one over
-DECODES_IN_FLIGHT = DECODE_THREADS * 2
+DECODES_IN_FLIGHT = POOL_THREADS * 2
 
 
 class DecodeQueue:
@@ -51,7 +51,7 @@ class DecodeQueue:
         self._stale: set[str] = set()
 
         self._pool = QThreadPool(parent)
-        self._pool.setMaxThreadCount(DECODE_THREADS)
+        self._pool.setMaxThreadCount(POOL_THREADS)
 
         self._reads = threading.Lock()
 
@@ -68,6 +68,11 @@ class DecodeQueue:
     @property
     def pool(self) -> QThreadPool:
         return self._pool
+
+    def spare_threads(self) -> int:
+        """The pool threads not in use, counting the one that asks"""
+
+        return max(1, self._pool.maxThreadCount() - self._pool.activeThreadCount() + 1)
 
     def wanted(self, texture: Texture) -> bool:
         uuid = texture.uuid
