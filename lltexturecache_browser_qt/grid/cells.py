@@ -49,6 +49,9 @@ MESSAGE_WIDTH = 320
 INCOMPLETE_COLOR = QColor(0xEF, 0x7C, 0x14)
 INCOMPLETE_WEIGHT = 2
 
+BORDER_WEIGHT = 1
+BORDER_MIX = 0.35
+
 SIMPLE_COLOR = QColor(0x33, 0x33, 0x33)
 SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
 SIMPLE_WEIGHT = 2
@@ -76,6 +79,8 @@ class CellDelegate(QStyledItemDelegate):
 
         icon.paint(painter, option.rect, Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
 
+        self.mark_border(painter, icon, option.rect, cell.palette)
+
         incomplete = bool(index.data(INCOMPLETE_ROLE))
 
         if index.data(SIMPLE_ROLE):
@@ -95,6 +100,27 @@ class CellDelegate(QStyledItemDelegate):
         room = inset + weight / 2
 
         return QRectF(drawn).adjusted(room, room, -room, -room)
+
+    def mark_border(self, painter: QPainter, icon: QIcon, rect: QRect, palette: QPalette) -> None:
+        box = self.image_rect(icon, rect, BORDER_WEIGHT, 0)
+
+        if box is None:
+            return
+
+        ink = palette.color(QPalette.ColorRole.Text)
+        ground = palette.color(QPalette.ColorRole.Base)
+
+        edge = QColor.fromRgbF(
+            ground.redF() + (ink.redF() - ground.redF()) * BORDER_MIX,
+            ground.greenF() + (ink.greenF() - ground.greenF()) * BORDER_MIX,
+            ground.blueF() + (ink.blueF() - ground.blueF()) * BORDER_MIX,
+        )
+
+        painter.save()
+        painter.setPen(QPen(edge, BORDER_WEIGHT))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(box)
+        painter.restore()
 
     def mark_incomplete(self, painter: QPainter, icon: QIcon, rect: QRect) -> None:
         box = self.image_rect(icon, rect, INCOMPLETE_WEIGHT, 0)

@@ -11,6 +11,7 @@ all notable changes to this project are documented in this file.
 - don't consider drag and drop from inside the application as a match target
 - choose a default export format under export menu
 - show a progress bar while drag out is happening
+- render a border around textures
 
 ## v0.7.3 - 2026-09-14
 
