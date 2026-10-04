@@ -9,7 +9,13 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
-from lltexturecache_browser_qt.cache.export import DEFAULT_FORMAT, FORMATS, Format
+from lltexturecache_browser_qt.cache.export import (
+    FORMATS,
+    ExportFormatChanges,
+    Format,
+    export_format,
+    set_export_format,
+)
 from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.view.cellsize import (
@@ -28,6 +34,8 @@ INSPECTOR_KEY = "showInspector"
 FILTERS_KEY = "showColorFilters"
 INCOMPLETE_KEY = "showIncomplete"
 SIMPLE_KEY = "showSimple"
+
+EXPORT_KEY = QKeySequence("Ctrl+E")
 
 TONES = {
     CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
@@ -148,7 +156,7 @@ class WindowActions(QObject):
         # the entries belong to the owner rather than to this, since a shortcut
         # is only answered by a window the action can be reached from
         self.build_file_menu(owner, menu.addMenu("&File"))
-        self.build_export_menu(menu.addMenu("&Export"))
+        self.build_export_menu(owner, menu.addMenu("&Export"))
         self.build_find_menu(owner, menu.addMenu("Fi&nd"))
         self.build_view_menu(owner, menu.addMenu("&View"))
         self.build_app_menu(menu.addMenu("About"))
@@ -195,18 +203,32 @@ class WindowActions(QObject):
         self.populate_recents()
         self.populate_suggested()
 
-    def build_export_menu(self, exports: QMenu) -> None:
+    def build_export_menu(self, owner: QWidget, exports: QMenu) -> None:
         self.exports = exports
 
         self._selected_export = self.format_menu(exports, "Export Selected As...", everything=False)
         self._all_export = self.format_menu(exports, "Export Full Cache As...", everything=True)
 
-        # the first format wraps the codestream the cache is already holding
-        # instead of encoding a new one, which is what a shortcut should reach
-        # for. only the entry under the menu bar answers it, since the context
-        # menu builds its own copy of these and two answers to a key is none
-        quick = self._selected_export.actions()[FORMATS.index(DEFAULT_FORMAT)]
-        quick.setShortcut(QKeySequence("Ctrl+E"))
+        self._formats: dict[str, QAction] = {}
+
+        formats = QActionGroup(owner)
+        formats.setExclusive(True)
+
+        for format in FORMATS:
+            entry = QAction(format.label, owner)
+            entry.setStatusTip(f"Write textures out as {format.label} when dragged or exported with the shortcut")
+            entry.setCheckable(True)
+            entry.setActionGroup(formats)
+            triggers(entry, partial(set_export_format, format))
+
+            self._formats[format.suffix] = entry
+
+        exports.addSeparator()
+        exports.addMenu("&Default Format").addActions(list(self._formats.values()))
+
+        ExportFormatChanges.shared().changed.connect(self.sync_export_format)
+
+        self.sync_export_format()
 
         # how much is selected and how much is in the cache both move around
         # under the menu, so the two entries are named on the way open. there is
@@ -366,6 +388,7 @@ class WindowActions(QObject):
         RecentCaches.shared().changed.disconnect(self.populate_recents)
         CheckerboardChanges.shared().changed.disconnect(self.sync_checkerboard)
         CellSizeChanges.shared().changed.disconnect(self.sync_zoom)
+        ExportFormatChanges.shared().changed.disconnect(self.sync_export_format)
 
     def sync_zoom(self) -> None:
         # the ladder has ends, and an entry that would do nothing says so
@@ -375,6 +398,18 @@ class WindowActions(QObject):
 
     def sync_checkerboard(self) -> None:
         self._tones[grid_tone()].setChecked(True)
+
+    def sync_export_format(self) -> None:
+        current = export_format()
+
+        self._formats[current.suffix].setChecked(True)
+
+        # the shortcut sits on the default format's entry, so the menu shows
+        # what it writes. only the entry under the menu bar answers it, since
+        # the context menu builds its own copy of these and two answers to a
+        # key is none
+        for format, entry in zip(FORMATS, self._selected_export.actions(), strict=True):
+            entry.setShortcut(EXPORT_KEY if format == current else QKeySequence())
 
     def ticks(self) -> tuple[str, ...]:
         return tuple(self._toggles)

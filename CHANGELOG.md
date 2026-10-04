@@ -9,6 +9,8 @@ all notable changes to this project are documented in this file.
 - remember calculated traits when changing filters
 - fix scroll position being pinned to bottom after calculating texture characteristics
 - don't consider drag and drop from inside the application as a match target
+- choose a default export format under export menu
+- show a progress bar while drag out is happening
 
 ## v0.7.3 - 2026-09-14
 

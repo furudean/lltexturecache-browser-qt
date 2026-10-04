@@ -116,6 +116,7 @@ class MainWindow(QMainWindow):
         self._model: TextureModel | None = None
         self._stack: list[Texture] = []
         self._job: ExportRun | None = None
+        self._staging = False
 
         self._summary = ""
 
@@ -508,12 +509,19 @@ class MainWindow(QMainWindow):
             )
             return
 
+        # staging runs an event loop of its own, and a second drag must not
+        # start inside it
+        if self._staging:
+            return
+
+        self._staging = True
         QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
 
         try:
-            paths = staged(textures, model.reads)
+            paths = staged(self, textures, model.reads)
         finally:
             QGuiApplication.restoreOverrideCursor()
+            self._staging = False
 
         if not paths:
             return

@@ -6,11 +6,15 @@ from functools import cache
 from pathlib import Path
 from threading import Lock
 
-from PySide6.QtCore import QMimeData, QUrl
-from texture_courier import Texture, TextureCacheError
+from PySide6.QtCore import QEventLoop, QMimeData, Qt, QUrl
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QProgressDialog, QWidget
+from texture_courier import Texture
 
 from lltexturecache_browser_qt import APP_NAME
-from lltexturecache_browser_qt.cache.export import FORMATS, export_texture
+from lltexturecache_browser_qt.app.exporting import DELAY_MESSAGE_DURATION_MS
+from lltexturecache_browser_qt.cache.export import ExportJob, export_format, export_path
+from lltexturecache_browser_qt.view.formatting import format_count
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +22,6 @@ STAGING_PREFIX = f"{APP_NAME}-drag-"
 
 # this tends to be slow, so we have a built-in limit
 DRAG_LIMIT = 200
-DRAG_FORMAT = FORMATS[0]
 
 
 @cache
@@ -30,20 +33,60 @@ def staging() -> Path:
     return directory
 
 
-def staged(textures: list[Texture], reads: Lock) -> list[Path]:
+def held() -> bool:
+    return bool(QGuiApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+
+
+def staged(parent: QWidget, textures: list[Texture], reads: Lock) -> list[Path]:
     out_dir = staging()
-    paths = []
+    format = export_format()
 
-    for texture in textures:
-        try:
-            paths.append(export_texture(texture, out_dir, DRAG_FORMAT, reads))
-        except (TextureCacheError, OSError, ValueError) as e:
-            # a drag carries what it can: one texture the cache will not give
-            # up is no reason to drop the rest of the selection on the floor
-            log.warning("leaving %s out of the drag: %s", texture.uuid, e)
-            continue
+    progress = QProgressDialog(
+        f"Preparing {format_count(len(textures))} textures as {format.label}...",
+        "Cancel",
+        0,
+        len(textures),
+        parent,
+    )
+    progress.setWindowTitle("Drag")
+    progress.setWindowModality(Qt.WindowModality.WindowModal)
+    progress.setMinimumDuration(DELAY_MESSAGE_DURATION_MS)
+    progress.setValue(0)
 
-    return paths
+    job = ExportJob(textures, out_dir, format, reads, parent)
+    waiting = QEventLoop()
+
+    def progressed(done: int) -> None:
+        progress.setValue(done)
+
+        if not held():
+            job.cancel()
+
+    job.progressed.connect(progressed)
+    job.finished.connect(waiting.quit)
+    progress.canceled.connect(job.cancel)
+
+    job.start()
+
+    if not job.done:
+        waiting.exec()
+
+    progress.reset()
+    progress.deleteLater()
+    job.deleteLater()
+
+    if job.cancelled or not held():
+        return []
+
+    # a drag carries what it can. one texture the cache will not give up is no
+    # reason to drop the rest of the selection on the floor
+    failed = set()
+
+    for uuid, reason in job.failed:
+        log.warning("leaving %s out of the drag: %s", uuid, reason)
+        failed.add(uuid)
+
+    return [export_path(out_dir, texture.uuid, format) for texture in textures if texture.uuid not in failed]
 
 
 def drag_data(paths: list[Path]) -> QMimeData:

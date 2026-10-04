@@ -2,10 +2,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, ClassVar, Self
 
 from PIL import Image
-from PySide6.QtCore import QObject, QRunnable, QThread, QThreadPool, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, QSettings, QThread, QThreadPool, Signal, Slot
 from texture_courier import Texture, TextureCacheError
 
 from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
@@ -37,6 +37,36 @@ FORMATS = (
 )
 
 DEFAULT_FORMAT = FORMATS[0]
+
+FORMAT_KEY = "exportFormat"
+
+
+class ExportFormatChanges(QObject):
+    changed = Signal()
+
+    _shared: ClassVar[Self | None] = None
+
+    @classmethod
+    def shared(cls) -> Self:
+        if cls._shared is None:
+            cls._shared = cls()
+
+        return cls._shared
+
+
+def export_format() -> Format:
+    stored = QSettings().value(FORMAT_KEY)
+
+    return next((format for format in FORMATS if format.suffix == stored), DEFAULT_FORMAT)
+
+
+def set_export_format(format: Format) -> None:
+    if format == export_format():
+        return
+
+    QSettings().setValue(FORMAT_KEY, format.suffix)
+
+    ExportFormatChanges.shared().changed.emit()
 
 
 def encodable(image: Image.Image, format: Format) -> Image.Image:
@@ -78,15 +108,6 @@ def write_texture(texture: Texture, path: Path, fmt: Format, reads: Lock) -> Non
 
 
 def export_texture(texture: Texture, out_dir: Path, fmt: Format, reads: Lock) -> Path:
-    """Write one texture out, and hand back where it landed
-
-    An export runs against a cache the viewer is still writing to, and a read
-    that fails part way through leaves whatever was written behind it. So the
-    file is built under a name of its own and moved into place once it is
-    whole: what appears at the exported path is either the finished texture or
-    nothing at all, never a truncated file that opens as a broken image.
-    """
-
     path = export_path(out_dir, texture.uuid, fmt)
     partial = path.with_name(f"{path.name}{PARTIAL_SUFFIX}")
 
@@ -172,6 +193,14 @@ class ExportJob(QObject):
     @property
     def failed(self) -> list[tuple[str, str]]:
         return list(self._failed)
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    @property
+    def done(self) -> bool:
+        return self._finished
 
     def start(self) -> None:
         self.pump()

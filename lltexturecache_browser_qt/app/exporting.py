@@ -34,7 +34,7 @@ def ask_for_directory(parent: QWidget, textures: list[Texture], format: Format) 
 
 
 def export_summary(out_dir: Path, written: int, failed: int, *, cancelled: bool) -> str:
-    note = "Cancelled export of" if cancelled else "Exported"
+    note = "Aborted export after writing" if cancelled else "Exported"
     summary = f"{note} {format_count(written)} texture(s) to {out_dir}"
 
     return f"{summary} ({format_count(failed)} could not be written)" if failed else summary
@@ -67,7 +67,7 @@ class ExportRun:
 
         self._progress = QProgressDialog(
             f"Exporting {format_count(len(textures))} textures as {format.label}...",
-            "Cancel",
+            "Stop",
             0,
             len(textures),
             parent,
