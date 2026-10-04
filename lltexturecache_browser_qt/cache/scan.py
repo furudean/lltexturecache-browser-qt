@@ -11,7 +11,7 @@ import logging
 import threading
 from dataclasses import dataclass, replace
 
-from PySide6.QtCore import QObject, QRunnable, Signal, Slot
+from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QImage
 from texture_courier import Texture, TextureCacheError, Thumbnail
 
@@ -25,15 +25,15 @@ from lltexturecache_browser_qt.cache.color import (
     signature,
 )
 from lltexturecache_browser_qt.cache.likeness import LikenessIndex, describe
-from lltexturecache_browser_qt.view.images import read_thumbnail
+from lltexturecache_browser_qt.view.images import read_image
 
 log = logging.getLogger(__name__)
 
 PLACEHOLDER_BYTE = 0x80
 
 
-def placeholder(thumbnail: Thumbnail) -> bool:
-    return bool(thumbnail.pixels) and thumbnail.pixels.count(PLACEHOLDER_BYTE) == len(thumbnail.pixels)
+def placeholder(kept: Thumbnail) -> bool:
+    return bool(kept.pixels) and kept.pixels.count(PLACEHOLDER_BYTE) == len(kept.pixels)
 
 
 @dataclass(frozen=True)
@@ -73,17 +73,17 @@ class CacheScan(QRunnable):
             if self._stopped.is_set():
                 return
 
-            thumbnail = self.thumbnail(texture)
+            kept = self.thumbnail(texture)
 
-            if thumbnail is None:
+            if kept is None:
                 continue
 
-            image = read_thumbnail(thumbnail)
+            image = read_image(QByteArray(kept.png()))
 
             if image.isNull():
                 continue
 
-            found = self.signature(texture, thumbnail, image)
+            found = self.signature(texture, kept, image)
 
             if found is not None:
                 colors.add(row, found)
@@ -108,7 +108,7 @@ class CacheScan(QRunnable):
             # the thumbnails all come out of the one file, the same as the reads
             # the grid makes, so this waits its turn among them
             with self._thumbnails:
-                thumbnail = texture.thumbnail
+                kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # a texture with no readable thumbnail has nothing to be filed
             # under, which leaves it out of the indexes rather than stopping the scan
@@ -116,29 +116,29 @@ class CacheScan(QRunnable):
 
             return None
 
-        if thumbnail is not None and placeholder(thumbnail):
+        if kept is not None and placeholder(kept):
             log.debug("thumbnail for %s is the viewer's fill", texture.uuid)
 
             return None
 
-        return thumbnail
+        return kept
 
-    def signature(self, texture: Texture, thumbnail: Thumbnail, image: QImage) -> Signature | None:
+    def signature(self, texture: Texture, kept: Thumbnail, image: QImage) -> Signature | None:
         found = signature(image)
 
-        if found is not None and found.flat and self.dense(texture, thumbnail, clear=found.clear):
+        if found is not None and found.flat and self.dense(texture, kept, clear=found.clear):
             return replace(found, flat=False, clear=False)
 
         return found
 
-    def dense(self, texture: Texture, thumbnail: Thumbnail, *, clear: bool = False) -> bool:
-        if not thumbnail.width or not thumbnail.height:
+    def dense(self, texture: Texture, kept: Thumbnail, *, clear: bool = False) -> bool:
+        if not kept.width or not kept.height:
             return False
 
-        if thumbnail.width * thumbnail.height == 1:
+        if kept.width * kept.height == 1:
             return texture.image_size > BLIND_BASE_BYTES
 
-        width, height = thumbnail.source_dimensions
+        width, height = kept.source_dimensions
         pixels = width * height
 
         if clear and pixels < CLEAR_MIN_PIXELS:
