@@ -17,7 +17,6 @@ STACK_SPAN_RATIO = 1.25
 STACK_FRAME = 0.012
 
 FRAME_FILL = QColor(0xFF, 0xFF, 0xFF)
-FRAME_EDGE = QColor(0x00, 0x00, 0x00, 0x28)
 
 
 def card_transform(uuid: str, side: float) -> QTransform:
@@ -134,39 +133,39 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None, ra
     square = checker_square_size(laid.size(), room)
 
     weight = hairline_weight(laid.size(), room, ratio)
+    hairline = QPen(border_color(QApplication.palette()), weight)
 
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-    painter.setPen(FRAME_EDGE)
     painter.translate(-laid.topLeft())
 
     for pixmap, transform in dealt:
         painter.save()
         painter.setWorldTransform(transform, True)
 
-        rect = framed(pixmap)
+        image = QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height())
+
+        # the grid's hairline outlines the paper in a pile, or the texture itself
+        # for a lone card with no paper
+        outline = framed(pixmap) if frame else image
 
         if frame:
             # a white border, so one texture against another still reads as two
             # cards rather than as one busy image
-            painter.fillRect(rect, FRAME_FILL)
-            painter.drawRect(rect)
+            painter.fillRect(outline, FRAME_FILL)
 
         # with no checkerboard a card keeps its transparency, and what shows through is
         # the paper behind it in a pile or the pane itself for a single card
         checkerboard = pane_checkerboard_at(square, pane_lightness(pixmap)) if pixmap.hasAlphaChannel() else None
-
-        image = QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height())
 
         if checkerboard is not None:
             painter.fillRect(image, QBrush(checkerboard))
 
         painter.drawPixmap(image.topLeft(), pixmap)
 
-        # the grid's hairline, around the texture itself rather than its paper
-        painter.setPen(QPen(border_color(QApplication.palette()), weight))
-        painter.drawRect(image.adjusted(weight / 2, weight / 2, -weight / 2, -weight / 2))
+        painter.setPen(hairline)
+        painter.drawRect(outline.adjusted(weight / 2, weight / 2, -weight / 2, -weight / 2))
 
         painter.restore()
 
