@@ -1,10 +1,12 @@
 from math import sqrt
 from random import Random
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap, QTransform
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap, QTransform
+from PySide6.QtWidgets import QApplication
 
 from lltexturecache_browser_qt.view.checkerboard import CHECKERBOARD_SIZE, pane_checkerboard_at, pane_lightness
+from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
 # how many of a selection are dealt out behind the one on top
 STACK_CARDS = 4
@@ -62,6 +64,15 @@ def checker_square_size(canvas: QSize, room: QSize | None) -> int:
     return max(1, round(CHECKERBOARD_SIZE * scale))
 
 
+def hairline_weight(canvas: QSize, room: QSize | None, ratio: float) -> float:
+    if room is None or room.isEmpty() or canvas.isEmpty():
+        return BORDER_WEIGHT / ratio
+
+    seen = canvas.scaled(room.boundedTo(canvas * ratio), Qt.AspectRatioMode.KeepAspectRatio)
+
+    return BORDER_WEIGHT * canvas.width() / max(1, seen.width())
+
+
 def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
     """The card the rest of a stack is sized against
 
@@ -74,11 +85,12 @@ def biggest_card(cards: list[tuple[str, QPixmap]]) -> QSize:
     return max((card.size() for _, card in cards), key=lambda size: size.width() * size.height())
 
 
-def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) -> QPixmap:
+def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None, ratio: float = 1.0) -> QPixmap:
     """Lay pixmaps out as a tilted stack, the last of them face up on top
 
     `room` is the size the stack will be seen at, which is what the checkerboard
-    behind a card with any transparency to it is sized against.
+    behind a card with any transparency to it is sized against. `ratio` is the
+    device pixel ratio of the screen it is seen on.
     """
 
     if not cards:
@@ -121,6 +133,8 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) ->
     # of them is asked for separately, at the one size they are all seen at
     square = checker_square_size(laid.size(), room)
 
+    weight = hairline_weight(laid.size(), room, ratio)
+
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -143,13 +157,17 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None) ->
         # the paper behind it in a pile or the pane itself for a single card
         checkerboard = pane_checkerboard_at(square, pane_lightness(pixmap)) if pixmap.hasAlphaChannel() else None
 
-        if checkerboard is not None:
-            painter.fillRect(
-                QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height()),
-                QBrush(checkerboard),
-            )
+        image = QRectF(-pixmap.width() / 2, -pixmap.height() / 2, pixmap.width(), pixmap.height())
 
-        painter.drawPixmap(QPointF(-pixmap.width() / 2, -pixmap.height() / 2), pixmap)
+        if checkerboard is not None:
+            painter.fillRect(image, QBrush(checkerboard))
+
+        painter.drawPixmap(image.topLeft(), pixmap)
+
+        # the grid's hairline, around the texture itself rather than its paper
+        painter.setPen(QPen(border_color(QApplication.palette()), weight))
+        painter.drawRect(image.adjusted(weight / 2, weight / 2, -weight / 2, -weight / 2))
+
         painter.restore()
 
     painter.end()

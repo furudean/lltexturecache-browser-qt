@@ -279,6 +279,9 @@ class InspectorPane(QWidget):
     def sidebar_room(self) -> QSize:
         return self._sidebar.room()
 
+    def sidebar_ratio(self) -> float:
+        return self._sidebar.devicePixelRatioF()
+
     def set_sidebar(self, pixmap: QPixmap, natural: QSize | None, *, transparent: bool = False) -> None:
         self._sidebar.set_source(pixmap, transparent=transparent)
 

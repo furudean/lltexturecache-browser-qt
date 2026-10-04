@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
 from lltexturecache_browser_qt.view.cellsize import cell_size
+from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
 CELL_PADDING = 14
 
@@ -48,9 +49,6 @@ MESSAGE_WIDTH = 320
 # since it is drawn over the image rather than over the background
 INCOMPLETE_COLOR = QColor(0xEF, 0x7C, 0x14)
 INCOMPLETE_WEIGHT = 2
-
-BORDER_WEIGHT = 1
-BORDER_MIX = 0.35
 
 SIMPLE_COLOR = QColor(0x33, 0x33, 0x33)
 SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
@@ -102,22 +100,14 @@ class CellDelegate(QStyledItemDelegate):
         return QRectF(drawn).adjusted(room, room, -room, -room)
 
     def mark_border(self, painter: QPainter, icon: QIcon, rect: QRect, palette: QPalette) -> None:
-        box = self.image_rect(icon, rect, BORDER_WEIGHT, 0)
+        weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
+        box = self.image_rect(icon, rect, weight, 0)
 
         if box is None:
             return
 
-        ink = palette.color(QPalette.ColorRole.Text)
-        ground = palette.color(QPalette.ColorRole.Base)
-
-        edge = QColor.fromRgbF(
-            ground.redF() + (ink.redF() - ground.redF()) * BORDER_MIX,
-            ground.greenF() + (ink.greenF() - ground.greenF()) * BORDER_MIX,
-            ground.blueF() + (ink.blueF() - ground.blueF()) * BORDER_MIX,
-        )
-
         painter.save()
-        painter.setPen(QPen(edge, BORDER_WEIGHT))
+        painter.setPen(QPen(border_color(palette), weight))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(box)
         painter.restore()

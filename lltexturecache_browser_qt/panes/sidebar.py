@@ -77,7 +77,7 @@ def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> 
         set_picked_lightness(pixmap_lightness(cards[-1][1]))
 
     pane.set_sidebar(
-        stack_pixmap(cards, pane.sidebar_room()),
+        stack_pixmap(cards, pane.sidebar_room(), pane.sidebar_ratio()),
         drawn_size(model, textures[-1]),
         transparent=any(card.hasAlphaChannel() for _, card in cards),
     )

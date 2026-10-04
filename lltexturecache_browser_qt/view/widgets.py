@@ -1,6 +1,20 @@
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtGui import QMouseEvent, QPalette
+from PySide6.QtGui import QColor, QMouseEvent, QPalette
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
+
+BORDER_WEIGHT = 1
+BORDER_MIX = 0.35
+
+
+def border_color(palette: QPalette) -> QColor:
+    ink = palette.color(QPalette.ColorRole.Text)
+    ground = palette.color(QPalette.ColorRole.Base)
+
+    return QColor.fromRgbF(
+        ground.redF() + (ink.redF() - ground.redF()) * BORDER_MIX,
+        ground.greenF() + (ink.greenF() - ground.greenF()) * BORDER_MIX,
+        ground.blueF() + (ink.blueF() - ground.blueF()) * BORDER_MIX,
+    )
 
 
 def dim(label: QLabel) -> QLabel:
