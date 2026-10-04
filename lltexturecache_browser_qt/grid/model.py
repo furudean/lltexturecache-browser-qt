@@ -283,15 +283,15 @@ class TextureModel(QAbstractListModel):
     def thumbnail(self, texture: Texture, *, checkerboard: bool = True) -> QImage:
         try:
             with self._thumbnails:
-                kept = texture.thumbnail
+                thumbnail = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # not every entry has a thumbnail beside it, and the placeholder
             # stands in for the ones that do not
             log.debug("no thumbnail for %s: %s", texture.uuid, e)
 
-            kept = None
+            thumbnail = None
 
-        return thumbnail_image(kept.png(), checkerboard=checkerboard) if kept is not None else QImage()
+        return thumbnail_image(thumbnail, checkerboard=checkerboard) if thumbnail is not None else QImage()
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""

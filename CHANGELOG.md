@@ -6,6 +6,7 @@ all notable changes to this project are documented in this file.
 
 - wire up some executable metadata fields
 - decode textures using an ideal number of threads
+- thumbnail decoding speed improvements
 
 ## v0.7.3 - 2026-09-14
 

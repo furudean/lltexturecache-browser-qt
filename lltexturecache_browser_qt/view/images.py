@@ -1,8 +1,9 @@
 from functools import cache
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader, QPixmap
+from texture_courier import Thumbnail
 
 from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.view.checkerboard import over_checkerboard
@@ -14,16 +15,14 @@ IMAGE_FORMATS = {
     RGBA: QImage.Format.Format_RGBA8888,
 }
 
+SCALING_FORMATS = {
+    RGB: QImage.Format.Format_RGB32,
+    RGBA: QImage.Format.Format_ARGB32,
+}
+
 # the box a cell's texture is fitted into, and the size everything that stands
 # in for one is drawn at
 THUMBNAIL_SIZE = 100
-
-
-def read_image(data: QByteArray) -> QImage:
-    buffer = QBuffer(data)
-    buffer.open(QBuffer.OpenModeFlag.ReadOnly)
-
-    return QImageReader(buffer).read()
 
 
 def decode_image(codestream: bytes) -> QImage:
@@ -44,8 +43,24 @@ def decode_image(codestream: bytes) -> QImage:
     return image.copy()
 
 
-def thumbnail_image(png: bytes, *, checkerboard: bool = True) -> QImage:
-    return fit_image(read_image(QByteArray(png)), checkerboard=checkerboard)
+def read_thumbnail(thumbnail: Thumbnail) -> QImage:
+    format = IMAGE_FORMATS.get(thumbnail.components)
+    stride = thumbnail.width * thumbnail.components
+
+    if format is None or len(thumbnail.pixels) != stride * thumbnail.height:
+        return QImage()
+
+    # the rows are packed tight and stored bottom up. converting gives the
+    # image its own copy of the pixels, which it can then flip in place
+    image = QImage(thumbnail.pixels, thumbnail.width, thumbnail.height, stride, format)
+    image = image.convertToFormat(SCALING_FORMATS.get(thumbnail.components, format))
+    image.flip(Qt.Orientation.Vertical)
+
+    return image
+
+
+def thumbnail_image(thumbnail: Thumbnail, *, checkerboard: bool = True) -> QImage:
+    return fit_image(read_thumbnail(thumbnail), checkerboard=checkerboard)
 
 
 def fit_image(
