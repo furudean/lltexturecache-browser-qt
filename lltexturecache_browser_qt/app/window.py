@@ -46,6 +46,7 @@ from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
 from lltexturecache_browser_qt.app.session import AppState
 from lltexturecache_browser_qt.cache.export import Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
+from lltexturecache_browser_qt.cache.scan import KnownTraits
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, TextureGrid
@@ -107,6 +108,8 @@ class MainWindow(QMainWindow):
         self.restoreGeometry(stored_blob(settings, GEOMETRY_KEY))
 
         self._cache: TextureCache | None = None
+
+        self._known: KnownTraits = {}
 
         # the model the grid is on. the view hands back a QAbstractItemModel,
         # which every caller would otherwise have to narrow again
@@ -1163,6 +1166,7 @@ class MainWindow(QMainWindow):
 
     def set_cache(self, cache: TextureCache) -> None:
         self._cache = cache
+        self._known = {}
 
         self._actions.reload.setEnabled(True)
         self.sync_inspector()
@@ -1201,7 +1205,7 @@ class MainWindow(QMainWindow):
         if isinstance(old_model, TextureModel):
             old_model.shutdown()
 
-        model = TextureModel(textures, self._cache, self)
+        model = TextureModel(textures, self._cache, self._known, self)
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
         model.ranked.connect(self.ranked_action)

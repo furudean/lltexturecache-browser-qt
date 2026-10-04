@@ -18,7 +18,7 @@ from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.cache.likeness import describe
-from lltexturecache_browser_qt.cache.scan import CacheScan, Scan, ScanSignals
+from lltexturecache_browser_qt.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
@@ -126,7 +126,13 @@ class TextureModel(QAbstractListModel):
     preview_ready = Signal(str)
     ranked = Signal()
 
-    def __init__(self, textures: list[Texture], cache: TextureCache, parent: QObject | None = None):
+    def __init__(
+        self,
+        textures: list[Texture],
+        cache: TextureCache,
+        known: KnownTraits,
+        parent: QObject | None = None,
+    ):
         super().__init__(parent)
 
         self._textures = list(textures)
@@ -168,7 +174,7 @@ class TextureModel(QAbstractListModel):
         self._scan_signals = ScanSignals(self)
         self._scan_signals.done.connect(self.scanned)
 
-        self._scan = CacheScan(self._textures, self._thumbnails, self._scan_signals)
+        self._scan = CacheScan(self._textures, self._thumbnails, self._scan_signals, known)
 
         QThreadPool.globalInstance().start(self._scan)
 

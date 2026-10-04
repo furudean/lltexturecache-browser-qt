@@ -24,7 +24,7 @@ from lltexturecache_browser_qt.cache.color import (
     Signature,
     signature,
 )
-from lltexturecache_browser_qt.cache.likeness import LikenessIndex, describe
+from lltexturecache_browser_qt.cache.likeness import Descriptor, LikenessIndex, describe
 from lltexturecache_browser_qt.view.images import read_image
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,21 @@ class Scan:
     likeness: LikenessIndex
 
 
+@dataclass(frozen=True)
+class Traits:
+    signature: Signature | None
+    descriptor: Descriptor | None
+
+
+type Stamp = tuple[str, int, int]
+
+type KnownTraits = dict[Stamp, Traits]
+
+
+def stamp(texture: Texture) -> Stamp:
+    return texture.uuid, texture.image_size, texture.body_size
+
+
 class ScanSignals(QObject):
     done = Signal(object)
 
@@ -51,12 +66,19 @@ class ScanSignals(QObject):
 class CacheScan(QRunnable):
     """Reads every thumbnail in a cache, off the ui thread"""
 
-    def __init__(self, textures: list[Texture], thumbnails: threading.Lock, signals: ScanSignals) -> None:
+    def __init__(
+        self,
+        textures: list[Texture],
+        thumbnails: threading.Lock,
+        signals: ScanSignals,
+        known: KnownTraits | None = None,
+    ) -> None:
         super().__init__()
 
         self._textures = textures
         self._thumbnails = thumbnails
         self._signals = signals
+        self._known: KnownTraits = known if known is not None else {}
         self._stopped = threading.Event()
 
     def cancel(self) -> None:
@@ -73,25 +95,22 @@ class CacheScan(QRunnable):
             if self._stopped.is_set():
                 return
 
-            kept = self.thumbnail(texture)
+            key = stamp(texture)
+            found = self._known.get(key)
 
-            if kept is None:
-                continue
+            if found is None:
+                found = self.traits(texture)
 
-            image = read_image(QByteArray(kept.png()))
+                if found is None:
+                    continue
 
-            if image.isNull():
-                continue
+                self._known[key] = found
 
-            found = self.signature(texture, kept, image)
+            if found.signature is not None:
+                colors.add(row, found.signature)
 
-            if found is not None:
-                colors.add(row, found)
-
-            described = describe(image)
-
-            if described is not None:
-                likeness.add(row, described)
+            if found.descriptor is not None:
+                likeness.add(row, found.descriptor)
 
         if self._stopped.is_set():
             return
@@ -102,6 +121,19 @@ class CacheScan(QRunnable):
             # the model this was reading for went out from under it between the
             # check above and here, taking the signals it reports through along
             log.debug("cache scan finished after its model closed", exc_info=True)
+
+    def traits(self, texture: Texture) -> Traits | None:
+        kept = self.thumbnail(texture)
+
+        if kept is None:
+            return None
+
+        image = read_image(QByteArray(kept.png()))
+
+        if image.isNull():
+            return None
+
+        return Traits(self.signature(texture, kept, image), describe(image))
 
     def thumbnail(self, texture: Texture) -> Thumbnail | None:
         try:
