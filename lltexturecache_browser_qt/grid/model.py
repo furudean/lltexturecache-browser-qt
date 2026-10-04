@@ -125,6 +125,7 @@ class TextureModel(QAbstractListModel):
     full_ready = Signal(str)
     preview_ready = Signal(str)
     ranked = Signal()
+    thinned = Signal()
 
     def __init__(
         self,
@@ -464,7 +465,10 @@ class TextureModel(QAbstractListModel):
         self._simple = self._narrowing.flat_uuids([texture.uuid for texture in self._textures])
 
         if self._narrowing.asking and self.apply_filters():
-            self.ranked.emit()
+            if self._narrowing.narrowed:
+                self.ranked.emit()
+            else:
+                self.thinned.emit()
         elif self._simple and self._filtered_textures:
             # nothing is being narrowed, so no reset goes out to redraw the
             # grid, and the rows the scan just found no picture in would sit

@@ -49,7 +49,7 @@ from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.scan import KnownTraits
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
-from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, TextureGrid
+from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, KeptScroll, TextureGrid
 from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
 from lltexturecache_browser_qt.grid.prefetch import prefetch
 from lltexturecache_browser_qt.grid.selection import KeptSelection
@@ -119,9 +119,10 @@ class MainWindow(QMainWindow):
 
         self._summary = ""
 
-        # what was selected before the model was last reset, put back once the
-        # rows it was picked out of have landed again
+        # what was selected and scrolled to before the model was last reset,
+        # put back once the rows they were taken from have landed again
         self._kept = KeptSelection()
+        self._scroll = KeptScroll()
 
         # the texture the panes are showing, which is what says whether a click on
         # one of them is still about what is in front of the user
@@ -444,7 +445,7 @@ class MainWindow(QMainWindow):
             rewritten = [texture for texture in rewritten if texture.whole()]
 
         shown = self._inspector.texture
-        place = self._view.place()
+        scroll = self._view.kept_scroll()
 
         if added or rewritten:
             self.populate_grid(
@@ -462,7 +463,7 @@ class MainWindow(QMainWindow):
         if added:
             self.scroll_to_end()
         elif rewritten:
-            self._view.pin_to(place)
+            self._view.restore_scroll(scroll)
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._model
@@ -689,7 +690,7 @@ class MainWindow(QMainWindow):
             return
 
         standing = self._inspector.texture
-        place = self._view.place()
+        scroll = self._view.kept_scroll()
 
         self.populate_grid()
 
@@ -704,7 +705,7 @@ class MainWindow(QMainWindow):
         if shown:
             self.scroll_to_end()
         else:
-            self._view.pin_to(place)
+            self._view.restore_scroll(scroll)
 
     def sync_incomplete(self) -> None:
         self._actions.incomplete.setEnabled(self._cache is not None)
@@ -718,8 +719,6 @@ class MainWindow(QMainWindow):
         if model is None:
             return
 
-        place = self._view.place()
-
         if not model.set_simple_hidden(not shown):
             self._status.set_summary(SCANNING_MESSAGE)
             return
@@ -729,13 +728,10 @@ class MainWindow(QMainWindow):
 
         self._status.set_summary(self.summary())
 
+        # the reset keeps the view on the texture it was on, which a ranking
+        # takes it off again
         if self.ranking():
             self.scroll_ranked()
-        else:
-            # the rows go from all through the grid rather than off one end of
-            # it, so where the view already was is the nearest thing to where
-            # it should be left
-            self._view.pin_to(place)
 
     def sync_simple(self) -> None:
         self._actions.simple.setEnabled(self._cache is not None)
@@ -778,6 +774,12 @@ class MainWindow(QMainWindow):
             self.show_ranking()
         else:
             self.scroll_ranked()
+
+    def thinned_action(self) -> None:
+        self.sync_empty()
+        self.sync_export()
+
+        self._status.set_summary(self.summary())
 
     def show_ranking(self) -> None:
         """Take the grid to the top of the ranking, where the likest textures are
@@ -839,6 +841,8 @@ class MainWindow(QMainWindow):
 
         current = self.selected_index()
 
+        self._scroll = self._view.kept_scroll()
+
         self._kept = KeptSelection.taken(
             model,
             [index.row() for index in self._view.selectionModel().selectedIndexes()],
@@ -854,6 +858,12 @@ class MainWindow(QMainWindow):
         kept, self._kept = self._kept, KeptSelection()
 
         kept.restore(model, self._view.selectionModel())
+
+        # putting the current row back scrolls to it, which is not where the
+        # user left the view
+        scroll, self._scroll = self._scroll, KeptScroll()
+
+        self._view.restore_scroll(scroll)
 
     def inspector_action(self, shown: bool) -> None:
         self.sync_inspector()
@@ -1209,6 +1219,7 @@ class MainWindow(QMainWindow):
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
         model.ranked.connect(self.ranked_action)
+        model.thinned.connect(self.thinned_action)
 
         self._model = model
 

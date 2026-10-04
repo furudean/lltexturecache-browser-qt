@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index
+from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
 from lltexturecache_browser_qt.view.cellsize import cell_size
 
 CELL_PADDING = 14
@@ -164,6 +164,29 @@ class Anchor:
     offset: int
 
 
+# the scroll bar's value is a pixel offset, and once rows are hidden or let
+# back in it points at other textures, or past the end. the scroll is kept by
+# the texture at the top of the view instead, and when that texture is gone
+# too, the nearest one after it that is still shown takes its place
+@dataclass
+class KeptScroll:
+    # the texture at the top of the view, then every texture after it in order
+    uuids: list[str] = field(default_factory=list)
+
+    # how far down the viewport the first of them sat
+    offset: int = 0
+
+    # held on the end, which follows new rows rather than any one texture
+    at_end: bool = False
+
+    @classmethod
+    def taken(cls, model: TextureModel, row: int, offset: int) -> "KeptScroll":
+        return cls([model.texture(after).uuid for after in range(row, model.rowCount())], offset)
+
+    def row(self, model: TextureModel) -> int | None:
+        return next((row for uuid in self.uuids if (row := model.row(uuid)) is not None), None)
+
+
 class TextureGrid(QListView):
     dragged = Signal()
     previewed = Signal()
@@ -171,7 +194,7 @@ class TextureGrid(QListView):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self._pin: int | None = None
+        self._pinned = False
         self._anchor: Anchor | None = None
         self._dragged = False
 
@@ -220,33 +243,55 @@ class TextureGrid(QListView):
         self._empty.setVisible(self.is_empty())
 
     def pin_to_bottom(self) -> None:
-        self.pin_to(-1)
-
-    def pin_to(self, place: int) -> None:
-        self._pin = place
+        self._pinned = True
 
         self.apply_pin()
 
     def apply_pin(self) -> None:
-        if self._pin is None:
-            return
-
-        if self._pin == -1:
+        if self._pinned:
             self.scrollToBottom()
-        else:
-            self.verticalScrollBar().setValue(self._pin)
 
     def unpin(self) -> None:
         # the view has been moved on purpose, so neither the place it was held
         # at nor the cell it was looking at describes it any more
-        self._pin = None
+        self._pinned = False
         self._anchor = None
 
-    def place(self) -> int:
-        return self.verticalScrollBar().value()
+    def kept_scroll(self) -> KeptScroll:
+        if self._pinned:
+            return KeptScroll(at_end=True)
+
+        model = self.model()
+        index = self.topmost()
+
+        if not (isinstance(model, TextureModel) and index.isValid()):
+            return KeptScroll()
+
+        return KeptScroll.taken(model, index.row(), self.visualRect(index).top() - self.viewport().rect().top())
+
+    def restore_scroll(self, kept: KeptScroll) -> None:
+        if kept.at_end:
+            self.pin_to_bottom()
+            return
+
+        model = self.model()
+
+        if not isinstance(model, TextureModel):
+            return
+
+        row = kept.row(model)
+
+        if row is None:
+            return
+
+        self.unpin()
+
+        # the rows are laid out lazily, and the row's place is not known until they are
+        self.executeDelayedItemsLayout()
+        self.restore_anchor(Anchor(QPersistentModelIndex(model.index(row, 0)), kept.offset))
 
     def anchor(self) -> Anchor | None:
-        if self._pin is not None:
+        if self._pinned:
             return None
 
         if self._anchor is None or not self._anchor.index.isValid():
