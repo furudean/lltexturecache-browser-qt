@@ -13,6 +13,7 @@ all notable changes to this project are documented in this file.
 - show a progress bar while drag out is happening
 - render a border around textures
 - bump texture-courier, pulling in faster and more correct texture parsing
+- bump other dependencies
 
 ## v0.7.3 - 2026-09-14
 
