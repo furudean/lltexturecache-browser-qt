@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
 
         # what was selected and scrolled to before the model was last reset,
         # put back once the rows they were taken from have landed again
-        self._kept = KeptSelection()
+        self._selection = KeptSelection()
         self._scroll = KeptScroll()
 
         # the texture the panes are showing, which is what says whether a click on
@@ -833,7 +833,7 @@ class MainWindow(QMainWindow):
         else:
             self.scroll_to_end()
 
-    def keep_selection(self) -> None:
+    def keep_view(self) -> None:
         model = self._model
 
         if model is None:
@@ -843,21 +843,21 @@ class MainWindow(QMainWindow):
 
         self._scroll = self._view.kept_scroll()
 
-        self._kept = KeptSelection.taken(
+        self._selection = KeptSelection.taken(
             model,
             [index.row() for index in self._view.selectionModel().selectedIndexes()],
             current.row() if current.isValid() else None,
         )
 
-    def restore_selection(self) -> None:
+    def restore_view(self) -> None:
         model = self._model
 
         if model is None:
             return
 
-        kept, self._kept = self._kept, KeptSelection()
+        selection, self._selection = self._selection, KeptSelection()
 
-        kept.restore(model, self._view.selectionModel())
+        selection.restore(model, self._view.selectionModel())
 
         # putting the current row back scrolls to it, which is not where the
         # user left the view
@@ -1232,8 +1232,8 @@ class MainWindow(QMainWindow):
         selection.selectionChanged.connect(self.selection_action)
         selection.currentChanged.connect(self.selection_action)
 
-        model.modelAboutToBeReset.connect(self.keep_selection)
-        model.modelReset.connect(self.restore_selection)
+        model.modelAboutToBeReset.connect(self.keep_view)
+        model.modelReset.connect(self.restore_view)
 
         self._stack = []
         self._inspector.clear()
