@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self._actions.reloaded.connect(self.refresh_action)
         self._actions.exported.connect(self.export_action)
         self._actions.copied.connect(self.copy_action)
+        self._actions.uuid_copied.connect(self.copy_uuid_action)
         self._actions.color_picked.connect(self.filter_color_action)
         self._actions.picture_picked.connect(self.pick_action)
         self._actions.picture_pasted.connect(self.paste_action)
@@ -535,6 +536,21 @@ class MainWindow(QMainWindow):
 
         self._status.flash(f"Copied {format_count(len(paths))} texture(s) to clipboard")
 
+    def copy_uuid_action(self) -> None:
+        model = self._model
+
+        if model is None:
+            return
+
+        textures = self.export_textures(model, everything=False)
+
+        if len(textures) != 1:
+            return
+
+        QGuiApplication.clipboard().setText(textures[0].uuid)
+
+        self._status.flash("Copied UUID to clipboard")
+
     def copy_image(self, model: TextureModel, texture: Texture) -> bool:
         QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
 
@@ -622,13 +638,10 @@ class MainWindow(QMainWindow):
         if not selected:
             return
 
-        index = self.selected_index()
-        uuid = self._model.texture(index.row()).uuid if selected == 1 and index.isValid() else None
-
         menu = self._actions.context_menu(
             parent,
             selected,
-            uuid=uuid,
+            single=selected == 1,
             idle=self._job is None,
             previewing=self.holds_preview(),
         )

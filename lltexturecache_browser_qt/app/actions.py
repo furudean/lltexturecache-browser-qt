@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QSettings, QSignalBlocker, Qt, Signal, SignalInstance
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
@@ -37,6 +37,8 @@ SIMPLE_KEY = "showSimple"
 
 EXPORT_KEY = QKeySequence("Ctrl+E")
 
+UUID_KEY = QKeySequence("Ctrl+Alt+C" if sys.platform == "darwin" else "Ctrl+Shift+C")
+
 TONES = {
     CheckerTone.AUTO: ("&Automatic", "Match the checkerboard to the window's own colours"),
     CheckerTone.LIGHT: ("&Checkerboard (Light)", "Draw a light checkerboard behind the transparent parts of a texture"),
@@ -52,6 +54,7 @@ FORWARDED = (
     "reloaded",
     "exported",
     "copied",
+    "uuid_copied",
     "color_picked",
     "picture_picked",
     "picture_pasted",
@@ -66,7 +69,7 @@ The ticks are not among them: one of those is moved on the window's own entry
 instead, so that its menu goes on saying what its panes are doing.
 """
 
-MIRRORED = ("reload", "copy", "filter_color", "match", "paste", "disable")
+MIRRORED = ("reload", "copy", "copy_uuid", "filter_color", "match", "paste", "disable")
 """The entries a window enables and disables as it goes, which the app-wide bar copies"""
 
 
@@ -139,6 +142,7 @@ class WindowActions(QObject):
     reloaded = Signal()
     exported = Signal(Format, bool)
     copied = Signal()
+    uuid_copied = Signal()
     color_picked = Signal()
     picture_picked = Signal()
     picture_pasted = Signal()
@@ -213,7 +217,14 @@ class WindowActions(QObject):
         self.copy.setEnabled(False)
         triggers(self.copy, self.copied.emit)
 
+        self.copy_uuid = QAction("Copy &UUID", owner)
+        self.copy_uuid.setShortcut(UUID_KEY)
+        self.copy_uuid.setStatusTip("Put the selected texture's uuid on the clipboard")
+        self.copy_uuid.setEnabled(False)
+        triggers(self.copy_uuid, self.uuid_copied.emit)
+
         edit_menu.addAction(self.copy)
+        edit_menu.addAction(self.copy_uuid)
 
     def build_export_menu(self, owner: QWidget, exports: QMenu) -> None:
         self.exports = exports
@@ -473,7 +484,7 @@ class WindowActions(QObject):
         parent: QWidget,
         selected: int,
         *,
-        uuid: str | None,
+        single: bool,
         idle: bool,
         previewing: bool,
     ) -> QMenu:
@@ -491,12 +502,21 @@ class WindowActions(QObject):
 
         menu.addSeparator()
 
-        # one uuid is all the clipboard can usefully hold
-        if uuid is not None:
-            copy = menu.addAction("Copy UUID")
-            triggers(copy, partial(QGuiApplication.clipboard().setText, uuid))
+        copy = menu.addAction("Copy")
+        copy.setShortcut(QKeySequence(QKeySequence.StandardKey.Copy))
+        copy.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        copy.setShortcutVisibleInContextMenu(True)
+        triggers(copy, self.copied.emit)
 
-            menu.addSeparator()
+        # one uuid is all the clipboard can usefully hold
+        if single:
+            copy_uuid = menu.addAction("Copy UUID")
+            copy_uuid.setShortcut(UUID_KEY)
+            copy_uuid.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+            copy_uuid.setShortcutVisibleInContextMenu(True)
+            triggers(copy_uuid, self.uuid_copied.emit)
+
+        menu.addSeparator()
 
         entries = self.format_menu(menu, export_title(selected, everything=False), everything=False)
         entries.setEnabled(idle)
@@ -513,6 +533,7 @@ class WindowActions(QObject):
 
     def sync_export(self, selected: int, total: int, *, idle: bool) -> None:
         self.copy.setEnabled(selected > 0)
+        self.copy_uuid.setEnabled(selected == 1)
 
         self._selected_export.setTitle(export_title(selected, everything=False))
         self._selected_export.setEnabled(idle and selected > 0)
