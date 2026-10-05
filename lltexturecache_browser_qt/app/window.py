@@ -32,7 +32,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QListView,
     QMainWindow,
-    QSplitter,
     QWidget,
 )
 from texture_courier import Texture, TextureCache, TextureCacheError
@@ -76,6 +75,7 @@ from lltexturecache_browser_qt.view.checkerboard import (
 )
 from lltexturecache_browser_qt.view.formatting import format_count
 from lltexturecache_browser_qt.view.images import image_file, image_filter, readable_image
+from lltexturecache_browser_qt.view.splitter import HairlineSplitter
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
         self._inspector.menued.connect(self.inspector_context_action)
         self._inspector.exported.connect(lambda format: self.export_action(format, False))
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter = HairlineSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._view)
         splitter.addWidget(self._inspector)
         splitter.setStretchFactor(0, 1)

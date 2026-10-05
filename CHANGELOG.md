@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - there is a more prominent export button in the inspector
+- minor ui tweaks
 - wire up some executable metadata fields
 - decode textures using an ideal number of threads
 - remember calculated traits when changing filters

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import (
     QContextMenuEvent,
     QMouseEvent,
@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
+    QStyle,
+    QStyleOptionButton,
     QVBoxLayout,
     QWidget,
 )
@@ -142,6 +144,18 @@ class SidebarLabel(QLabel):
         self.setPixmap(fitted)
 
 
+def bezel_inset(button: QPushButton) -> int:
+    option = QStyleOptionButton()
+    button.initStyleOption(option)
+
+    # the button has no size of its own yet, so it is measured at the one it asks for
+    option.rect = QRect(QPoint(), button.sizeHint())
+
+    bezel = button.style().subElementRect(QStyle.SubElement.SE_PushButtonLayoutItem, option, button)
+
+    return max(option.rect.bottom() - bezel.bottom(), 0) if bezel.isValid() else 0
+
+
 class InspectorPane(QWidget):
     dragged = Signal()
     menued = Signal(QPoint)
@@ -206,7 +220,10 @@ class InspectorPane(QWidget):
         self._details.setLayout(details)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(PANE_MARGIN, PANE_MARGIN, PANE_MARGIN, PANE_MARGIN)
+        # the mac style draws a button's bezel inside a taller frame, and the
+        # margin under it gives back the slack so the bezel sits on the margin.
+        # styles that draw to the frame's edge report no slack
+        layout.setContentsMargins(PANE_MARGIN, PANE_MARGIN, PANE_MARGIN, PANE_MARGIN - bezel_inset(self._export))
         layout.setSpacing(PANE_SPACING)
         # a hidden widget is skipped by the layout, stretch and all, so the two
         # states can share one column without stepping on each other
@@ -251,9 +268,11 @@ class InspectorPane(QWidget):
         self.share_height()
 
     def share_height(self) -> None:
-        width = self.width() - 2 * PANE_MARGIN
+        margins = self.layout().contentsMargins()
+
+        width = self.width() - margins.left() - margins.right()
         text = self._details.heightForWidth(width) if width > 0 else self._details.sizeHint().height()
-        room = max(self.height() - 2 * PANE_MARGIN - PANE_SPACING - text, SIDEBAR_MIN_HEIGHT)
+        room = max(self.height() - margins.top() - margins.bottom() - PANE_SPACING - text, SIDEBAR_MIN_HEIGHT)
 
         if room != self._sidebar.maximumHeight():
             self._sidebar.setMaximumHeight(room)
