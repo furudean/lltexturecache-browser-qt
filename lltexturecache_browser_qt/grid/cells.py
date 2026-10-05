@@ -1,4 +1,5 @@
 from bisect import bisect_left, bisect_right
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from math import log
 
@@ -8,6 +9,7 @@ from PySide6.QtCore import (
     QItemSelection,
     QItemSelectionModel,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     QPoint,
     QPointF,
@@ -27,6 +29,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPalette,
     QPen,
+    QPixmap,
     QResizeEvent,
     QShowEvent,
     QWheelEvent,
@@ -79,8 +82,18 @@ WHEEL_STEP = 120
 PINCH_STEP = log(CELL_SIZE_RATIO)
 
 
+# the room baked cells may take up
+BAKED_BYTES = 64 * 1024 * 1024
+
+
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
     return QIcon.Mode.Normal if state & QStyle.StateFlag.State_Enabled else QIcon.Mode.Disabled
+
+
+def decoration(index: Index) -> QPixmap:
+    value = index.data(Qt.ItemDataRole.DecorationRole)
+
+    return value if isinstance(value, QPixmap) else QPixmap()
 
 
 def slot_size() -> int:
@@ -91,9 +104,18 @@ def texture_room(cell: QRect) -> QRect:
     return cell.adjusted(SELECTION_INSET, SELECTION_INSET, -SELECTION_INSET, -SELECTION_INSET)
 
 
-def image_box(icon: QIcon, cell: QRect) -> QRect | None:
+def fitted(size: QSize, room: QSize) -> QSize:
+    """The size QIcon.actualSize gives a pixmap, which shrinks to fit and never grows"""
+
+    if size.width() <= room.width() and size.height() <= room.height():
+        return size
+
+    return size.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+
+
+def image_box(pixmap: QPixmap, cell: QRect) -> QRect | None:
     room = texture_room(cell)
-    size = icon.actualSize(room.size())
+    size = fitted(pixmap.size(), room.size())
 
     if size.isEmpty():
         return None
@@ -129,33 +151,106 @@ def ring(box: QRect, weight: float, inset: float) -> QPainterPath:
     return rounded(QRectF(box).adjusted(room, room, -room, -room), max(TEXTURE_RADIUS - room, 0))
 
 
+class BakedCells:
+    def __init__(self, budget: int = BAKED_BYTES) -> None:
+        self._budget = budget
+        self._bytes = 0
+        self._cells: OrderedDict[tuple[int, int, int, float, int, QIcon.Mode], QPixmap] = OrderedDict()
+
+    def cell(self, pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
+        key = (pixmap.cacheKey(), size.width(), size.height(), ratio, border.rgba(), mode)
+
+        if (baked := self._cells.get(key)) is not None:
+            self._cells.move_to_end(key)
+
+            return baked
+
+        baked = bake(pixmap, size, ratio, border, mode)
+
+        self._cells[key] = baked
+        self._bytes += baked_bytes(baked)
+
+        while self._bytes > self._budget and len(self._cells) > 1:
+            _, dropped = self._cells.popitem(last=False)
+            self._bytes -= baked_bytes(dropped)
+
+        return baked
+
+
+def baked_bytes(pixmap: QPixmap) -> int:
+    return pixmap.width() * pixmap.height() * 4
+
+
+def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
+    """The texture and its border onto a QPixmap"""
+
+    baked = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
+    baked.setDevicePixelRatio(ratio)
+    baked.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(baked)
+    box = QRect(QPoint(), size)
+
+    # the view paints with this on, and the texture is scaled up to the
+    # screen's resolution by the brush
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+    paint_texture(painter, pixmap, box, mode)
+    mark_border(painter, box, border)
+
+    painter.end()
+
+    return baked
+
+
+def paint_texture(painter: QPainter, pixmap: QPixmap, box: QRect, mode: QIcon.Mode) -> None:
+    scaled = QIcon(pixmap).pixmap(box.size(), painter.device().devicePixelRatioF(), mode)
+
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+
+    # the brush tiles from its origin, so the pixmap lands where
+    # QIcon.paint would put it
+    painter.setBrushOrigin(box.topLeft())
+    painter.setBrush(scaled)
+    painter.drawPath(rounded(QRectF(box), TEXTURE_RADIUS))
+    painter.restore()
+
+
+def mark_border(painter: QPainter, box: QRect, color: QColor) -> None:
+    weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
+
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(color, weight))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPath(ring(box, weight, 0))
+    painter.restore()
+
+
 class CellDelegate(QStyledItemDelegate):
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+
+        self._baked = BakedCells()
+
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: Index) -> None:
-        cell = QStyleOptionViewItem(option)
-        self.initStyleOption(cell, index)
+        # the selection is drawn here and a cell has no text, focus or
+        # background, so the style's item and the option it reads are skipped
+        pixmap = decoration(index)
+        box = image_box(pixmap, option.rect)
 
-        icon = QIcon(cell.icon)
-        cell.icon = QIcon()
-        cell.showDecorationSelected = True
-
-        selected = bool(cell.state & QStyle.StateFlag.State_Selected)
-
-        cell.state &= ~(QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus)
-
-        style = cell.widget.style() if cell.widget is not None else QApplication.style()
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, cell, painter, cell.widget)
-
-        box = image_box(icon, option.rect)
-
-        if selected:
-            self.mark_selected(painter, frame_box(box, option.rect), cell)
+        if option.state & QStyle.StateFlag.State_Selected:
+            self.mark_selected(painter, frame_box(box, option.rect), option)
 
         if box is None:
             return
 
-        self.paint_texture(painter, icon, box, icon_mode(cell.state))
+        ratio = painter.device().devicePixelRatioF()
+        baked = self._baked.cell(pixmap, box.size(), ratio, border_color(option.palette), icon_mode(option.state))
 
-        self.mark_border(painter, box, cell.palette)
+        painter.drawPixmap(box.topLeft(), baked)
 
         incomplete = bool(index.data(INCOMPLETE_ROLE))
 
@@ -164,20 +259,6 @@ class CellDelegate(QStyledItemDelegate):
 
         if incomplete:
             self.mark_incomplete(painter, box)
-
-    def paint_texture(self, painter: QPainter, icon: QIcon, box: QRect, mode: QIcon.Mode) -> None:
-        pixmap = icon.pixmap(box.size(), painter.device().devicePixelRatioF(), mode)
-
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        # the brush tiles from its origin, so the pixmap lands where
-        # QIcon.paint would put it
-        painter.setBrushOrigin(box.topLeft())
-        painter.setBrush(pixmap)
-        painter.drawPath(rounded(QRectF(box), TEXTURE_RADIUS))
-        painter.restore()
 
     def mark_selected(self, painter: QPainter, rect: QRect, cell: QStyleOptionViewItem) -> None:
         active = cell.state & QStyle.StateFlag.State_Active
@@ -188,16 +269,6 @@ class CellDelegate(QStyledItemDelegate):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(cell.palette.color(group, QPalette.ColorRole.Highlight))
         painter.drawRoundedRect(QRectF(rect), SELECTION_RADIUS, SELECTION_RADIUS)
-        painter.restore()
-
-    def mark_border(self, painter: QPainter, box: QRect, palette: QPalette) -> None:
-        weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
-
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QPen(border_color(palette), weight))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawPath(ring(box, weight, 0))
         painter.restore()
 
     def mark_incomplete(self, painter: QPainter, box: QRect) -> None:
@@ -450,7 +521,7 @@ class TextureGrid(QListView):
 
     def target(self, index: Index) -> QRect:
         cell = self.visualRect(index)
-        box = image_box(QIcon(index.data(Qt.ItemDataRole.DecorationRole)), cell)
+        box = image_box(decoration(index), cell)
 
         return cell if box is None else target_box(box, cell)
 

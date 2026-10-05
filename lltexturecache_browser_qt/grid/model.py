@@ -14,7 +14,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QColor, QIcon, QImage, QPixmap, QPixmapCache
+from PySide6.QtGui import QColor, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.cache.likeness import describe
@@ -238,14 +238,14 @@ class TextureModel(QAbstractListModel):
 
         return flags | Qt.ItemFlag.ItemIsDragEnabled
 
-    def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QIcon | str | bool | None:
+    def data(self, index: Index, role: int = Qt.ItemDataRole.DisplayRole) -> QPixmap | str | bool | None:
         if not index.isValid():
             return None
 
         texture = self._filtered_textures[index.row()]
 
         if role == Qt.ItemDataRole.DecorationRole:
-            return self.icon(texture)
+            return self.decoration(texture)
 
         if role == INCOMPLETE_ROLE:
             return not texture.whole()
@@ -263,15 +263,15 @@ class TextureModel(QAbstractListModel):
 
         return None
 
-    def icon(self, texture: Texture) -> QIcon:
+    def decoration(self, texture: Texture) -> QPixmap:
         decoded = QPixmap()
 
         if QPixmapCache.find(texture.uuid, decoded):
-            return QIcon(decoded)
+            return decoded
 
         self.request(texture)
 
-        return QIcon(self.sidebar(texture))
+        return self.sidebar(texture)
 
     def sidebar(self, texture: Texture) -> QPixmap:
         if texture.uuid in self._no_sidebar:
