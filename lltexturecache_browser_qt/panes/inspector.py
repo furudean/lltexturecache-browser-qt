@@ -230,6 +230,7 @@ class InspectorPane(QWidget):
         layout.addWidget(self._empty, 1)
         layout.addWidget(self._sidebar)
         layout.addWidget(self._details, 1)
+        self._layout = layout
 
         self.clear()
 
@@ -268,7 +269,7 @@ class InspectorPane(QWidget):
         self.share_height()
 
     def share_height(self) -> None:
-        margins = self.layout().contentsMargins()
+        margins = self._layout.contentsMargins()
 
         width = self.width() - margins.left() - margins.right()
         text = self._details.heightForWidth(width) if width > 0 else self._details.sizeHint().height()
