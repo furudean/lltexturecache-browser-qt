@@ -479,6 +479,12 @@ class WindowActions(QObject):
 
         return menu
 
+    def grid_menu(self, parent: QWidget) -> QMenu:
+        menu = QMenu(parent)
+        menu.addMenu("&Alpha Mode").addActions(list(self._tones.values()))
+
+        return menu
+
     def context_menu(
         self,
         parent: QWidget,

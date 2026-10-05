@@ -621,10 +621,23 @@ class MainWindow(QMainWindow):
         selection = self._view.selectionModel()
         index = self._view.indexAt(at)
 
-        if index.isValid() and not selection.isSelected(index):
+        at = self._view.viewport().mapToGlobal(at)
+
+        if not index.isValid():
+            # finder lets go of the selection on a click between items, and
+            # what is left to offer is the grid's own setting
+            selection.clearSelection()
+
+            menu = self._actions.grid_menu(self._view)
+            menu.exec(at)
+            menu.deleteLater()
+
+            return
+
+        if not selection.isSelected(index):
             selection.setCurrentIndex(index, QItemSelectionModel.SelectionFlag.ClearAndSelect)
 
-        self.show_context_menu(self._view, self._view.viewport().mapToGlobal(at))
+        self.show_context_menu(self._view, at)
 
     def inspector_context_action(self, at: QPoint) -> None:
         self.show_context_menu(self._inspector, at)
