@@ -1,10 +1,12 @@
 import threading
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
-from texture_courier import Entry, Texture, Thumbnail
+from texture_courier import Entry, Texture, TextureCache, Thumbnail
 
 from lltexturecache_browser_qt.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
 from lltexturecache_browser_qt.cache.scan import PLACEHOLDER_BYTE, CacheScan, ScanSignals, placeholder
@@ -14,9 +16,7 @@ def entry(image_size: int) -> Texture:
     return Texture(
         index=0,
         entry=Entry(uuid="0" * 36, image_size=image_size, body_size=0, time=datetime.now()),  # noqa: DTZ005
-        body_path=Path("nowhere"),
-        read_head=bytes,
-        read_thumbnail=lambda: None,
+        cache=cast("TextureCache", SimpleNamespace(cache_dir=Path("nowhere"))),
     )
 
 
