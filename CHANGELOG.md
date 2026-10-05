@@ -8,7 +8,7 @@ all notable changes to this project are documented in this file.
 - minor ui tweaks
 - copy uuid option when right clicking a texture
 - copy textures to the clipboard
-- grid menu
+- can right click on grid to show relevant actions
 - sync inspector visibility with menu
 - wire up some executable metadata fields
 - decode textures using an ideal number of threads
