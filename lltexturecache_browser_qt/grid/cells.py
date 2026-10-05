@@ -299,9 +299,11 @@ class TextureGrid(QListView):
         self._scrolled = ZoomGesture(WHEEL_STEP)
         self._pinched = ZoomGesture(PINCH_STEP)
 
-        # the splitter the grid sits in makes it draw its frame, which on macOS
-        # lands as a hard line across the top of the window under the title bar
-        self.setFrameShape(QFrame.Shape.NoFrame)
+        # fusion leaves the scroll bar's outer edge for the frame to draw. other
+        # styles close the scroll bar themselves, and their frame lands as a
+        # hard line across the top of the window under the title bar
+        if self.style().name() != "fusion":
+            self.setFrameShape(QFrame.Shape.NoFrame)
 
         # a child of the viewport rather than of the view, so it is clipped to
         # the area the textures are drawn in and not to the frame around it

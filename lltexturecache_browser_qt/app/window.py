@@ -177,6 +177,12 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
         splitter.setCollapsible(0, False)
+
+        # the toolbar and the window already draw lines above and beside the
+        # grid, so its frame tucks those two edges out of sight
+        tuck = -self._view.frameWidth()
+
+        splitter.setContentsMargins(tuck, tuck, 0, 0)
         splitter.setSizes([self.width() - INSPECTOR_WIDTH, INSPECTOR_WIDTH])
 
         splitter.restoreState(stored_blob(settings, SPLITTER_KEY))
