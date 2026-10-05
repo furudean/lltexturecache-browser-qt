@@ -140,9 +140,7 @@ class CellDelegate(QStyledItemDelegate):
 
         selected = bool(cell.state & QStyle.StateFlag.State_Selected)
 
-        # the style's highlight is a square block the texture covers, so the
-        # selection is drawn here instead, in the margin around the texture
-        cell.state &= ~QStyle.StateFlag.State_Selected
+        cell.state &= ~(QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus)
 
         style = cell.widget.style() if cell.widget is not None else QApplication.style()
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, cell, painter, cell.widget)
