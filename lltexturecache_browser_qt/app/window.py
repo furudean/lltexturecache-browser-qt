@@ -62,6 +62,7 @@ from lltexturecache_browser_qt.panes.inspector import INSPECTOR_WIDTH, Inspector
 from lltexturecache_browser_qt.panes.preview import PreviewWindow
 from lltexturecache_browser_qt.panes.sidebar import paint as paint_pane
 from lltexturecache_browser_qt.panes.status import WindowStatus
+from lltexturecache_browser_qt.panes.zoom import ZoomControl
 from lltexturecache_browser_qt.settings import (
     FILTERS_KEY,
     GEOMETRY_KEY,
@@ -229,6 +230,9 @@ class MainWindow(QMainWindow):
         self._actions.abouted.connect(self.about_action)
         self._actions.close_window.connect(self.close)
 
+        self._zoom = ZoomControl(self)
+        self._status.add_control(self._zoom)
+
         # how much is selected and how much is in the cache both move around
         # under the menu, and only this end knows either of them
         self._actions.exports.aboutToShow.connect(self.sync_export)
@@ -315,6 +319,7 @@ class MainWindow(QMainWindow):
         self.save_layout()
 
         self._actions.shutdown()
+        self._zoom.shutdown()
 
         CheckerboardChanges.shared().changed.disconnect(self.restyle)
         CellSizeChanges.shared().changed.disconnect(self.resize_cells)

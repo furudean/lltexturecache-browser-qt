@@ -93,3 +93,21 @@ def reset(to: int | None = None) -> int | None:
     was, _size = _size, to
 
     return was
+
+
+class ZoomGesture:
+    def __init__(self, span: float) -> None:
+        self._span = span
+        self._gathered = 0.0
+
+    def feed(self, amount: float) -> int:
+        self._gathered += amount
+
+        steps = int(self._gathered / self._span)
+
+        self._gathered -= steps * self._span
+
+        return steps
+
+    def reset(self) -> None:
+        self._gathered = 0.0

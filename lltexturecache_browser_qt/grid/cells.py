@@ -1,8 +1,10 @@
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
+from math import log
 
 from PySide6.QtCore import (
     QAbstractItemModel,
+    QEvent,
     QItemSelection,
     QItemSelectionModel,
     QModelIndex,
@@ -20,6 +22,7 @@ from PySide6.QtGui import (
     QIcon,
     QKeyEvent,
     QMouseEvent,
+    QNativeGestureEvent,
     QPainter,
     QPainterPath,
     QPalette,
@@ -40,7 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
-from lltexturecache_browser_qt.view.cellsize import cell_size
+from lltexturecache_browser_qt.view.cellsize import CELL_SIZE_RATIO, ZoomGesture, cell_size, step_cell_size
 from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
 CELL_PADDING = 12
@@ -68,6 +71,12 @@ SIMPLE_COLOR = QColor(0x33, 0x33, 0x33)
 SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
 SIMPLE_WEIGHT = 2
 SIMPLE_DASH = 2.5
+
+# how much of a scroll or a pinch moves the grid one size along. a wheel notch
+# is 120 eighths of a degree. a pinch's changes in scale sum to the log of its
+# total scale, so a step of log ratio keeps the grid under the fingers
+WHEEL_STEP = 120
+PINCH_STEP = log(CELL_SIZE_RATIO)
 
 
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
@@ -288,6 +297,9 @@ class TextureGrid(QListView):
         self._anchor: Anchor | None = None
         self._dragged = False
         self._pressed = QPointF()
+
+        self._scrolled = ZoomGesture(WHEEL_STEP)
+        self._pinched = ZoomGesture(PINCH_STEP)
 
         # the splitter the grid sits in makes it draw its frame, which on macOS
         # lands as a hard line across the top of the window under the title bar
@@ -563,9 +575,41 @@ class TextureGrid(QListView):
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        # the command key on mac, and control elsewhere
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.scroll_zoom(event)
+            return
+
         self.unpin()
 
         super().wheelEvent(event)
+
+    def scroll_zoom(self, event: QWheelEvent) -> None:
+        event.accept()
+
+        if event.phase() == Qt.ScrollPhase.ScrollBegin:
+            self._scrolled.reset()
+
+        # a trackpad keeps coasting after the fingers lift, and the grid stays
+        # at the size it was left at rather than running on to an end
+        if event.phase() == Qt.ScrollPhase.ScrollMomentum:
+            return
+
+        step_cell_size(self._scrolled.feed(event.angleDelta().y()))
+
+    def viewportEvent(self, event: QEvent) -> bool:
+        if not isinstance(event, QNativeGestureEvent):
+            return super().viewportEvent(event)
+
+        match event.gestureType():
+            case Qt.NativeGestureType.BeginNativeGesture:
+                self._pinched.reset()
+            case Qt.NativeGestureType.ZoomNativeGesture:
+                step_cell_size(self._pinched.feed(event.value()))
+            case _:
+                return super().viewportEvent(event)
+
+        return True
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         self.unpin()

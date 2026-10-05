@@ -6,6 +6,7 @@ all notable changes to this project are documented in this file.
 
 - there is a more prominent export button in the inspector
 - minor ui tweaks
+- add a zoom slider in the status bar
 - copy uuid option when right clicking a texture
 - copy textures to the clipboard
 - can right click on grid to show relevant actions

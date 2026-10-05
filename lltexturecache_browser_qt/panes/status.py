@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QMainWindow, QStatusBar
+from PySide6.QtWidgets import QMainWindow, QStatusBar, QWidget
 
 from lltexturecache_browser_qt.view.formatting import format_count
 
@@ -21,6 +21,8 @@ class WindowStatus(QObject):
         self._bar = QStatusBar(window)
         window.setStatusBar(self._bar)
 
+        self._bar.setSizeGripEnabled(False)
+
         self._resting = ""
         self._summary = ""
 
@@ -35,6 +37,9 @@ class WindowStatus(QObject):
         self._opened = opened
 
         self.sync()
+
+    def add_control(self, control: QWidget) -> None:
+        self._bar.addPermanentWidget(control)
 
     def rest(self, message: str) -> None:
         self._resting = message
