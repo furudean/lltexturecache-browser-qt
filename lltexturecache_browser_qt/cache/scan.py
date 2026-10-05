@@ -81,8 +81,18 @@ class CacheScan(QRunnable):
         self._known: KnownTraits = known if known is not None else {}
         self._stopped = threading.Event()
 
+        self._free = threading.Event()
+        self._free.set()
+
     def cancel(self) -> None:
         self._stopped.set()
+        self._free.set()
+
+    def pause(self) -> None:
+        self._free.clear()
+
+    def resume(self) -> None:
+        self._free.set()
 
     @Slot()
     def run(self) -> None:
@@ -92,6 +102,8 @@ class CacheScan(QRunnable):
         likeness = LikenessIndex(count)
 
         for row, texture in enumerate(self._textures):
+            self._free.wait()
+
             if self._stopped.is_set():
                 return
 

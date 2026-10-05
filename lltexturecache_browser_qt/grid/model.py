@@ -500,6 +500,12 @@ class TextureModel(QAbstractListModel):
                 [SIMPLE_ROLE],
             )
 
+    def pause_scan(self) -> None:
+        self._scan.pause()
+
+    def resume_scan(self) -> None:
+        self._scan.resume()
+
     def start_decode(self, texture: Texture, priority: int) -> None:
         task = DecodeTask(texture, self.reads, self._signals, self._cell_size)
 

@@ -142,6 +142,13 @@ class MainWindow(QMainWindow):
         self._zoomed.setInterval(150)
         self._zoomed.timeout.connect(self.prefetch_action)
 
+        # the scan holds off while the grid scrolls, and picks up again once
+        # the scroll has been still this long
+        self._scrolled = QTimer(self)
+        self._scrolled.setSingleShot(True)
+        self._scrolled.setInterval(250)
+        self._scrolled.timeout.connect(self.scroll_settled_action)
+
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
         self._view.setIconSize(QSize(cell_size(), cell_size()))
@@ -162,6 +169,7 @@ class MainWindow(QMainWindow):
         self._view.previewed.connect(self.toggle_preview_action)
         self._view.customContextMenuRequested.connect(self.context_action)
         self._view.verticalScrollBar().valueChanged.connect(self.prefetch_action)
+        self._view.verticalScrollBar().valueChanged.connect(self.scrolling_action)
         # a grid that has been resized, filtered or filled has a new band under
         # it without anything having scrolled
         self._view.verticalScrollBar().rangeChanged.connect(self.prefetch_action)
@@ -1165,6 +1173,16 @@ class MainWindow(QMainWindow):
 
         if model is not None:
             prefetch(self._view, model)
+
+    def scrolling_action(self) -> None:
+        if self._model is not None:
+            self._model.pause_scan()
+
+        self._scrolled.start()
+
+    def scroll_settled_action(self) -> None:
+        if self._model is not None:
+            self._model.resume_scan()
 
     def select_texture(self, uuid: str) -> None:
         model = self._model
