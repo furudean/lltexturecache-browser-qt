@@ -21,6 +21,7 @@ from PySide6.QtGui import (
     QKeyEvent,
     QMouseEvent,
     QPainter,
+    QPainterPath,
     QPalette,
     QPen,
     QResizeEvent,
@@ -46,6 +47,8 @@ CELL_PADDING = 12
 
 SELECTION_INSET = 3
 SELECTION_RADIUS = 6
+
+TEXTURE_RADIUS = SELECTION_RADIUS - SELECTION_INSET
 
 # the least a texture's click target spans either way, so a strip a few pixels
 # thin still takes a click as easily as a button does
@@ -104,10 +107,17 @@ def frame_box(box: QRect | None, cell: QRect) -> QRect:
     return box.adjusted(-SELECTION_INSET, -SELECTION_INSET, SELECTION_INSET, SELECTION_INSET)
 
 
-def ring_box(box: QRect, weight: float, inset: float) -> QRectF:
+def rounded(rect: QRectF, radius: float) -> QPainterPath:
+    path = QPainterPath()
+    path.addRoundedRect(rect, radius, radius)
+
+    return path
+
+
+def ring(box: QRect, weight: float, inset: float) -> QPainterPath:
     room = inset + weight / 2
 
-    return QRectF(box).adjusted(room, room, -room, -room)
+    return rounded(QRectF(box).adjusted(room, room, -room, -room), max(TEXTURE_RADIUS - room, 0))
 
 
 class CellDelegate(QStyledItemDelegate):
@@ -133,10 +143,10 @@ class CellDelegate(QStyledItemDelegate):
         if selected:
             self.mark_selected(painter, frame_box(box, option.rect), cell)
 
-        icon.paint(painter, texture_room(option.rect), Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
-
         if box is None:
             return
+
+        self.paint_texture(painter, icon, box, icon_mode(cell.state))
 
         self.mark_border(painter, box, cell.palette)
 
@@ -147,6 +157,20 @@ class CellDelegate(QStyledItemDelegate):
 
         if incomplete:
             self.mark_incomplete(painter, box)
+
+    def paint_texture(self, painter: QPainter, icon: QIcon, box: QRect, mode: QIcon.Mode) -> None:
+        pixmap = icon.pixmap(box.size(), painter.device().devicePixelRatioF(), mode)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        # the brush tiles from its origin, so the pixmap lands where
+        # QIcon.paint would put it
+        painter.setBrushOrigin(box.topLeft())
+        painter.setBrush(pixmap)
+        painter.drawPath(rounded(QRectF(box), TEXTURE_RADIUS))
+        painter.restore()
 
     def mark_selected(self, painter: QPainter, rect: QRect, cell: QStyleOptionViewItem) -> None:
         active = cell.state & QStyle.StateFlag.State_Active
@@ -163,33 +187,36 @@ class CellDelegate(QStyledItemDelegate):
         weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
 
         painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(border_color(palette), weight))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(ring_box(box, weight, 0))
+        painter.drawPath(ring(box, weight, 0))
         painter.restore()
 
     def mark_incomplete(self, painter: QPainter, box: QRect) -> None:
         painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(INCOMPLETE_COLOR, INCOMPLETE_WEIGHT))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(ring_box(box, INCOMPLETE_WEIGHT, 0))
+        painter.drawPath(ring(box, INCOMPLETE_WEIGHT, 0))
         painter.restore()
 
     def mark_simple(self, painter: QPainter, box: QRect, inset: float) -> None:
-        ring = ring_box(box, SIMPLE_WEIGHT, inset)
+        path = ring(box, SIMPLE_WEIGHT, inset)
         dashed = QPen(SIMPLE_COLOR, SIMPLE_WEIGHT, Qt.PenStyle.CustomDashLine)
         dashed.setDashPattern([SIMPLE_DASH, SIMPLE_DASH])
 
         painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
         # the pale ring goes down whole and the dark one dashes over it, so a
         # blank of any lightness has one of the two to show it against
         painter.setPen(QPen(SIMPLE_GROUND, SIMPLE_WEIGHT))
-        painter.drawRect(ring)
+        painter.drawPath(path)
 
         painter.setPen(dashed)
-        painter.drawRect(ring)
+        painter.drawPath(path)
 
         painter.restore()
 
