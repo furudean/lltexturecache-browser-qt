@@ -64,11 +64,25 @@ def outward(band: tuple[int, int], visible: tuple[int, int]) -> list[int]:
     return sorted(range(first, last + 1), key=lambda row: -abs(row - middle))
 
 
-def prefetch(view: QListView, model: TextureModel) -> None:
+def prefetch(view: QListView, model: TextureModel, *, force: bool = False) -> None:
+    """Fill the model's queue with the band around the viewport
+
+    Skipped until the grid has scrolled half a band from where the queue was
+    last filled, so the band always leads by at least half its reach. Cells
+    that come on screen in between are asked for by the paint. A resize or a
+    new cell size moves the band without scrolling, and forces a refill.
+    """
+
+    margin = reach(view)
+    offset = view.verticalScrollBar().value()
+
+    if not force and model.prefetched_near(offset, margin // 2):
+        return
+
     visible = visible_rows(view, model)
-    band = rows_within(view, model, reach(view))
+    band = rows_within(view, model, margin)
 
     if visible is None or band is None:
         return
 
-    model.prefetch(outward(band, visible), range(visible[0], visible[1] + 1))
+    model.prefetch(outward(band, visible), visible, offset)

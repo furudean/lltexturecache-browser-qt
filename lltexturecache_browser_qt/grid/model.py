@@ -164,6 +164,8 @@ class TextureModel(QAbstractListModel):
 
         self._decodes = DecodeQueue(self, start=self.start_decode)
 
+        self._prefetched_at: int | None = None
+
         self._signals = DecodeSignals(self)
         self._signals.done.connect(self.decoded)
 
@@ -477,6 +479,7 @@ class TextureModel(QAbstractListModel):
         self._filtered_rows = {texture.uuid: row for row, texture in enumerate(textures)}
 
         self._decodes.clear()
+        self._prefetched_at = None
 
         self.endResetModel()
 
@@ -517,8 +520,14 @@ class TextureModel(QAbstractListModel):
     def wanted(self, texture: Texture) -> bool:
         return self._decodes.wanted(texture)
 
-    def prefetch(self, rows: Iterable[int], showing: Iterable[int]) -> None:
-        on_screen = {self.texture(row).uuid for row in showing}
+    def prefetched_near(self, offset: int, slack: int) -> bool:
+        return self._prefetched_at is not None and abs(offset - self._prefetched_at) < slack
+
+    def prefetch(self, rows: Iterable[int], visible: tuple[int, int], offset: int) -> None:
+        first, last = visible
+        on_screen = {self.texture(row).uuid for row in range(first, last + 1)}
+
+        self._prefetched_at = offset
 
         self._decodes.refill(map(self.texture, rows), on_screen)
 

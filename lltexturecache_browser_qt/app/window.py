@@ -140,14 +140,19 @@ class MainWindow(QMainWindow):
         self._zoomed = QTimer(self)
         self._zoomed.setSingleShot(True)
         self._zoomed.setInterval(150)
-        self._zoomed.timeout.connect(self.prefetch_action)
+        self._zoomed.timeout.connect(self.refill_action)
+
+        self._prefetching = QTimer(self)
+        self._prefetching.setSingleShot(True)
+        self._prefetching.setInterval(0)
+        self._prefetching.timeout.connect(self.prefetch_action)
 
         # the scan holds off while the grid scrolls, and picks up again once
         # the scroll has been still this long
-        self._scrolled = QTimer(self)
-        self._scrolled.setSingleShot(True)
-        self._scrolled.setInterval(250)
-        self._scrolled.timeout.connect(self.scroll_settled_action)
+        self._scan_held = QTimer(self)
+        self._scan_held.setSingleShot(True)
+        self._scan_held.setInterval(250)
+        self._scan_held.timeout.connect(self.scroll_settled_action)
 
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
@@ -168,11 +173,10 @@ class MainWindow(QMainWindow):
         self._view.dragged.connect(self.drag_action)
         self._view.previewed.connect(self.toggle_preview_action)
         self._view.customContextMenuRequested.connect(self.context_action)
-        self._view.verticalScrollBar().valueChanged.connect(self.prefetch_action)
         self._view.verticalScrollBar().valueChanged.connect(self.scrolling_action)
         # a grid that has been resized, filtered or filled has a new band under
         # it without anything having scrolled
-        self._view.verticalScrollBar().rangeChanged.connect(self.prefetch_action)
+        self._view.verticalScrollBar().rangeChanged.connect(self.refill_action)
 
         self._inspector = InspectorPane()
         self._inspector.dragged.connect(self.inspector_drag_action)
@@ -1174,11 +1178,18 @@ class MainWindow(QMainWindow):
         if model is not None:
             prefetch(self._view, model)
 
+    def refill_action(self) -> None:
+        model = self._model
+
+        if model is not None:
+            prefetch(self._view, model, force=True)
+
     def scrolling_action(self) -> None:
         if self._model is not None:
             self._model.pause_scan()
 
-        self._scrolled.start()
+        self._prefetching.start()
+        self._scan_held.start()
 
     def scroll_settled_action(self) -> None:
         if self._model is not None:
