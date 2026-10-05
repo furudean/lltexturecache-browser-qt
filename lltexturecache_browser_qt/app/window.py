@@ -166,6 +166,7 @@ class MainWindow(QMainWindow):
         self._inspector = InspectorPane()
         self._inspector.dragged.connect(self.inspector_drag_action)
         self._inspector.menued.connect(self.inspector_context_action)
+        self._inspector.exported.connect(lambda format: self.export_action(format, False))
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._view)
@@ -590,6 +591,7 @@ class MainWindow(QMainWindow):
         total = model.rowCount() if model is not None else 0
 
         self._actions.sync_export(selected, total, idle=self._job is None)
+        self._inspector.set_exportable(self._job is None)
 
     def export_textures(self, model: TextureModel, everything: bool) -> list[Texture]:
         if everything:

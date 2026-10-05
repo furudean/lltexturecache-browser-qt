@@ -123,12 +123,12 @@ def triggers(entry: QAction, call: Callable[[], object]) -> None:
 
 def export_title(count: int, *, everything: bool) -> str:
     if everything:
-        return "Export Full Cache As..."
+        return "Export Full Cache As"
 
     if count == 1:
-        return "Export As..."
+        return "Export As"
 
-    return f"Export {format_count(count)} Selected As..." if count else "Export Selected As..."
+    return f"Export {format_count(count)} Selected As" if count else "Export Selected As"
 
 
 class WindowActions(QObject):
@@ -206,8 +206,8 @@ class WindowActions(QObject):
     def build_export_menu(self, owner: QWidget, exports: QMenu) -> None:
         self.exports = exports
 
-        self._selected_export = self.format_menu(exports, "Export Selected As...", everything=False)
-        self._all_export = self.format_menu(exports, "Export Full Cache As...", everything=True)
+        self._selected_export = self.format_menu(exports, "Export Selected As", everything=False)
+        self._all_export = self.format_menu(exports, "Export Full Cache As", everything=True)
 
         self._formats: dict[str, QAction] = {}
 

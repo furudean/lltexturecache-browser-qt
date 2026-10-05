@@ -8,13 +8,17 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
+    QMenu,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 from texture_courier import Texture
 
+from lltexturecache_browser_qt.cache.export import FORMATS, Format
 from lltexturecache_browser_qt.view.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
 from lltexturecache_browser_qt.view.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
@@ -141,6 +145,7 @@ class SidebarLabel(QLabel):
 class InspectorPane(QWidget):
     dragged = Signal()
     menued = Signal(QPoint)
+    exported = Signal(Format)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -195,6 +200,7 @@ class InspectorPane(QWidget):
         # the slack in the pane collects here, under the rows, rather than
         # between the sidebar and the name
         details.addStretch(1)
+        details.addLayout(self.export_row())
 
         self._details = height_for_width(QWidget())
         self._details.setLayout(details)
@@ -209,6 +215,28 @@ class InspectorPane(QWidget):
         layout.addWidget(self._details, 1)
 
         self.clear()
+
+    def export_row(self) -> QHBoxLayout:
+        menu = QMenu(self)
+
+        for format in FORMATS:
+            entry = menu.addAction(format.label)
+            entry.triggered.connect(lambda _checked=False, format=format: self.exported.emit(format))
+
+        # a push button with a menu is drawn by the mac style as a native
+        # pull-down, arrow and all
+        self._export = QPushButton("Export As")
+        self._export.setMenu(menu)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, HEADING_SPACING, 0, 0)
+        row.addStretch(1)
+        row.addWidget(self._export)
+
+        return row
+
+    def set_exportable(self, exportable: bool) -> None:
+        self._export.setEnabled(exportable)
 
     def row(self, name: str) -> QLabel:
         value = wrapped(copyable(QLabel()))
@@ -261,6 +289,8 @@ class InspectorPane(QWidget):
             if count > 1
             else f"{kind} — {format_size(texture.image_size)}"
         )
+
+        self._export.setToolTip(f"Export {format_count(count)} selected texture(s)")
 
         # the rows below are about the one texture, and a selection is titled
         # by its count above rather than described item by item
