@@ -1,10 +1,14 @@
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import (
     QAbstractItemModel,
+    QItemSelection,
+    QItemSelectionModel,
     QModelIndex,
     QPersistentModelIndex,
     QPoint,
+    QPointF,
     QRect,
     QRectF,
     QSize,
@@ -38,7 +42,14 @@ from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, I
 from lltexturecache_browser_qt.view.cellsize import cell_size
 from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
-CELL_PADDING = 14
+CELL_PADDING = 12
+
+SELECTION_INSET = 3
+SELECTION_RADIUS = 6
+
+# the least a texture's click target spans either way, so a strip a few pixels
+# thin still takes a click as easily as a button does
+TARGET_MIN = 24
 
 # how far the empty grid's message may run before it wraps, so a window dragged
 # wide reads as a line of text in the middle of it rather than as a banner
@@ -57,10 +68,46 @@ SIMPLE_DASH = 2.5
 
 
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
-    if not (state & QStyle.StateFlag.State_Enabled):
-        return QIcon.Mode.Disabled
+    return QIcon.Mode.Normal if state & QStyle.StateFlag.State_Enabled else QIcon.Mode.Disabled
 
-    return QIcon.Mode.Selected if state & QStyle.StateFlag.State_Selected else QIcon.Mode.Normal
+
+def slot_size() -> int:
+    return cell_size() + SELECTION_INSET * 2
+
+
+def texture_room(cell: QRect) -> QRect:
+    return cell.adjusted(SELECTION_INSET, SELECTION_INSET, -SELECTION_INSET, -SELECTION_INSET)
+
+
+def image_box(icon: QIcon, cell: QRect) -> QRect | None:
+    room = texture_room(cell)
+    size = icon.actualSize(room.size())
+
+    if size.isEmpty():
+        return None
+
+    # the placement QIcon.paint uses, which moveCenter misses by a pixel
+    return QStyle.alignedRect(Qt.LayoutDirection.LeftToRight, Qt.AlignmentFlag.AlignCenter, size, room)
+
+
+def target_box(box: QRect, cell: QRect) -> QRect:
+    grow_x = max(TARGET_MIN - box.width(), 0) // 2
+    grow_y = max(TARGET_MIN - box.height(), 0) // 2
+
+    return box.adjusted(-grow_x, -grow_y, grow_x, grow_y) & cell
+
+
+def frame_box(box: QRect | None, cell: QRect) -> QRect:
+    if box is None:
+        return cell
+
+    return box.adjusted(-SELECTION_INSET, -SELECTION_INSET, SELECTION_INSET, SELECTION_INSET)
+
+
+def ring_box(box: QRect, weight: float, inset: float) -> QRectF:
+    room = inset + weight / 2
+
+    return QRectF(box).adjusted(room, room, -room, -room)
 
 
 class CellDelegate(QStyledItemDelegate):
@@ -72,64 +119,64 @@ class CellDelegate(QStyledItemDelegate):
         cell.icon = QIcon()
         cell.showDecorationSelected = True
 
+        selected = bool(cell.state & QStyle.StateFlag.State_Selected)
+
+        # the style's highlight is a square block the texture covers, so the
+        # selection is drawn here instead, in the margin around the texture
+        cell.state &= ~QStyle.StateFlag.State_Selected
+
         style = cell.widget.style() if cell.widget is not None else QApplication.style()
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, cell, painter, cell.widget)
 
-        icon.paint(painter, option.rect, Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
+        box = image_box(icon, option.rect)
 
-        self.mark_border(painter, icon, option.rect, cell.palette)
+        if selected:
+            self.mark_selected(painter, frame_box(box, option.rect), cell)
+
+        icon.paint(painter, texture_room(option.rect), Qt.AlignmentFlag.AlignCenter, icon_mode(cell.state))
+
+        if box is None:
+            return
+
+        self.mark_border(painter, box, cell.palette)
 
         incomplete = bool(index.data(INCOMPLETE_ROLE))
 
         if index.data(SIMPLE_ROLE):
-            self.mark_simple(painter, icon, option.rect, INCOMPLETE_WEIGHT if incomplete else 0)
+            self.mark_simple(painter, box, INCOMPLETE_WEIGHT if incomplete else 0)
 
         if incomplete:
-            self.mark_incomplete(painter, icon, option.rect)
+            self.mark_incomplete(painter, box)
 
-    def image_rect(self, icon: QIcon, rect: QRect, weight: float, inset: float) -> QRectF | None:
-        drawn = QRect(QPoint(), icon.actualSize(rect.size()))
+    def mark_selected(self, painter: QPainter, rect: QRect, cell: QStyleOptionViewItem) -> None:
+        active = cell.state & QStyle.StateFlag.State_Active
+        group = QPalette.ColorGroup.Active if active else QPalette.ColorGroup.Inactive
 
-        if drawn.isEmpty():
-            return None
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(cell.palette.color(group, QPalette.ColorRole.Highlight))
+        painter.drawRoundedRect(QRectF(rect), SELECTION_RADIUS, SELECTION_RADIUS)
+        painter.restore()
 
-        drawn.moveCenter(rect.center())
-
-        room = inset + weight / 2
-
-        return QRectF(drawn).adjusted(room, room, -room, -room)
-
-    def mark_border(self, painter: QPainter, icon: QIcon, rect: QRect, palette: QPalette) -> None:
+    def mark_border(self, painter: QPainter, box: QRect, palette: QPalette) -> None:
         weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
-        box = self.image_rect(icon, rect, weight, 0)
-
-        if box is None:
-            return
 
         painter.save()
         painter.setPen(QPen(border_color(palette), weight))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(box)
+        painter.drawRect(ring_box(box, weight, 0))
         painter.restore()
 
-    def mark_incomplete(self, painter: QPainter, icon: QIcon, rect: QRect) -> None:
-        box = self.image_rect(icon, rect, INCOMPLETE_WEIGHT, 0)
-
-        if box is None:
-            return
-
+    def mark_incomplete(self, painter: QPainter, box: QRect) -> None:
         painter.save()
         painter.setPen(QPen(INCOMPLETE_COLOR, INCOMPLETE_WEIGHT))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRect(box)
+        painter.drawRect(ring_box(box, INCOMPLETE_WEIGHT, 0))
         painter.restore()
 
-    def mark_simple(self, painter: QPainter, icon: QIcon, rect: QRect, inset: float) -> None:
-        box = self.image_rect(icon, rect, SIMPLE_WEIGHT, inset)
-
-        if box is None:
-            return
-
+    def mark_simple(self, painter: QPainter, box: QRect, inset: float) -> None:
+        ring = ring_box(box, SIMPLE_WEIGHT, inset)
         dashed = QPen(SIMPLE_COLOR, SIMPLE_WEIGHT, Qt.PenStyle.CustomDashLine)
         dashed.setDashPattern([SIMPLE_DASH, SIMPLE_DASH])
 
@@ -139,15 +186,15 @@ class CellDelegate(QStyledItemDelegate):
         # the pale ring goes down whole and the dark one dashes over it, so a
         # blank of any lightness has one of the two to show it against
         painter.setPen(QPen(SIMPLE_GROUND, SIMPLE_WEIGHT))
-        painter.drawRect(box)
+        painter.drawRect(ring)
 
         painter.setPen(dashed)
-        painter.drawRect(box)
+        painter.drawRect(ring)
 
         painter.restore()
 
     def sizeHint(self, option: QStyleOptionViewItem, index: Index) -> QSize:
-        size = cell_size()
+        size = slot_size()
 
         return QSize(size, size)
 
@@ -213,6 +260,7 @@ class TextureGrid(QListView):
         self._pinned = False
         self._anchor: Anchor | None = None
         self._dragged = False
+        self._pressed = QPointF()
 
         # the splitter the grid sits in makes it draw its frame, which on macOS
         # lands as a hard line across the top of the window under the title bar
@@ -342,16 +390,81 @@ class TextureGrid(QListView):
     def topmost(self) -> Index:
         viewport = self.viewport().rect()
         stride = self.spacing() + 1
-        reach = cell_size() + stride
+        reach = slot_size() + stride
 
         for y in range(viewport.top(), viewport.top() + reach, stride):
             for x in range(viewport.left(), viewport.left() + reach, stride):
-                index = self.indexAt(QPoint(x, y))
+                index = super().indexAt(QPoint(x, y))
 
                 if index.isValid():
                     return index
 
         return QModelIndex()
+
+    def indexAt(self, point: QPoint) -> QModelIndex:
+        index = super().indexAt(point)
+
+        if not index.isValid():
+            return index
+
+        return index if self.target(index).contains(point) else QModelIndex()
+
+    def target(self, index: Index) -> QRect:
+        cell = self.visualRect(index)
+        box = image_box(QIcon(index.data(Qt.ItemDataRole.DecorationRole)), cell)
+
+        return cell if box is None else target_box(box, cell)
+
+    def setSelection(self, rect: QRect, command: QItemSelectionModel.SelectionFlag) -> None:
+        box = rect.normalized()
+        reach = QApplication.startDragDistance()
+
+        if box.width() > reach or box.height() > reach:
+            selection = self.touched(box)
+        else:
+            pressed = self.indexAt(rect.topLeft())
+            selection = QItemSelection(pressed, pressed) if pressed.isValid() else QItemSelection()
+
+        self.selectionModel().select(selection, command)
+
+    def touched(self, box: QRect) -> QItemSelection:
+        model = self.model()
+        selection = QItemSelection()
+
+        if model is None:
+            return selection
+
+        rows = range(model.rowCount())
+
+        # the grid lays rows out in order, so the cells level with the box are
+        # one run of them
+        first = bisect_left(rows, box.top(), key=lambda row: self.visualRect(model.index(row, 0)).bottom())
+        last = bisect_right(rows, box.bottom(), key=lambda row: self.visualRect(model.index(row, 0)).top())
+
+        start: Index | None = None
+        end: Index | None = None
+
+        for row in range(first, last):
+            index = model.index(row, 0)
+            cell = self.visualRect(index)
+
+            # only a cell the box's edge cuts through needs its target measured
+            if not box.contains(cell) and not self.target(index).intersects(box):
+                continue
+
+            if end is not None and end.row() == row - 1:
+                end = index
+                continue
+
+            if start is not None and end is not None:
+                selection.select(start, end)
+
+            start = end = index
+
+        if start is not None and end is not None:
+            selection.select(start, end)
+
+        return selection
 
     def scrollTo(self, index: Index, hint: QListView.ScrollHint = QListView.ScrollHint.EnsureVisible) -> None:
         # something has a particular texture it wants in view, which outranks
@@ -388,6 +501,7 @@ class TextureGrid(QListView):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._dragged = False
+        self._pressed = event.position()
 
         self.unpin()
 
@@ -404,6 +518,20 @@ class TextureGrid(QListView):
 
         if dragged:
             return
+
+        drift = event.position() - self._pressed
+
+        if drift.manhattanLength() < QApplication.startDragDistance():
+            event = QMouseEvent(
+                event.type(),
+                self._pressed,
+                event.scenePosition() - drift,
+                event.globalPosition() - drift,
+                event.button(),
+                event.buttons(),
+                event.modifiers(),
+                event.pointingDevice(),
+            )
 
         super().mouseReleaseEvent(event)
 
