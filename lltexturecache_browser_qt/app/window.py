@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
         self._actions.previewed.connect(self.preview_action)
         self._actions.preview_toggled.connect(self.toggle_preview_action)
         self._actions.inspected.connect(self.inspector_action)
+        self._splitter.splitterMoved.connect(self.inspector_dragged_action)
         self._actions.filtered.connect(self.filters_action)
         self._actions.incompleted.connect(self.incomplete_action)
         self._actions.simple_shown.connect(self.simple_action)
@@ -971,6 +972,18 @@ class MainWindow(QMainWindow):
 
         self._actions.inspector.setEnabled(opened)
         self._inspector.setVisible(opened and self._actions.inspector.isChecked())
+
+        # a pane dragged shut stays shut when shown again, so it opens back up
+        # at its usual width
+        if self._inspector.isVisible() and self._splitter.sizes()[1] == 0:
+            whole = sum(self._splitter.sizes())
+            self._splitter.setSizes([whole - INSPECTOR_WIDTH, INSPECTOR_WIDTH])
+
+    def inspector_dragged_action(self) -> None:
+        # dragging the hairline all the way over hides the pane, and the menu
+        # has to say so or there is no way back to it
+        if self._inspector.isVisible() and self._splitter.sizes()[1] == 0:
+            self._actions.inspector.setChecked(False)
 
     def preview_action(self, shown: bool) -> None:
         # one window's menu says whether the shared window is up, so the rest of

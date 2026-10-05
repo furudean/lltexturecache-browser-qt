@@ -9,6 +9,7 @@ all notable changes to this project are documented in this file.
 - copy uuid option when right clicking a texture
 - copy textures to the clipboard
 - grid menu
+- sync inspector visibility with menu
 - wire up some executable metadata fields
 - decode textures using an ideal number of threads
 - remember calculated traits when changing filters
