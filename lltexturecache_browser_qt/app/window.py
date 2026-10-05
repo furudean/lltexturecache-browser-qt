@@ -47,7 +47,7 @@ from lltexturecache_browser_qt.app.session import AppState
 from lltexturecache_browser_qt.cache.decode import POOL_THREADS
 from lltexturecache_browser_qt.cache.export import Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
-from lltexturecache_browser_qt.cache.scan import KnownTraits
+from lltexturecache_browser_qt.cache.scan import KnownTraits, stamp
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, KeptScroll, TextureGrid
@@ -437,7 +437,7 @@ class MainWindow(QMainWindow):
         if self._cache is None:
             return
 
-        sizes = {texture.uuid: (texture.image_size, texture.body_size) for texture in self._cache}
+        before = {texture.uuid: texture for texture in self._cache}
 
         try:
             changed = list(self._cache.refresh())
@@ -445,29 +445,32 @@ class MainWindow(QMainWindow):
             warn(self, f"Could not reload {self._cache.cache_dir.name}.", str(e))
             return
 
-        added = [texture for texture in changed if texture.uuid not in sizes]
+        added = [texture for texture in changed if texture.uuid not in before]
         rewritten = [
-            texture
-            for texture in changed
-            if texture.uuid in sizes and sizes[texture.uuid] != (texture.image_size, texture.body_size)
+            texture for texture in changed if texture.uuid in before and stamp(texture) != stamp(before[texture.uuid])
         ]
+        evicted = [texture for uuid, texture in before.items() if uuid not in self._cache]
 
-        for texture in rewritten:
+        for texture in rewritten + evicted:
             QPixmapCache.remove(texture.uuid)
             QPixmapCache.remove(sidebar_key(texture.uuid))
 
+        self.forget_traits()
+
         # an entry the grid is not showing is neither news to report nor a row
-        # to scroll to, however much of it the viewer wrote since the last read
+        # to scroll to or take away, however much of it the viewer wrote
         if not self.showing_incomplete():
             added = [texture for texture in added if texture.whole()]
             rewritten = [texture for texture in rewritten if texture.whole()]
+            evicted = [texture for texture in evicted if texture.whole()]
 
         shown = self._inspector.texture
         scroll = self._view.kept_scroll()
 
-        if added or rewritten:
+        if added or rewritten or evicted:
             self.populate_grid(
-                f"Reloaded {format_count(len(added))} new and {format_count(len(rewritten))} changed textures"
+                f"Reloaded {format_count(len(added))} new, {format_count(len(rewritten))} changed"
+                f" and {format_count(len(evicted))} evicted textures"
             )
         else:
             self._status.flash("No new textures found after reload")
@@ -480,8 +483,15 @@ class MainWindow(QMainWindow):
 
         if added:
             self.scroll_to_end()
-        elif rewritten:
+        elif rewritten or evicted:
             self._view.restore_scroll(scroll)
+
+    def forget_traits(self) -> None:
+        live = {stamp(texture) for texture in self._cache or ()}
+
+        for key in list(self._known):
+            if key not in live:
+                self._known.pop(key, None)
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._model
