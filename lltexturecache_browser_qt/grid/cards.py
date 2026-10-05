@@ -38,7 +38,7 @@ def stack_textures(model: TextureModel, index: QModelIndex, selected: list[QMode
 
 
 def point_sized(cell: QPixmap) -> QPixmap:
-    size = cell_size()
+    size = round(cell_size())
 
     if max(cell.width(), cell.height()) == size:
         return cell

@@ -1,7 +1,7 @@
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from math import log
+from math import exp
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -46,7 +46,8 @@ from PySide6.QtWidgets import (
 )
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
-from lltexturecache_browser_qt.view.cellsize import CELL_SIZE_RATIO, ZoomGesture, cell_size, step_cell_size
+from lltexturecache_browser_qt.grid.prefetch import visible_rows
+from lltexturecache_browser_qt.view.cellsize import CELL_SIZE_RATIO, cell_size, scale_cell_size
 from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
 CELL_PADDING = 12
@@ -75,11 +76,9 @@ SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
 SIMPLE_WEIGHT = 2
 SIMPLE_DASH = 2.5
 
-# how much of a scroll or a pinch moves the grid one size along. a wheel notch
-# is 120 eighths of a degree. a pinch's changes in scale sum to the log of its
-# total scale, so a step of log ratio keeps the grid under the fingers
+# how much of a scroll moves the grid one rung along. a wheel notch is 120
+# eighths of a degree
 WHEEL_STEP = 120
-PINCH_STEP = log(CELL_SIZE_RATIO)
 
 
 # the room baked cells may take up
@@ -97,7 +96,7 @@ def decoration(index: Index) -> QPixmap:
 
 
 def slot_size() -> int:
-    return cell_size() + SELECTION_INSET * 2
+    return round(cell_size()) + SELECTION_INSET * 2
 
 
 def texture_room(cell: QRect) -> QRect:
@@ -347,6 +346,15 @@ class Anchor:
     offset: int
 
 
+# a zoom grows the grid out from the middle of the view. the texture there is
+# kept, along with how far down it the middle sat, so it stays put however
+# the rows reflow around it
+@dataclass(frozen=True)
+class Focus:
+    index: Index
+    fraction: float
+
+
 # the scroll bar's value is a pixel offset, and once rows are hidden or let
 # back in it points at other textures, or past the end. the scroll is kept by
 # the texture at the top of the view instead, and when that texture is gone
@@ -379,11 +387,9 @@ class TextureGrid(QListView):
 
         self._pinned = False
         self._anchor: Anchor | None = None
+        self._focus: Focus | None = None
         self._dragged = False
         self._pressed = QPointF()
-
-        self._scrolled = ZoomGesture(WHEEL_STEP)
-        self._pinched = ZoomGesture(PINCH_STEP)
 
         # fusion leaves the scroll bar's outer edge for the frame to draw. other
         # styles close the scroll bar themselves, and their frame lands as a
@@ -445,6 +451,7 @@ class TextureGrid(QListView):
         # at nor the cell it was looking at describes it any more
         self._pinned = False
         self._anchor = None
+        self._focus = None
 
     def kept_scroll(self) -> KeptScroll:
         if self._pinned:
@@ -511,6 +518,58 @@ class TextureGrid(QListView):
         top = self.visualRect(anchor.index).top() - self.viewport().rect().top()
 
         bar.setValue(bar.value() + top - anchor.offset)
+
+    def focus(self) -> Focus | None:
+        if self._pinned:
+            return None
+
+        # kept across a whole run of zooms, so rounding never walks the view off
+        if self._focus is None or not self._focus.index.isValid():
+            self._focus = self.take_focus()
+
+        return self._focus
+
+    def take_focus(self) -> Focus | None:
+        middle = self.viewport().rect().center()
+        index = self.nearest(middle)
+
+        if not index.isValid():
+            return None
+
+        cell = self.visualRect(index)
+
+        return Focus(QPersistentModelIndex(index), (middle.y() - cell.top()) / max(cell.height(), 1))
+
+    def restore_focus(self, focus: Focus | None) -> None:
+        if focus is None or not focus.index.isValid():
+            return
+
+        bar = self.verticalScrollBar()
+        cell = self.visualRect(focus.index)
+        at = cell.top() + round(focus.fraction * cell.height())
+
+        bar.setValue(bar.value() + at - self.viewport().rect().center().y())
+
+        # the cell the window's own resizes hold onto has moved with the zoom
+        self._anchor = None
+
+    def nearest(self, point: QPoint) -> Index:
+        model = self.model()
+
+        if not isinstance(model, TextureModel):
+            return QModelIndex()
+
+        visible = visible_rows(self, model)
+
+        if visible is None:
+            return QModelIndex()
+
+        first, last = visible
+
+        def distance(row: int) -> int:
+            return (self.visualRect(model.index(row, 0)).center() - point).manhattanLength()
+
+        return model.index(min(range(first, last + 1), key=distance), 0)
 
     def topmost(self) -> Index:
         viewport = self.viewport().rect()
@@ -606,6 +665,9 @@ class TextureGrid(QListView):
     def resizeEvent(self, event: QResizeEvent) -> None:
         anchor = self.anchor()
 
+        # the middle of the view moves with its size
+        self._focus = None
+
         super().resizeEvent(event)
 
         self.executeDelayedItemsLayout()
@@ -673,25 +735,21 @@ class TextureGrid(QListView):
     def scroll_zoom(self, event: QWheelEvent) -> None:
         event.accept()
 
-        if event.phase() == Qt.ScrollPhase.ScrollBegin:
-            self._scrolled.reset()
-
         # a trackpad keeps coasting after the fingers lift, and the grid stays
         # at the size it was left at rather than running on to an end
         if event.phase() == Qt.ScrollPhase.ScrollMomentum:
             return
 
-        step_cell_size(self._scrolled.feed(event.angleDelta().y()))
+        scale_cell_size(CELL_SIZE_RATIO ** (event.angleDelta().y() / WHEEL_STEP))
 
     def viewportEvent(self, event: QEvent) -> bool:
         if not isinstance(event, QNativeGestureEvent):
             return super().viewportEvent(event)
 
         match event.gestureType():
-            case Qt.NativeGestureType.BeginNativeGesture:
-                self._pinched.reset()
+            # a pinch's changes in scale sum to the log of its total scale
             case Qt.NativeGestureType.ZoomNativeGesture:
-                step_cell_size(self._pinched.feed(event.value()))
+                scale_cell_size(exp(event.value()))
             case _:
                 return super().viewportEvent(event)
 

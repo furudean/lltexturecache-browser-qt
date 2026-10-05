@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - zoom slider in the status bar to grow or shrink textures
+- zoom is now more granular, and you can zoom with trackpad gestures
 - export as button at the bottom of the inspector
 - pick a default export format under export > default format
 - edit > copy puts the selected texture on the clipboard. several textures are

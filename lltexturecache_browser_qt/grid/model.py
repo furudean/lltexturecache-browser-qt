@@ -70,7 +70,8 @@ def alpha_key(uuid: str) -> str:
 
 
 def cell_pixels(ratio: float) -> int:
-    return round(cell_size() * ratio)
+    # rounded the way the slot is, so a settled cell is drawn without resampling
+    return round(round(cell_size()) * ratio)
 
 
 def full_size(natural: QSize) -> QSize:
@@ -526,6 +527,12 @@ class TextureModel(QAbstractListModel):
 
     def resume_scan(self) -> None:
         self._scan.resume()
+
+    def pause_decodes(self) -> None:
+        self._decodes.hold()
+
+    def resume_decodes(self) -> None:
+        self._decodes.release()
 
     def start_decode(self, texture: Texture, priority: int) -> None:
         task = DecodeTask(texture, self.reads, self._signals, self._pixels, ratio=self._ratio)

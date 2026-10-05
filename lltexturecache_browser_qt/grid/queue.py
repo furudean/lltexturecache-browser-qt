@@ -53,6 +53,10 @@ class DecodeQueue:
         # arrival
         self._stale: set[str] = set()
 
+        # held while the grid is being resized. every decode started then is out
+        # of date before it lands, and its threads take the GIL from the layout
+        self._held = False
+
         self._pool = QThreadPool(parent)
         self._pool.setMaxThreadCount(POOL_THREADS)
 
@@ -140,7 +144,18 @@ class DecodeQueue:
 
         self.pump()
 
+    def hold(self) -> None:
+        self._held = True
+
+    def release(self) -> None:
+        self._held = False
+
+        self.pump()
+
     def pump(self) -> None:
+        if self._held:
+            return
+
         while self._queue and len(self._running) < DECODES_IN_FLIGHT:
             uuid, (priority, texture) = self._queue.popitem()
 

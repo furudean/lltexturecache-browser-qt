@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
         self._zoomed = QTimer(self)
         self._zoomed.setSingleShot(True)
         self._zoomed.setInterval(150)
-        self._zoomed.timeout.connect(self.refill_action)
+        self._zoomed.timeout.connect(self.zoom_settled_action)
 
         self._prefetching = QTimer(self)
         self._prefetching.setSingleShot(True)
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
 
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
-        self._view.setIconSize(QSize(cell_size(), cell_size()))
+        self._view.setIconSize(QSize(round(cell_size()), round(cell_size())))
         self._view.setSpacing(CELL_PADDING // 2)
         self._view.setItemDelegate(CellDelegate(self._view))
         self._view.setResizeMode(QListView.ResizeMode.Adjust)
@@ -421,13 +421,13 @@ class MainWindow(QMainWindow):
         self._settle.start()
 
     def resize_cells(self) -> None:
-        size = cell_size()
+        size = round(cell_size())
 
-        anchor = self._view.anchor()
+        focus = self._view.focus()
 
         self._view.setIconSize(QSize(size, size))
         self._view.doItemsLayout()
-        self._view.restore_anchor(anchor)
+        self._view.restore_focus(focus)
 
         model = self._model
 
@@ -436,7 +436,13 @@ class MainWindow(QMainWindow):
 
         self._view.viewport().update()
 
+        # a gesture resizes the grid every frame, and decodes or a scan running
+        # alongside slow each layout down. both wait until it settles
+        model.pause_decodes()
+        model.pause_scan()
+
         self._zoomed.start()
+        self._scan_held.start()
 
     def open_action(self) -> None:
         dialog = QFileDialog(self, "Select a texturecache directory")
@@ -1190,6 +1196,14 @@ class MainWindow(QMainWindow):
 
         if model is not None:
             prefetch(self._view, model, force=True)
+
+    def zoom_settled_action(self) -> None:
+        model = self._model
+
+        if model is not None:
+            model.resume_decodes()
+
+        self.refill_action()
 
     def scrolling_action(self) -> None:
         if self._model is not None:
