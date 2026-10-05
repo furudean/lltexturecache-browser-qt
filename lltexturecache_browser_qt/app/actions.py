@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QSettings, QSignalBlocker, Qt, Signal, SignalInstance
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import QMenu, QMenuBar, QWidget
 
 from lltexturecache_browser_qt import APP_DISPLAY_NAME
@@ -454,7 +454,15 @@ class WindowActions(QObject):
 
         return menu
 
-    def context_menu(self, parent: QWidget, selected: int, *, idle: bool, previewing: bool) -> QMenu:
+    def context_menu(
+        self,
+        parent: QWidget,
+        selected: int,
+        *,
+        uuid: str | None,
+        idle: bool,
+        previewing: bool,
+    ) -> QMenu:
         menu = QMenu(parent)
 
         preview = menu.addAction("Hide Preview" if previewing else "Preview")
@@ -468,6 +476,13 @@ class WindowActions(QObject):
         checkerboard.addActions(list(self._tones.values()))
 
         menu.addSeparator()
+
+        # one uuid is all the clipboard can usefully hold
+        if uuid is not None:
+            copy = menu.addAction("Copy UUID")
+            triggers(copy, partial(QGuiApplication.clipboard().setText, uuid))
+
+            menu.addSeparator()
 
         entries = self.format_menu(menu, export_title(selected, everything=False), everything=False)
         entries.setEnabled(idle)

@@ -6,6 +6,7 @@ all notable changes to this project are documented in this file.
 
 - there is a more prominent export button in the inspector
 - minor ui tweaks
+- copy uuid option when right clicking a texture
 - wire up some executable metadata fields
 - decode textures using an ideal number of threads
 - remember calculated traits when changing filters

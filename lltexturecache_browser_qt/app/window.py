@@ -574,9 +574,13 @@ class MainWindow(QMainWindow):
         if not selected:
             return
 
+        index = self.selected_index()
+        uuid = self._model.texture(index.row()).uuid if selected == 1 and index.isValid() else None
+
         menu = self._actions.context_menu(
             parent,
             selected,
+            uuid=uuid,
             idle=self._job is None,
             previewing=self.holds_preview(),
         )
