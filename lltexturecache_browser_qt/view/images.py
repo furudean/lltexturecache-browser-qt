@@ -49,7 +49,12 @@ def thumbnail_image(png: bytes, *, checkerboard: bool = True) -> QImage:
 
 
 def fit_image(
-    image: QImage, size: int | None = THUMBNAIL_SIZE, *, upscale: bool = True, checkerboard: bool = True
+    image: QImage,
+    size: int | None = THUMBNAIL_SIZE,
+    *,
+    upscale: bool = True,
+    checkerboard: bool = True,
+    ratio: float = 1.0,
 ) -> QImage:
     """Fit an image to a square box, over the checkerboard if transparent"""
 
@@ -75,7 +80,7 @@ def fit_image(
 
     # a caller that draws its own checkerboard underneath wants the alpha kept, since
     # a checkerboard painted into an image is scaled along with it
-    return over_checkerboard(scaled) if checkerboard else scaled
+    return over_checkerboard(scaled, ratio) if checkerboard else scaled
 
 
 @cache

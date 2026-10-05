@@ -378,7 +378,7 @@ def checker_tile(light: QColor, dark: QColor, square: int = CHECKERBOARD_SIZE) -
     return tile
 
 
-def over_checkerboard(image: QImage) -> QImage:
+def over_checkerboard(image: QImage, ratio: float = 1.0) -> QImage:
     if not image.hasAlphaChannel():
         return image
 
@@ -393,7 +393,9 @@ def over_checkerboard(image: QImage) -> QImage:
     if colors is None:
         return image
 
-    checkerboard = checkerboard_at(colors)
+    # an image drawn at the screen's resolution has its squares scaled to
+    # match, so they come out the same size on screen at any ratio
+    checkerboard = checkerboard_at(colors, round(CHECKERBOARD_SIZE * ratio))
 
     backed = QImage(image.size(), QImage.Format.Format_RGB32)
 

@@ -34,8 +34,11 @@ class DecodeQueue:
     how a decode is made.
     """
 
-    def __init__(self, parent: QObject, start: Callable[[Texture, int], None]) -> None:
+    def __init__(self, parent: QObject, start: Callable[[Texture, int], None], pixels: int) -> None:
         self._start = start
+
+        # how many pixels across a cell is decoded at
+        self._pixels = pixels
 
         # drained from the end, so whatever fills it puts the rows wanted
         # soonest last. each entry carries the priority it goes to the pool at,
@@ -85,7 +88,17 @@ class DecodeQueue:
         if uuid in self._running or uuid in self._failed:
             return False
 
-        return not QPixmapCache.find(uuid, QPixmap())
+        held = QPixmap()
+
+        return not QPixmapCache.find(uuid, held) or not self.fits(held)
+
+    def fits(self, cell: QPixmap) -> bool:
+        return max(cell.width(), cell.height()) == self._pixels
+
+    def resize(self, pixels: int) -> None:
+        self._pixels = pixels
+
+        self.restyle()
 
     def enqueue(self, texture: Texture, priority: int) -> bool:
         """Put a texture in the queue, and say whether the queue moved

@@ -2,7 +2,6 @@ from math import sqrt
 from typing import ClassVar, Self
 
 from PySide6.QtCore import QObject, QSettings, Signal
-from PySide6.QtGui import QPixmapCache
 
 from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
 
@@ -68,7 +67,6 @@ def set_cell_size(size: int) -> None:
     _size = size
 
     QSettings().setValue(CELL_SIZE_KEY, size)
-    QPixmapCache.clear()
 
     CellSizeChanges.shared().changed.emit()
 

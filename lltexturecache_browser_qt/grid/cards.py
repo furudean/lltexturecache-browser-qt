@@ -6,11 +6,12 @@ textures go on the pile, and what each of them is drawn from, is the same
 question in both places, so it is answered here.
 """
 
-from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex, Qt
 from PySide6.QtGui import QPixmap
 from texture_courier import Texture
 
 from lltexturecache_browser_qt.grid.model import TextureModel
+from lltexturecache_browser_qt.view.cellsize import cell_size
 from lltexturecache_browser_qt.view.stack import STACK_CARDS
 
 type Card = tuple[str, QPixmap]
@@ -36,6 +37,15 @@ def stack_textures(model: TextureModel, index: QModelIndex, selected: list[QMode
     return [*others[::step][: STACK_CARDS - 1], top]
 
 
+def point_sized(cell: QPixmap) -> QPixmap:
+    size = cell_size()
+
+    if max(cell.width(), cell.height()) == size:
+        return cell
+
+    return cell.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+
 def grid_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
     """Cards drawn from what the grid already holds, for a drag
 
@@ -48,7 +58,7 @@ def grid_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
 
     for texture in textures:
         cell = model.cell(texture)
-        card = model.sidebar(texture) if cell.isNull() else cell
+        card = model.sidebar(texture) if cell.isNull() else point_sized(cell)
 
         if not card.isNull():
             cards.append((texture.uuid, card))

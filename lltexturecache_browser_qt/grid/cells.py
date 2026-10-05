@@ -105,9 +105,13 @@ def texture_room(cell: QRect) -> QRect:
 
 
 def fitted(size: QSize, room: QSize) -> QSize:
-    """The size QIcon.actualSize gives a pixmap, which shrinks to fit and never grows"""
+    """A pixmap's size grown or shrunk to fit the room
 
-    if size.width() <= room.width() and size.height() <= room.height():
+    Grown as well, so a cell from before a zoom fills the square its
+    replacement will.
+    """
+
+    if size.isEmpty():
         return size
 
     return size.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
@@ -204,7 +208,18 @@ def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon
 
 
 def paint_texture(painter: QPainter, pixmap: QPixmap, box: QRect, mode: QIcon.Mode) -> None:
-    scaled = QIcon(pixmap).pixmap(box.size(), painter.device().devicePixelRatioF(), mode)
+    ratio = painter.device().devicePixelRatioF()
+    scaled = QIcon(pixmap).pixmap(box.size(), ratio, mode)
+    shown = scaled.deviceIndependentSize()
+
+    if shown.width() < box.width() or shown.height() < box.height():
+        scaled = pixmap.scaled(
+            box.size() * ratio,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        scaled.setDevicePixelRatio(ratio)
+        scaled = QIcon(scaled).pixmap(box.size(), ratio, mode)
 
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)

@@ -366,6 +366,13 @@ class MainWindow(QMainWindow):
 
         super().closeEvent(event)
 
+    def event(self, event: QEvent) -> bool:
+        # a window dragged onto a screen of another resolution
+        if event.type() == QEvent.Type.DevicePixelRatioChange:
+            self.resize_cells()
+
+        return super().event(event)
+
     def changeEvent(self, event: QEvent) -> None:
         super().changeEvent(event)
 
@@ -424,7 +431,7 @@ class MainWindow(QMainWindow):
 
         model = self._model
 
-        if model is None or not model.resize_cells():
+        if model is None or not model.resize_cells(self._view.devicePixelRatioF()):
             return
 
         self._view.viewport().update()
@@ -1378,7 +1385,7 @@ class MainWindow(QMainWindow):
         if isinstance(old_model, TextureModel):
             old_model.shutdown()
 
-        model = TextureModel(textures, self._cache, self._known, self)
+        model = TextureModel(textures, self._cache, self._known, self._view.devicePixelRatioF(), self)
         model.full_ready.connect(self.ready_action)
         model.preview_ready.connect(self.preview_ready_action)
         model.ranked.connect(self.ranked_action)

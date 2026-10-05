@@ -69,6 +69,10 @@ def alpha_key(uuid: str) -> str:
     return f"alpha:{uuid}"
 
 
+def cell_pixels(ratio: float) -> int:
+    return round(cell_size() * ratio)
+
+
 def full_size(natural: QSize) -> QSize:
     return natural.scaled(QSize(FULL_SIZE, FULL_SIZE).boundedTo(natural), Qt.AspectRatioMode.KeepAspectRatio)
 
@@ -87,6 +91,7 @@ class DecodeTask(QRunnable):
         *,
         upscale: bool = True,
         checkerboard: bool = True,
+        ratio: float = 1.0,
         threads: Callable[[], int] | None = None,
     ):
         super().__init__()
@@ -97,6 +102,7 @@ class DecodeTask(QRunnable):
         self._size = size
         self._upscale = upscale
         self._board = checkerboard
+        self._ratio = ratio
         self._threads = threads
 
     @Slot()
@@ -124,7 +130,9 @@ class DecodeTask(QRunnable):
 
             return QImage(), QSize()
 
-        return fit_image(image, self._size, upscale=self._upscale, checkerboard=self._board), image.size()
+        fitted = fit_image(image, self._size, upscale=self._upscale, checkerboard=self._board, ratio=self._ratio)
+
+        return fitted, image.size()
 
 
 class TextureModel(QAbstractListModel):
@@ -138,6 +146,7 @@ class TextureModel(QAbstractListModel):
         textures: list[Texture],
         cache: TextureCache,
         known: KnownTraits,
+        ratio: float = 1.0,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
@@ -159,10 +168,13 @@ class TextureModel(QAbstractListModel):
         # asked for is the only one worth the room a full sized decode takes
         self._previews = PreviewDecodes()
         self._generation = checkerboard_generation()
-        self._cell_size = cell_size()
+        # cells are decoded at the screen's resolution, so on a retina screen a
+        # 100 point cell is 200 pixels across
+        self._ratio = ratio
+        self._pixels = cell_pixels(ratio)
         self._thumbnails = threading.Lock()
 
-        self._decodes = DecodeQueue(self, start=self.start_decode)
+        self._decodes = DecodeQueue(self, start=self.start_decode, pixels=self._pixels)
 
         self._prefetched_at: int | None = None
 
@@ -267,6 +279,11 @@ class TextureModel(QAbstractListModel):
         decoded = QPixmap()
 
         if QPixmapCache.find(texture.uuid, decoded):
+            # a cell from before the grid was resized stands in for its
+            # replacement until that lands
+            if not self._decodes.fits(decoded):
+                self.request(texture)
+
             return decoded
 
         self.request(texture)
@@ -430,15 +447,16 @@ class TextureModel(QAbstractListModel):
 
         return True
 
-    def resize_cells(self) -> bool:
-        size = cell_size()
+    def resize_cells(self, ratio: float) -> bool:
+        pixels = cell_pixels(ratio)
 
-        if size == self._cell_size:
+        if pixels == self._pixels and ratio == self._ratio:
             return False
 
-        self._cell_size = size
+        self._ratio = ratio
+        self._pixels = pixels
 
-        self._decodes.restyle()
+        self._decodes.resize(pixels)
 
         return True
 
@@ -510,7 +528,7 @@ class TextureModel(QAbstractListModel):
         self._scan.resume()
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        task = DecodeTask(texture, self.reads, self._signals, self._cell_size)
+        task = DecodeTask(texture, self.reads, self._signals, self._pixels, ratio=self._ratio)
 
         self._decodes.pool.start(task, priority)
 
