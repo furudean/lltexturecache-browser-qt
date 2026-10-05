@@ -2,6 +2,7 @@ import atexit
 import logging
 import shutil
 import tempfile
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 from threading import Lock
@@ -37,7 +38,18 @@ def held() -> bool:
     return bool(QGuiApplication.mouseButtons() & Qt.MouseButton.LeftButton)
 
 
-def staged(parent: QWidget, textures: list[Texture], reads: Lock) -> list[Path]:
+def always() -> bool:
+    return True
+
+
+def staged(
+    parent: QWidget,
+    textures: list[Texture],
+    reads: Lock,
+    *,
+    title: str,
+    wanted: Callable[[], bool] = always,
+) -> list[Path]:
     out_dir = staging()
     format = export_format()
 
@@ -48,7 +60,7 @@ def staged(parent: QWidget, textures: list[Texture], reads: Lock) -> list[Path]:
         len(textures),
         parent,
     )
-    progress.setWindowTitle("Drag")
+    progress.setWindowTitle(title)
     progress.setWindowModality(Qt.WindowModality.WindowModal)
     progress.setMinimumDuration(DELAY_MESSAGE_DURATION_MS)
     progress.setValue(0)
@@ -59,7 +71,7 @@ def staged(parent: QWidget, textures: list[Texture], reads: Lock) -> list[Path]:
     def progressed(done: int) -> None:
         progress.setValue(done)
 
-        if not held():
+        if not wanted():
             job.cancel()
 
     job.progressed.connect(progressed)
@@ -75,21 +87,21 @@ def staged(parent: QWidget, textures: list[Texture], reads: Lock) -> list[Path]:
     progress.deleteLater()
     job.deleteLater()
 
-    if job.cancelled or not held():
+    if job.cancelled or not wanted():
         return []
 
-    # a drag carries what it can. one texture the cache will not give up is no
+    # a drag or a copy carries what it can. one texture the cache will not give up is no
     # reason to drop the rest of the selection on the floor
     failed = set()
 
     for uuid, reason in job.failed:
-        log.warning("leaving %s out of the drag: %s", uuid, reason)
+        log.warning("leaving %s out of the files: %s", uuid, reason)
         failed.add(uuid)
 
     return [export_path(out_dir, texture.uuid, format) for texture in textures if texture.uuid not in failed]
 
 
-def drag_data(paths: list[Path]) -> QMimeData:
+def file_data(paths: list[Path]) -> QMimeData:
     data = QMimeData()
     data.setUrls([QUrl.fromLocalFile(str(path)) for path in paths])
 

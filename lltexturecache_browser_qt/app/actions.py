@@ -51,6 +51,7 @@ FORWARDED = (
     "reopened",
     "reloaded",
     "exported",
+    "copied",
     "color_picked",
     "picture_picked",
     "picture_pasted",
@@ -65,7 +66,7 @@ The ticks are not among them: one of those is moved on the window's own entry
 instead, so that its menu goes on saying what its panes are doing.
 """
 
-MIRRORED = ("reload", "filter_color", "match", "paste", "disable")
+MIRRORED = ("reload", "copy", "filter_color", "match", "paste", "disable")
 """The entries a window enables and disables as it goes, which the app-wide bar copies"""
 
 
@@ -137,6 +138,7 @@ class WindowActions(QObject):
     reopened = Signal(Path)
     reloaded = Signal()
     exported = Signal(Format, bool)
+    copied = Signal()
     color_picked = Signal()
     picture_picked = Signal()
     picture_pasted = Signal()
@@ -156,6 +158,7 @@ class WindowActions(QObject):
         # the entries belong to the owner rather than to this, since a shortcut
         # is only answered by a window the action can be reached from
         self.build_file_menu(owner, menu.addMenu("&File"))
+        self.build_edit_menu(owner, menu.addMenu("&Edit"))
         self.build_export_menu(owner, menu.addMenu("&Export"))
         self.build_find_menu(owner, menu.addMenu("Fi&nd"))
         self.build_view_menu(owner, menu.addMenu("&View"))
@@ -203,6 +206,15 @@ class WindowActions(QObject):
         self.populate_recents()
         self.populate_suggested()
 
+    def build_edit_menu(self, owner: QWidget, edit_menu: QMenu) -> None:
+        self.copy = QAction("&Copy", owner)
+        self.copy.setShortcut(QKeySequence(QKeySequence.StandardKey.Copy))
+        self.copy.setStatusTip("Put the selected texture on the clipboard, or several as files in the default format")
+        self.copy.setEnabled(False)
+        triggers(self.copy, self.copied.emit)
+
+        edit_menu.addAction(self.copy)
+
     def build_export_menu(self, owner: QWidget, exports: QMenu) -> None:
         self.exports = exports
 
@@ -216,7 +228,9 @@ class WindowActions(QObject):
 
         for format in FORMATS:
             entry = QAction(format.label, owner)
-            entry.setStatusTip(f"Write textures out as {format.label} when dragged or exported with the shortcut")
+            entry.setStatusTip(
+                f"Write textures out as {format.label} when dragged, copied or exported with the shortcut"
+            )
             entry.setCheckable(True)
             entry.setActionGroup(formats)
             triggers(entry, partial(set_export_format, format))
@@ -498,6 +512,8 @@ class WindowActions(QObject):
         self.disable.setEnabled(asking)
 
     def sync_export(self, selected: int, total: int, *, idle: bool) -> None:
+        self.copy.setEnabled(selected > 0)
+
         self._selected_export.setTitle(export_title(selected, everything=False))
         self._selected_export.setEnabled(idle and selected > 0)
 

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
 from typing import ClassVar
@@ -40,9 +41,10 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.app.about import AboutDialog
 from lltexturecache_browser_qt.app.actions import AppMenu, WindowActions
 from lltexturecache_browser_qt.app.alerts import warn
-from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, drag_data, staged
+from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, always, file_data, held, staged
 from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
 from lltexturecache_browser_qt.app.session import AppState
+from lltexturecache_browser_qt.cache.decode import POOL_THREADS
 from lltexturecache_browser_qt.cache.export import Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.scan import KnownTraits
@@ -74,7 +76,7 @@ from lltexturecache_browser_qt.view.checkerboard import (
     sync_checkerboard,
 )
 from lltexturecache_browser_qt.view.formatting import format_count
-from lltexturecache_browser_qt.view.images import image_file, image_filter, readable_image
+from lltexturecache_browser_qt.view.images import decode_image, image_file, image_filter, readable_image
 from lltexturecache_browser_qt.view.splitter import HairlineSplitter
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
@@ -211,6 +213,7 @@ class MainWindow(QMainWindow):
         self._actions.reopened.connect(self.open_cache)
         self._actions.reloaded.connect(self.refresh_action)
         self._actions.exported.connect(self.export_action)
+        self._actions.copied.connect(self.copy_action)
         self._actions.color_picked.connect(self.filter_color_action)
         self._actions.picture_picked.connect(self.pick_action)
         self._actions.picture_pasted.connect(self.paste_action)
@@ -492,37 +495,7 @@ class MainWindow(QMainWindow):
         if model is None:
             return
 
-        textures = self.export_textures(model, everything=False)
-
-        if not textures:
-            return
-
-        if len(textures) > DRAG_LIMIT:
-            # the mouse is still down on the drag this is turning away, so the
-            # alert waits for the press to be over rather than coming up under it
-            QTimer.singleShot(
-                0,
-                lambda: warn(
-                    self,
-                    f"Can't drag more than {format_count(DRAG_LIMIT)} textures at once.",
-                    "Export them to a folder instead.",
-                ),
-            )
-            return
-
-        # staging runs an event loop of its own, and a second drag must not
-        # start inside it
-        if self._staging:
-            return
-
-        self._staging = True
-        QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
-
-        try:
-            paths = staged(self, textures, model.reads)
-        finally:
-            QGuiApplication.restoreOverrideCursor()
-            self._staging = False
+        paths = self.stage_selection(model, "drag", held)
 
         if not paths:
             return
@@ -530,13 +503,88 @@ class MainWindow(QMainWindow):
         pixmap = self.drag_pixmap(model)
 
         drag = QDrag(source if source is not None else self._view)
-        drag.setMimeData(drag_data(paths))
+        drag.setMimeData(file_data(paths))
 
         if not pixmap.isNull():
             drag.setPixmap(pixmap)
             drag.setHotSpot(QPoint(pixmap.width() // 2, pixmap.height() // 2))
 
         drag.exec(Qt.DropAction.CopyAction)
+
+    def copy_action(self) -> None:
+        model = self._model
+
+        if model is None:
+            return
+
+        textures = self.export_textures(model, everything=False)
+
+        if len(textures) == 1 and self.copy_image(model, textures[0]):
+            self._status.flash("Copied texture to clipboard")
+            return
+
+        paths = self.stage_selection(model, "copy", always)
+
+        if not paths:
+            if len(textures) == 1:
+                self._status.flash("Could not copy texture")
+
+            return
+
+        QGuiApplication.clipboard().setMimeData(file_data(paths))
+
+        self._status.flash(f"Copied {format_count(len(paths))} texture(s) to clipboard")
+
+    def copy_image(self, model: TextureModel, texture: Texture) -> bool:
+        QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+
+        try:
+            with model.reads:
+                codestream = texture.codestream()
+
+            image = decode_image(codestream, POOL_THREADS)
+        except (TextureCacheError, OSError):
+            # an unfinished texture will not decode, and goes out as a file instead
+            return False
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+
+        QGuiApplication.clipboard().setImage(image)
+
+        return True
+
+    def stage_selection(self, model: TextureModel, verb: str, wanted: Callable[[], bool]) -> list[Path]:
+        textures = self.export_textures(model, everything=False)
+
+        if not textures:
+            return []
+
+        if len(textures) > DRAG_LIMIT:
+            # a drag turned away still has the mouse down, so the alert waits
+            # for the press to be over rather than coming up under it
+            QTimer.singleShot(
+                0,
+                lambda: warn(
+                    self,
+                    f"Can't {verb} more than {format_count(DRAG_LIMIT)} textures at once.",
+                    "Export them to a folder instead.",
+                ),
+            )
+            return []
+
+        # staging runs an event loop of its own, and a second one must not
+        # start inside it
+        if self._staging:
+            return []
+
+        self._staging = True
+        QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+
+        try:
+            return staged(self, textures, model.reads, title=verb.title(), wanted=wanted)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+            self._staging = False
 
     def drag_pixmap(self, model: TextureModel) -> QPixmap:
         index = self.selected_index()
@@ -596,6 +644,13 @@ class MainWindow(QMainWindow):
 
         self._actions.sync_export(selected, total, idle=self._job is None)
         self._inspector.set_exportable(self._job is None)
+
+        # the selection moves without the menu being opened, and cmd+c is
+        # answered by whichever bar is up
+        menu = MainWindow._app.menu
+
+        if menu is not None:
+            menu.resync(self._actions)
 
     def export_textures(self, model: TextureModel, everything: bool) -> list[Texture]:
         if everything:
