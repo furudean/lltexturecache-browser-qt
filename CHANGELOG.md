@@ -4,24 +4,30 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
-- there is a more prominent export button in the inspector
-- minor ui tweaks
-- add a zoom slider in the status bar
-- copy uuid option when right clicking a texture
-- copy textures to the clipboard
-- can right click on grid to show relevant actions
-- sync inspector visibility with menu
-- wire up some executable metadata fields
-- decode textures using an ideal number of threads
-- remember calculated traits when changing filters
-- clear evicted textures after refresh
-- fix scroll position being pinned to bottom after calculating texture characteristics
-- don't consider drag and drop from inside the application as a match target
-- choose a default export format under export menu
-- show a progress bar while drag out is happening
-- render a border around textures
-- bump texture-courier, pulling in faster and more correct texture parsing
+- zoom slider in the status bar to grow or shrink textures
+- export as button at the bottom of the inspector
+- pick a default export format under export > default format
+- edit > copy puts the selected texture on the clipboard. several textures are
+  copied as files in the default format
+- copy uuid with menu
+- clicking on empty space has a right-click menu
+- show a progress bar while dragged textures are being written out
+- a more visible border hugs selected textures, and textures get rounded corners
+- thinner splitter between the grid and inspector
+- the inspector syncs its visibility with the toolbar, so it won't get stuck
+  hidden.
+- more stable scroll position as texture positions shift
+- reload drops textures the viewer has evicted from the cache
+- drop to match no longer accepts textures that originated in the app (likely
+  source of mistakes)
+- fix the scroll bar missing its outer edge with the fusion style (linux)
+- faster decoding, exporting and filtering overall
+- more performant scrolling
+- bump texture-courier to 0.2.0, pulling in faster and more correct texture
+  parsing
 - bump other dependencies
+- set company name, copyright, version and description on the built executable,
+  and an app category on mac. because it makes me feel cool.
 
 ## v0.7.3 - 2026-09-14
 
