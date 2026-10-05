@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QListView
 from lltexturecache_browser_qt.grid.model import TextureModel
 
 # how far past the viewport, in screenfuls, cells are decoded ahead
-PREFETCH_SCREENS = 2
+PREFETCH_SCREENS = 1
 
 
 def reach(view: QListView) -> int:
