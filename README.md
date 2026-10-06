@@ -55,6 +55,13 @@ use [uv](https://docs.astral.sh/uv/) to run the app in a development context
 uv run lltexturecache-browser-qt
 ```
 
+common tasks are defined under `[tool.poe.tasks]` in
+[pyproject.toml](pyproject.toml) and run with [poe](https://poethepoet.natn.io/)
+
+```bash
+uv run poe check
+```
+
 ## build
 
 a script makes the app for the host platform. mac gets a `.app` windows
