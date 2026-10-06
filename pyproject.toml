@@ -63,7 +63,7 @@ cmd = "pytest"
 help = "run the test suite"
 
 [tool.poe.tasks.check]
-sequence = ["lint", "fmt-check", "types", "test"]
+sequence = ["lint", "fmt-check", "types", "test", { cmd = "python scripts/generate-licences" }]
 help = "run all CI checks"
 
 [tool.pytest.ini_options]

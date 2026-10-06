@@ -135,7 +135,7 @@ def offered(expression: str) -> list[str]:
     return [term for term in IDENTIFIER.findall(expression) if term.upper() not in OPERATOR]
 
 
-def text(name: str, dist: Distribution) -> str:
+def text(dist: Distribution) -> str | None:
     files = [file for file in dist.files or [] if "licenses" in file.parts]
 
     if files:
@@ -148,13 +148,28 @@ def text(name: str, dist: Distribution) -> str:
         if term in VENDOR:
             return SEPARATOR.join((VENDORED / file).read_text() for file in VENDOR[term])
 
-    raise SystemExit(f"{name} ships no licence file and names none this project keeps, add its licence to VENDOR")
+    return None
 
 
 def main() -> None:
     # read from the project rather than from its dist-info, so the script does
     # not need the app itself installed to say what the app ships
     roots = required(pyproject()["project"]["dependencies"])
+    shipped = sorted(closure(roots).items())
+
+    texts: dict[str, str] = {}
+    unmapped = []
+
+    for name, dist in shipped:
+        body = text(dist)
+
+        if body is None:
+            unmapped.append(f"{name} ships no licence text, add one to packaging/licences and list it in VENDOR")
+        else:
+            texts[name] = body
+
+    if unmapped:
+        raise SystemExit("\n".join(unmapped))
 
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -163,10 +178,10 @@ def main() -> None:
 
     index = []
 
-    for name, dist in sorted(closure(roots).items()):
+    for name, dist in shipped:
         file = f"{name}.txt"
 
-        (OUT / file).write_text(text(name, dist).strip() + "\n")
+        (OUT / file).write_text(texts[name].strip() + "\n")
 
         index.append(
             {
