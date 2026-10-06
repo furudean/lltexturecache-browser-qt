@@ -10,7 +10,6 @@ from PySide6.QtCore import (
     QModelIndex,
     QPoint,
     QSettings,
-    QSize,
     Qt,
     QTimer,
     QUrl,
@@ -70,7 +69,7 @@ from lltexturecache_browser_qt.settings import (
     SPLITTER_KEY,
     stored_blob,
 )
-from lltexturecache_browser_qt.view.cellsize import CellSizeChanges, cell_size
+from lltexturecache_browser_qt.view.cellsize import CellSizeChanges
 from lltexturecache_browser_qt.view.checkerboard import (
     CheckerboardChanges,
     reset_pane_tone,
@@ -157,7 +156,6 @@ class MainWindow(QMainWindow):
 
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
-        self._view.setIconSize(QSize(round(cell_size()), round(cell_size())))
         self._view.setSpacing(CELL_PADDING // 2)
         self._view.setItemDelegate(CellDelegate(self._view))
         self._view.setResizeMode(QListView.ResizeMode.Adjust)
@@ -422,13 +420,10 @@ class MainWindow(QMainWindow):
         self._settle.start()
 
     def resize_cells(self) -> None:
-        size = round(cell_size())
-
         focus = self._view.focus()
 
-        self._view.setIconSize(QSize(size, size))
         self._view.doItemsLayout()
-        self._view.restore_focus(focus)
+        self._view.restore_anchor(focus)
 
         model = self._model
 

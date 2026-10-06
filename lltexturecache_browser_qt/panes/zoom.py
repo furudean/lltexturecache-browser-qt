@@ -5,7 +5,6 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QSizePolicy, QSlider, Q
 
 from lltexturecache_browser_qt.view.cellsize import (
     CELL_SIZES,
-    DEFAULT_CELL_SIZE,
     LARGEST_CELL_SIZE,
     SMALLEST_CELL_SIZE,
     CellSizeChanges,
@@ -14,35 +13,20 @@ from lltexturecache_browser_qt.view.cellsize import (
 )
 
 SLIDER_WIDTH = 72
-
-# the slider's positions, spread evenly over the log of the cell size so each
-# rung of the zoom ladder sits the same distance from the next. the default
-# size sits in the middle, with each half spread over its own end
 SLIDER_STEPS = 600
-MIDDLE = SLIDER_STEPS // 2
 
-LOWER_SPAN = log(DEFAULT_CELL_SIZE / SMALLEST_CELL_SIZE)
-UPPER_SPAN = log(LARGEST_CELL_SIZE / DEFAULT_CELL_SIZE)
+SPAN = log(LARGEST_CELL_SIZE / SMALLEST_CELL_SIZE)
 
-# the bar's message sits this far in from the left edge, and the slider keeps
-# the same distance from the right one
 EDGE_INSET = 6
-
-# room above and below the slider, which holds the bar at the height it stands
-# at with only a message on it
 EDGE_PADDING = 4
 
 
 def size_at(place: int) -> float:
-    span = LOWER_SPAN if place < MIDDLE else UPPER_SPAN
-
-    return DEFAULT_CELL_SIZE * exp(span * (place - MIDDLE) / MIDDLE)
+    return SMALLEST_CELL_SIZE * exp(SPAN * place / SLIDER_STEPS)
 
 
 def place_of(size: float) -> int:
-    span = LOWER_SPAN if size < DEFAULT_CELL_SIZE else UPPER_SPAN
-
-    return MIDDLE + round(log(size / DEFAULT_CELL_SIZE) / span * MIDDLE)
+    return round(log(size / SMALLEST_CELL_SIZE) / SPAN * SLIDER_STEPS)
 
 
 class ZoomControl(QWidget):

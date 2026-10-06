@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
 from lltexturecache_browser_qt.grid.prefetch import visible_rows
-from lltexturecache_browser_qt.view.cellsize import CELL_SIZE_RATIO, cell_size, scale_cell_size
+from lltexturecache_browser_qt.view.cellsize import RUNG_RATIO, cell_size, scale_cell_size
 from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
 CELL_PADDING = 12
@@ -352,20 +352,11 @@ class EmptyState(QLabel):
 
         self.adjustSize()
 
-
 @dataclass(frozen=True)
 class Anchor:
     index: Index
-    offset: int
-
-
-# a zoom grows the grid out from the middle of the view. the texture there is
-# kept, along with how far down it the middle sat, so it stays put however
-# the rows reflow around it
-@dataclass(frozen=True)
-class Focus:
-    index: Index
-    fraction: float
+    line: int
+    fraction: float = 0.0
 
 
 # the scroll bar's value is a pixel offset, and once rows are hidden or let
@@ -400,7 +391,7 @@ class TextureGrid(QListView):
 
         self._pinned = False
         self._anchor: Anchor | None = None
-        self._focus: Focus | None = None
+        self._focus: Anchor | None = None
         self._dragged = False
         self._pressed = QPointF()
 
@@ -476,7 +467,7 @@ class TextureGrid(QListView):
         if not (isinstance(model, TextureModel) and index.isValid()):
             return KeptScroll()
 
-        return KeptScroll.taken(model, index.row(), self.visualRect(index).top() - self.viewport().rect().top())
+        return KeptScroll.taken(model, index.row(), self.visualRect(index).top())
 
     def restore_scroll(self, kept: KeptScroll) -> None:
         if kept.at_end:
@@ -513,26 +504,16 @@ class TextureGrid(QListView):
             return None
 
         index: Index = self.currentIndex()
-        viewport = self.viewport().rect()
 
-        if not (index.isValid() and viewport.intersects(self.visualRect(index))):
+        if not (index.isValid() and self.viewport().rect().intersects(self.visualRect(index))):
             index = self.topmost()
 
         if not index.isValid():
             return None
 
-        return Anchor(QPersistentModelIndex(index), self.visualRect(index).top() - viewport.top())
+        return Anchor(QPersistentModelIndex(index), self.visualRect(index).top())
 
-    def restore_anchor(self, anchor: Anchor | None) -> None:
-        if anchor is None or not anchor.index.isValid():
-            return
-
-        bar = self.verticalScrollBar()
-        top = self.visualRect(anchor.index).top() - self.viewport().rect().top()
-
-        bar.setValue(bar.value() + top - anchor.offset)
-
-    def focus(self) -> Focus | None:
+    def focus(self) -> Anchor | None:
         if self._pinned:
             return None
 
@@ -540,9 +521,12 @@ class TextureGrid(QListView):
         if self._focus is None or not self._focus.index.isValid():
             self._focus = self.take_focus()
 
+        # the cell a resize holds onto moves with the zoom
+        self._anchor = None
+
         return self._focus
 
-    def take_focus(self) -> Focus | None:
+    def take_focus(self) -> Anchor | None:
         middle = self.viewport().rect().center()
         index = self.nearest(middle)
 
@@ -551,33 +535,35 @@ class TextureGrid(QListView):
 
         cell = self.visualRect(index)
 
-        return Focus(QPersistentModelIndex(index), (middle.y() - cell.top()) / max(cell.height(), 1))
+        return Anchor(QPersistentModelIndex(index), middle.y(), (middle.y() - cell.top()) / max(cell.height(), 1))
 
-    def restore_focus(self, focus: Focus | None) -> None:
-        if focus is None or not focus.index.isValid():
+    def restore_anchor(self, anchor: Anchor | None) -> None:
+        if anchor is None or not anchor.index.isValid():
             return
 
         bar = self.verticalScrollBar()
-        cell = self.visualRect(focus.index)
-        at = cell.top() + round(focus.fraction * cell.height())
+        cell = self.visualRect(anchor.index)
+        at = cell.top() + round(anchor.fraction * cell.height())
 
-        bar.setValue(bar.value() + at - self.viewport().rect().center().y())
+        bar.setValue(bar.value() + at - anchor.line)
 
-        # the cell the window's own resizes hold onto has moved with the zoom
-        self._anchor = None
-
-    def nearest(self, point: QPoint) -> Index:
+    def visible(self) -> tuple[TextureModel, int, int] | None:
         model = self.model()
 
         if not isinstance(model, TextureModel):
-            return QModelIndex()
+            return None
 
-        visible = visible_rows(self, model)
+        rows = visible_rows(self, model)
+
+        return None if rows is None else (model, *rows)
+
+    def nearest(self, point: QPoint) -> Index:
+        visible = self.visible()
 
         if visible is None:
             return QModelIndex()
 
-        first, last = visible
+        model, first, last = visible
 
         def distance(row: int) -> int:
             return (self.visualRect(model.index(row, 0)).center() - point).manhattanLength()
@@ -585,18 +571,16 @@ class TextureGrid(QListView):
         return model.index(min(range(first, last + 1), key=distance), 0)
 
     def topmost(self) -> Index:
-        viewport = self.viewport().rect()
-        stride = self.spacing() + 1
-        reach = slot_size() + stride
+        visible = self.visible()
 
-        for y in range(viewport.top(), viewport.top() + reach, stride):
-            for x in range(viewport.left(), viewport.left() + reach, stride):
-                index = super().indexAt(QPoint(x, y))
+        if visible is None:
+            return QModelIndex()
 
-                if index.isValid():
-                    return index
+        # the rows are laid out in order, so the first one on screen is the one
+        # in the top left corner
+        model, first, _ = visible
 
-        return QModelIndex()
+        return model.index(first, 0)
 
     def indexAt(self, point: QPoint) -> QModelIndex:
         index = super().indexAt(point)
@@ -748,12 +732,10 @@ class TextureGrid(QListView):
     def scroll_zoom(self, event: QWheelEvent) -> None:
         event.accept()
 
-        # a trackpad keeps coasting after the fingers lift, and the grid stays
-        # at the size it was left at rather than running on to an end
         if event.phase() == Qt.ScrollPhase.ScrollMomentum:
             return
 
-        scale_cell_size(CELL_SIZE_RATIO ** (event.angleDelta().y() / WHEEL_STEP))
+        scale_cell_size(RUNG_RATIO ** (event.angleDelta().y() / WHEEL_STEP))
 
     def viewportEvent(self, event: QEvent) -> bool:
         if not isinstance(event, QNativeGestureEvent):

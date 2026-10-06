@@ -7,26 +7,18 @@ from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
 
 CELL_SIZE_KEY = "cellSize"
 
-CELL_SIZE_RATIO = sqrt(2)
-SMALLEST_STEP = -3
-LARGEST_STEP = 3
+DEFAULT_CELL_SIZE = THUMBNAIL_SIZE
 
-CELL_SIZES = tuple(round(THUMBNAIL_SIZE * CELL_SIZE_RATIO**step) for step in range(SMALLEST_STEP, LARGEST_STEP + 1))
+ZOOM_REACH = sqrt(2) ** 3
+ZOOM_RUNGS = 5
+
+RUNG_RATIO: float = ZOOM_REACH ** (1 / ZOOM_RUNGS)
+
+CELL_SIZES = tuple(DEFAULT_CELL_SIZE * RUNG_RATIO**step for step in range(-ZOOM_RUNGS, ZOOM_RUNGS + 1))
 
 SMALLEST_CELL_SIZE = CELL_SIZES[0]
 LARGEST_CELL_SIZE = CELL_SIZES[-1]
 
-DEFAULT_CELL_SIZE = THUMBNAIL_SIZE
-
-ACTION_STEPS = 5
-
-ACTION_SIZES = tuple(
-    round(THUMBNAIL_SIZE * CELL_SIZE_RATIO ** (LARGEST_STEP * step / ACTION_STEPS))
-    for step in range(-ACTION_STEPS, ACTION_STEPS + 1)
-)
-
-# how far past the cell size the next rung has to be for a zoom step to land on
-# it, so a size a gesture left just short of a rung steps past it
 STEP_MARGIN = 1.05
 
 
@@ -63,13 +55,17 @@ def to_size(stored: object) -> float | None:
     except (TypeError, ValueError):
         return None
 
-    return size if SMALLEST_CELL_SIZE <= size <= LARGEST_CELL_SIZE else None
+    return clamped(size)
+
+
+def clamped(size: float) -> float:
+    return min(max(size, SMALLEST_CELL_SIZE), LARGEST_CELL_SIZE)
 
 
 def set_cell_size(size: float) -> None:
     global _size
 
-    size = min(max(size, SMALLEST_CELL_SIZE), LARGEST_CELL_SIZE)
+    size = clamped(size)
 
     if size == cell_size():
         return
@@ -89,16 +85,9 @@ def stepped(step: int) -> float:
     size = cell_size()
 
     if step > 0:
-        larger = [rung for rung in ACTION_SIZES if rung > size * STEP_MARGIN]
+        return next((rung for rung in CELL_SIZES if rung > size * STEP_MARGIN), LARGEST_CELL_SIZE)
 
-        return larger[min(step, len(larger)) - 1] if larger else LARGEST_CELL_SIZE
-
-    if step < 0:
-        smaller = [rung for rung in ACTION_SIZES if rung < size / STEP_MARGIN]
-
-        return smaller[-min(-step, len(smaller))] if smaller else SMALLEST_CELL_SIZE
-
-    return size
+    return next((rung for rung in reversed(CELL_SIZES) if rung < size / STEP_MARGIN), SMALLEST_CELL_SIZE)
 
 
 def step_cell_size(step: int) -> None:
