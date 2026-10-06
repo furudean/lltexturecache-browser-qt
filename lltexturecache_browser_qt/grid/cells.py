@@ -20,8 +20,8 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
+    QBrush,
     QColor,
-    QIcon,
     QKeyEvent,
     QMouseEvent,
     QNativeGestureEvent,
@@ -33,6 +33,7 @@ from PySide6.QtGui import (
     QPixmap,
     QResizeEvent,
     QShowEvent,
+    QTransform,
     QWheelEvent,
 )
 from PySide6.QtWidgets import (
@@ -86,10 +87,6 @@ MIN_BAKED_BYTES = 64 * 1024 * 1024
 BAKED_SCREENS = 2
 
 
-def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
-    return QIcon.Mode.Normal if state & QStyle.StateFlag.State_Enabled else QIcon.Mode.Disabled
-
-
 def decoration(index: Index) -> QPixmap:
     value = index.data(Qt.ItemDataRole.DecorationRole)
 
@@ -124,7 +121,6 @@ def image_box(pixmap: QPixmap, cell: QRect) -> QRect | None:
     if size.isEmpty():
         return None
 
-    # the placement QIcon.paint uses, which moveCenter misses by a pixel
     return QStyle.alignedRect(Qt.LayoutDirection.LeftToRight, Qt.AlignmentFlag.AlignCenter, size, room)
 
 
@@ -159,20 +155,20 @@ class BakedCells:
     def __init__(self, budget: int = MIN_BAKED_BYTES) -> None:
         self._budget = budget
         self._bytes = 0
-        self._cells: OrderedDict[tuple[int, int, int, float, int, QIcon.Mode], QPixmap] = OrderedDict()
+        self._cells: OrderedDict[tuple[int, int, int, float, int], QPixmap] = OrderedDict()
 
     def make_room(self, screen: int) -> None:
         self._budget = max(MIN_BAKED_BYTES, screen * BAKED_SCREENS)
 
-    def cell(self, pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
-        key = (pixmap.cacheKey(), size.width(), size.height(), ratio, border.rgba(), mode)
+    def cell(self, pixmap: QPixmap, size: QSize, ratio: float, border: QColor) -> QPixmap:
+        key = (pixmap.cacheKey(), size.width(), size.height(), ratio, border.rgba())
 
         if (baked := self._cells.get(key)) is not None:
             self._cells.move_to_end(key)
 
             return baked
 
-        baked = bake(pixmap, size, ratio, border, mode)
+        baked = bake(pixmap, size, ratio, border)
 
         self._cells[key] = baked
         self._bytes += baked_bytes(baked)
@@ -194,9 +190,7 @@ def screen_bytes(device: QPaintDevice) -> int:
     return round(device.width() * ratio * device.height() * ratio) * 4
 
 
-def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
-    """The texture and its border onto a QPixmap"""
-
+def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor) -> QPixmap:
     baked = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
     baked.setDevicePixelRatio(ratio)
     baked.fill(Qt.GlobalColor.transparent)
@@ -204,11 +198,7 @@ def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon
     painter = QPainter(baked)
     box = QRect(QPoint(), size)
 
-    # the view paints with this on, and the texture is scaled up to the
-    # screen's resolution by the brush
-    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-
-    paint_texture(painter, pixmap, box, mode)
+    paint_texture(painter, texture_brush(pixmap, baked.size(), ratio), box)
     mark_border(painter, box, border)
 
     painter.end()
@@ -216,28 +206,26 @@ def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon
     return baked
 
 
-def paint_texture(painter: QPainter, pixmap: QPixmap, box: QRect, mode: QIcon.Mode) -> None:
-    ratio = painter.device().devicePixelRatioF()
-    scaled = QIcon(pixmap).pixmap(box.size(), ratio, mode)
-    shown = scaled.deviceIndependentSize()
+def texture_brush(pixmap: QPixmap, pixels: QSize, ratio: float) -> QBrush:
+    if pixmap.size() != pixels:
+        pixmap = pixmap.scaled(pixels, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
-    if shown.width() < box.width() or shown.height() < box.height():
-        scaled = pixmap.scaled(
-            box.size() * ratio,
-            Qt.AspectRatioMode.IgnoreAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        scaled.setDevicePixelRatio(ratio)
-        scaled = QIcon(scaled).pixmap(box.size(), ratio, mode)
+    brush = QBrush(pixmap)
 
+    # undoes the ratio, so one texel lands on one pixel
+    brush.setTransform(QTransform.fromScale(1 / ratio, 1 / ratio))
+
+    return brush
+
+
+def paint_texture(painter: QPainter, brush: QBrush, box: QRect) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
 
-    # the brush tiles from its origin, so the pixmap lands where
-    # QIcon.paint would put it
+    # the brush tiles from its origin, so the texture starts at the box's corner
     painter.setBrushOrigin(box.topLeft())
-    painter.setBrush(scaled)
+    painter.setBrush(brush)
     painter.drawPath(rounded(QRectF(box), TEXTURE_RADIUS))
     painter.restore()
 
@@ -275,7 +263,7 @@ class CellDelegate(QStyledItemDelegate):
 
         self._baked.make_room(screen_bytes(painter.device()))
 
-        baked = self._baked.cell(pixmap, box.size(), ratio, border_color(option.palette), icon_mode(option.state))
+        baked = self._baked.cell(pixmap, box.size(), ratio, border_color(option.palette))
 
         painter.drawPixmap(box.topLeft(), baked)
 
@@ -351,6 +339,7 @@ class EmptyState(QLabel):
         self.setFixedWidth(MESSAGE_WIDTH if wraps else width)
 
         self.adjustSize()
+
 
 @dataclass(frozen=True)
 class Anchor:
