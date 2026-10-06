@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import Any, ClassVar, Self
+from typing import Any
 
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, QSettings, QThreadPool, Signal, Slot
@@ -10,6 +10,7 @@ from texture_courier import Texture, TextureCacheError
 
 from lltexturecache_browser_qt.cache.decode import GREYSCALE, POOL_THREADS, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.reveal import REVEAL_LIMIT
+from lltexturecache_browser_qt.settings import SettingsWatcher
 
 # what a texture is called while it is still being written
 PARTIAL_SUFFIX = ".partial"
@@ -39,17 +40,8 @@ DEFAULT_FORMAT = FORMATS[0]
 FORMAT_KEY = "exportFormat"
 
 
-class ExportFormatChanges(QObject):
-    changed = Signal()
-
-    _shared: ClassVar[Self | None] = None
-
-    @classmethod
-    def shared(cls) -> Self:
-        if cls._shared is None:
-            cls._shared = cls()
-
-        return cls._shared
+class ExportFormatChanges(SettingsWatcher):
+    pass
 
 
 def export_format() -> Format:

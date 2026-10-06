@@ -1,8 +1,8 @@
 from math import sqrt
-from typing import ClassVar, Self
 
-from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtCore import QSettings
 
+from lltexturecache_browser_qt.settings import SettingsWatcher
 from lltexturecache_browser_qt.view.images import THUMBNAIL_SIZE
 
 CELL_SIZE_KEY = "cellSize"
@@ -22,17 +22,8 @@ LARGEST_CELL_SIZE = CELL_SIZES[-1]
 STEP_MARGIN = 1.05
 
 
-class CellSizeChanges(QObject):
-    changed = Signal()
-
-    _shared: ClassVar[Self | None] = None
-
-    @classmethod
-    def shared(cls) -> Self:
-        if cls._shared is None:
-            cls._shared = cls()
-
-        return cls._shared
+class CellSizeChanges(SettingsWatcher):
+    pass
 
 
 _size: float | None = None

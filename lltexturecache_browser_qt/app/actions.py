@@ -490,7 +490,6 @@ class WindowActions(QObject):
         parent: QWidget,
         selected: int,
         *,
-        single: bool,
         idle: bool,
         previewing: bool,
     ) -> QMenu:
@@ -515,7 +514,7 @@ class WindowActions(QObject):
         triggers(copy, self.copied.emit)
 
         # one uuid is all the clipboard can usefully hold
-        if single:
+        if selected == 1:
             copy_uuid = menu.addAction("Copy UUID")
             copy_uuid.setShortcut(UUID_KEY)
             copy_uuid.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)

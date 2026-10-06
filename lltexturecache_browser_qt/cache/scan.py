@@ -9,6 +9,7 @@ hands back an index for each question.
 
 import logging
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
@@ -57,6 +58,15 @@ type KnownTraits = dict[Stamp, Traits]
 
 def stamp(texture: Texture) -> Stamp:
     return texture.uuid, texture.image_size, texture.body_size
+
+
+def forget_gone(known: KnownTraits, textures: Iterable[Texture]) -> None:
+    """Drop the traits of textures the cache has evicted or rewritten"""
+
+    live = {stamp(texture) for texture in textures}
+
+    for key in [key for key in known if key not in live]:
+        del known[key]
 
 
 class ScanSignals(QObject):

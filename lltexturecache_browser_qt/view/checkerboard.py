@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import ClassVar, Self
 
-from PySide6.QtCore import QObject, QSettings, Qt, Signal
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPixmap, QPixmapCache
 from PySide6.QtWidgets import QApplication
+
+from lltexturecache_browser_qt.settings import SettingsWatcher
 
 CHECKERBOARD_SIZE = 8
 LIGHTNESS_THRESHOLD = 128
@@ -32,17 +33,8 @@ class CheckerTone(StrEnum):
 TONE_CYCLE = (CheckerTone.LIGHT, CheckerTone.DARK, CheckerTone.NONE)
 
 
-class CheckerboardChanges(QObject):
-    changed = Signal()
-
-    _shared: ClassVar[Self | None] = None
-
-    @classmethod
-    def shared(cls) -> Self:
-        if cls._shared is None:
-            cls._shared = cls()
-
-        return cls._shared
+class CheckerboardChanges(SettingsWatcher):
+    pass
 
 
 @dataclass

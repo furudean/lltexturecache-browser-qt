@@ -2,7 +2,6 @@ import atexit
 import logging
 import shutil
 import tempfile
-from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 from threading import Lock
@@ -38,20 +37,19 @@ def held() -> bool:
     return bool(QGuiApplication.mouseButtons() & Qt.MouseButton.LeftButton)
 
 
-def always() -> bool:
-    return True
-
-
 def staged(
     parent: QWidget,
     textures: list[Texture],
     reads: Lock,
     *,
     title: str,
-    wanted: Callable[[], bool] = always,
+    while_held: bool = False,
 ) -> list[Path]:
     out_dir = staging()
     format = export_format()
+
+    def wanted() -> bool:
+        return held() or not while_held
 
     progress = QProgressDialog(
         f"Preparing {format_count(len(textures))} textures as {format.label}...",

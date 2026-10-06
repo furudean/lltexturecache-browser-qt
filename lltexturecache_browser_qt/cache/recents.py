@@ -1,28 +1,18 @@
 from pathlib import Path
-from typing import ClassVar, Self
 
-from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtCore import QObject, QSettings
+
+from lltexturecache_browser_qt.settings import SettingsWatcher
 
 RECENT_LIMIT = 10
 RECENT_KEY = "recentCaches"
 
 
-class RecentCaches(QObject):
-    changed = Signal()
-
-    _shared: ClassVar[Self | None] = None
-
+class RecentCaches(SettingsWatcher):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
 
         self._paths = self.load()
-
-    @classmethod
-    def shared(cls) -> Self:
-        if cls._shared is None:
-            cls._shared = cls()
-
-        return cls._shared
 
     def load(self) -> list[Path]:
         stored = QSettings().value(RECENT_KEY) or []

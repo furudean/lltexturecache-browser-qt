@@ -9,13 +9,21 @@ from PySide6.QtWidgets import QApplication
 from texture_courier import Entry, Texture, TextureCache, Thumbnail
 
 from lltexturecache_browser_qt.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
-from lltexturecache_browser_qt.cache.scan import PLACEHOLDER_BYTE, CacheScan, ScanSignals, placeholder
+from lltexturecache_browser_qt.cache.scan import (
+    PLACEHOLDER_BYTE,
+    CacheScan,
+    ScanSignals,
+    Traits,
+    forget_gone,
+    placeholder,
+    stamp,
+)
 
 
-def entry(image_size: int) -> Texture:
+def entry(image_size: int, uuid: str = "0" * 36) -> Texture:
     return Texture(
         index=0,
-        entry=Entry(uuid="0" * 36, image_size=image_size, body_size=0, time=datetime.now()),  # noqa: DTZ005
+        entry=Entry(uuid=uuid, image_size=image_size, body_size=0, time=datetime.now()),  # noqa: DTZ005
         cache=cast("TextureCache", SimpleNamespace(cache_dir=Path("nowhere"))),
     )
 
@@ -131,3 +139,16 @@ class TestPlaceholder:
 
     def test_a_thumbnail_with_no_pixels_is_not(self) -> None:
         assert placeholder(kept(width=0)) is False
+
+
+class TestForgetGone:
+    def test_only_textures_still_held_as_they_were_keep_their_traits(self) -> None:
+        held = entry(10, "a" * 36)
+        rewritten = entry(20, "b" * 36)
+        evicted = entry(30, "c" * 36)
+
+        known = {stamp(texture): Traits(None, None) for texture in (held, rewritten, evicted)}
+
+        forget_gone(known, [held, entry(21, "b" * 36)])
+
+        assert list(known) == [stamp(held)]

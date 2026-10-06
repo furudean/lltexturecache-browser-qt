@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
 from typing import ClassVar
@@ -39,13 +38,13 @@ from lltexturecache_browser_qt import APP_DISPLAY_NAME
 from lltexturecache_browser_qt.app.about import AboutDialog
 from lltexturecache_browser_qt.app.actions import AppMenu, WindowActions
 from lltexturecache_browser_qt.app.alerts import warn
-from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, always, file_data, held, staged
+from lltexturecache_browser_qt.app.drag import DRAG_LIMIT, file_data, staged
 from lltexturecache_browser_qt.app.exporting import ExportRun, ask_for_directory
 from lltexturecache_browser_qt.app.session import AppState
 from lltexturecache_browser_qt.cache.decode import POOL_THREADS
 from lltexturecache_browser_qt.cache.export import Format
 from lltexturecache_browser_qt.cache.recents import RecentCaches
-from lltexturecache_browser_qt.cache.scan import KnownTraits, stamp
+from lltexturecache_browser_qt.cache.scan import KnownTraits, forget_gone, stamp
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.grid.cellcache import remove_cells
@@ -459,7 +458,7 @@ class MainWindow(QMainWindow):
             remove_cells(texture.uuid)
             QPixmapCache.remove(sidebar_key(texture.uuid))
 
-        self.forget_traits()
+        forget_gone(self._known, self._cache)
 
         # an entry the grid is not showing is neither news to report nor a row
         # to scroll to or take away, however much of it the viewer wrote
@@ -477,13 +476,6 @@ class MainWindow(QMainWindow):
             f" and {format_count(len(evicted))} evicted textures",
             to_end=bool(added),
         )
-
-    def forget_traits(self) -> None:
-        live = {stamp(texture) for texture in self._cache or ()}
-
-        for key in list(self._known):
-            if key not in live:
-                self._known.pop(key, None)
 
     def export_action(self, format: Format, everything: bool) -> None:
         model = self._model
@@ -510,7 +502,7 @@ class MainWindow(QMainWindow):
         if model is None:
             return
 
-        paths = self.stage_selection(model, "drag", held)
+        paths = self.stage_selection(model, "drag", while_held=True)
 
         if not paths:
             return
@@ -538,7 +530,7 @@ class MainWindow(QMainWindow):
             self._status.flash("Copied texture to clipboard")
             return
 
-        paths = self.stage_selection(model, "copy", always)
+        paths = self.stage_selection(model, "copy")
 
         if not paths:
             if len(textures) == 1:
@@ -583,7 +575,7 @@ class MainWindow(QMainWindow):
 
         return True
 
-    def stage_selection(self, model: TextureModel, verb: str, wanted: Callable[[], bool]) -> list[Path]:
+    def stage_selection(self, model: TextureModel, verb: str, *, while_held: bool = False) -> list[Path]:
         textures = self.export_textures(model, everything=False)
 
         if not textures:
@@ -611,7 +603,7 @@ class MainWindow(QMainWindow):
         QGuiApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
 
         try:
-            return staged(self, textures, model.reads, title=verb.title(), wanted=wanted)
+            return staged(self, textures, model.reads, title=verb.title(), while_held=while_held)
         finally:
             QGuiApplication.restoreOverrideCursor()
             self._staging = False
@@ -668,7 +660,6 @@ class MainWindow(QMainWindow):
         menu = self._actions.context_menu(
             parent,
             selected,
-            single=selected == 1,
             idle=self._job is None,
             previewing=self.holds_preview(),
         )
