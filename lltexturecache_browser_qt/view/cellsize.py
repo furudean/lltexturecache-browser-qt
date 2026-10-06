@@ -18,13 +18,11 @@ LARGEST_CELL_SIZE = CELL_SIZES[-1]
 
 DEFAULT_CELL_SIZE = THUMBNAIL_SIZE
 
-# the finer ladder the zoom actions step along, with a rung between each pair
-# of the ones above so every other step lands on one of them
-ACTION_STEPS = 2
+ACTION_STEPS = 5
 
 ACTION_SIZES = tuple(
-    round(THUMBNAIL_SIZE * CELL_SIZE_RATIO ** (step / ACTION_STEPS))
-    for step in range(SMALLEST_STEP * ACTION_STEPS, LARGEST_STEP * ACTION_STEPS + 1)
+    round(THUMBNAIL_SIZE * CELL_SIZE_RATIO ** (LARGEST_STEP * step / ACTION_STEPS))
+    for step in range(-ACTION_STEPS, ACTION_STEPS + 1)
 )
 
 # how far past the cell size the next rung has to be for a zoom step to land on
