@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from lltexturecache_browser_qt.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, TextureModel
 from lltexturecache_browser_qt.grid.prefetch import visible_rows
+from lltexturecache_browser_qt.grid.selection import KeptSelection
 from lltexturecache_browser_qt.view.cellsize import RUNG_RATIO, cell_size, scale_cell_size
 from lltexturecache_browser_qt.view.widgets import BORDER_WEIGHT, border_color
 
@@ -379,6 +380,7 @@ class TextureGrid(QListView):
         super().__init__(parent)
 
         self._pinned = False
+        self._kept: tuple[KeptSelection, KeptScroll] | None = None
         self._anchor: Anchor | None = None
         self._focus: Anchor | None = None
         self._dragged = False
@@ -415,6 +417,8 @@ class TextureGrid(QListView):
             old.modelReset.disconnect(self.sync_empty)
             old.rowsInserted.disconnect(self.sync_empty)
             old.rowsRemoved.disconnect(self.sync_empty)
+            old.modelAboutToBeReset.disconnect(self.hold_view)
+            old.modelReset.disconnect(self.release_view)
 
         super().setModel(model)
 
@@ -422,6 +426,11 @@ class TextureGrid(QListView):
             model.modelReset.connect(self.sync_empty)
             model.rowsInserted.connect(self.sync_empty)
             model.rowsRemoved.connect(self.sync_empty)
+
+            # filtering, ranking and hiding rows reset the model, which drops
+            # the selection and leaves the scroll bar pointing at other rows
+            model.modelAboutToBeReset.connect(self.hold_view)
+            model.modelReset.connect(self.release_view)
 
         self.sync_empty()
 
@@ -445,6 +454,50 @@ class TextureGrid(QListView):
         self._pinned = False
         self._anchor = None
         self._focus = None
+
+    def selected_index(self) -> QModelIndex:
+        selection = self.selectionModel()
+        current = self.currentIndex()
+
+        if current.isValid() and selection.isSelected(current):
+            return current
+
+        selected = selection.selectedIndexes()
+
+        return selected[-1] if selected else QModelIndex()
+
+    def hold_view(self) -> None:
+        self._kept = self.kept_selection(), self.kept_scroll()
+
+    def release_view(self) -> None:
+        if self._kept is None:
+            return
+
+        (selection, scroll), self._kept = self._kept, None
+
+        # putting the current row back scrolls to it, so the scroll goes back last
+        self.restore_selection(selection)
+        self.restore_scroll(scroll)
+
+    def kept_selection(self) -> KeptSelection:
+        model = self.model()
+
+        if not isinstance(model, TextureModel):
+            return KeptSelection()
+
+        current = self.selected_index()
+
+        return KeptSelection.taken(
+            model,
+            [index.row() for index in self.selectionModel().selectedIndexes()],
+            current.row() if current.isValid() else None,
+        )
+
+    def restore_selection(self, kept: KeptSelection) -> None:
+        model = self.model()
+
+        if isinstance(model, TextureModel):
+            kept.restore(model, self.selectionModel())
 
     def kept_scroll(self) -> KeptScroll:
         if self._pinned:

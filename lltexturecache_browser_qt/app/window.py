@@ -7,7 +7,6 @@ from PySide6.QtCore import (
     QDir,
     QEvent,
     QItemSelectionModel,
-    QModelIndex,
     QPoint,
     QSettings,
     Qt,
@@ -50,10 +49,9 @@ from lltexturecache_browser_qt.cache.scan import KnownTraits, stamp
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
 from lltexturecache_browser_qt.grid.cellcache import remove_cells
-from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, KeptScroll, TextureGrid
+from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, TextureGrid
 from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
 from lltexturecache_browser_qt.grid.prefetch import prefetch
-from lltexturecache_browser_qt.grid.selection import KeptSelection
 from lltexturecache_browser_qt.grid.summary import empty_message, narrowed_summary, ranked_summary
 from lltexturecache_browser_qt.grid.summary import grid_summary as summary_of
 from lltexturecache_browser_qt.panes.dropzone import DropZone
@@ -122,11 +120,6 @@ class MainWindow(QMainWindow):
         self._staging = False
 
         self._summary = ""
-
-        # what was selected and scrolled to before the model was last reset,
-        # put back once the rows they were taken from have landed again
-        self._selection = KeptSelection()
-        self._scroll = KeptScroll()
 
         # the texture the panes are showing, which is what says whether a click on
         # one of them is still about what is in front of the user
@@ -485,27 +478,15 @@ class MainWindow(QMainWindow):
             rewritten = [texture for texture in rewritten if texture.whole()]
             evicted = [texture for texture in evicted if texture.whole()]
 
-        shown = self._inspector.texture
-        scroll = self._view.kept_scroll()
-
-        if added or rewritten or evicted:
-            self.populate_grid(
-                f"Reloaded {format_count(len(added))} new, {format_count(len(rewritten))} changed"
-                f" and {format_count(len(evicted))} evicted textures"
-            )
-        else:
+        if not (added or rewritten or evicted):
             self._status.flash("No new textures found after reload")
-
-        if shown is not None:
-            self.select_texture(shown.uuid)
-
-        if self.ranking():
             return
 
-        if added:
-            self.scroll_to_end()
-        elif rewritten or evicted:
-            self._view.restore_scroll(scroll)
+        self.repopulate(
+            f"Reloaded {format_count(len(added))} new, {format_count(len(rewritten))} changed"
+            f" and {format_count(len(evicted))} evicted textures",
+            to_end=bool(added),
+        )
 
     def forget_traits(self) -> None:
         live = {stamp(texture) for texture in self._cache or ()}
@@ -646,7 +627,7 @@ class MainWindow(QMainWindow):
             self._staging = False
 
     def drag_pixmap(self, model: TextureModel) -> QPixmap:
-        index = self.selected_index()
+        index = self._view.selected_index()
 
         if not index.isValid():
             return QPixmap()
@@ -827,23 +808,9 @@ class MainWindow(QMainWindow):
         if self._cache is None:
             return
 
-        standing = self._inspector.texture
-        scroll = self._view.kept_scroll()
-
-        self.populate_grid()
-
-        if standing is not None:
-            self.select_texture(standing.uuid)
-
-        if self.ranking():
-            return
-
         # letting the rest of the cache in moves every row after the first of
         # them, so there is no place to come back to
-        if shown:
-            self.scroll_to_end()
-        else:
-            self._view.restore_scroll(scroll)
+        self.repopulate(to_end=shown)
 
     def sync_incomplete(self) -> None:
         self._actions.incomplete.setEnabled(self._cache is not None)
@@ -971,38 +938,6 @@ class MainWindow(QMainWindow):
         else:
             self.scroll_to_end()
 
-    def keep_view(self) -> None:
-        model = self._model
-
-        if model is None:
-            return
-
-        current = self.selected_index()
-
-        self._scroll = self._view.kept_scroll()
-
-        self._selection = KeptSelection.taken(
-            model,
-            [index.row() for index in self._view.selectionModel().selectedIndexes()],
-            current.row() if current.isValid() else None,
-        )
-
-    def restore_view(self) -> None:
-        model = self._model
-
-        if model is None:
-            return
-
-        selection, self._selection = self._selection, KeptSelection()
-
-        selection.restore(model, self._view.selectionModel())
-
-        # putting the current row back scrolls to it, which is not where the
-        # user left the view
-        scroll, self._scroll = self._scroll, KeptScroll()
-
-        self._view.restore_scroll(scroll)
-
     def inspector_action(self, shown: bool) -> None:
         self.sync_inspector()
 
@@ -1083,7 +1018,7 @@ class MainWindow(QMainWindow):
         if model is None:
             return
 
-        index = self.selected_index()
+        index = self._view.selected_index()
 
         if not index.isValid():
             preview.clear()
@@ -1106,7 +1041,7 @@ class MainWindow(QMainWindow):
 
     def sync_pane_tone(self) -> None:
         model = self._model
-        index = self.selected_index()
+        index = self._view.selected_index()
 
         standing = model.texture(index.row()).uuid if model is not None and index.isValid() else ""
 
@@ -1140,7 +1075,7 @@ class MainWindow(QMainWindow):
         if not self._inspector.isVisible() or model is None:
             return
 
-        index = self.selected_index()
+        index = self._view.selected_index()
 
         if not index.isValid():
             self._stack = []
@@ -1169,17 +1104,6 @@ class MainWindow(QMainWindow):
 
         if model is not None:
             paint_pane(self._inspector, model, self._stack)
-
-    def selected_index(self) -> QModelIndex:
-        selection = self._view.selectionModel()
-        current = self._view.currentIndex()
-
-        if current.isValid() and selection.isSelected(current):
-            return current
-
-        selected = selection.selectedIndexes()
-
-        return selected[-1] if selected else QModelIndex()
 
     def prefetch_action(self) -> None:
         model = self._model
@@ -1211,22 +1135,6 @@ class MainWindow(QMainWindow):
     def scroll_settled_action(self) -> None:
         if self._model is not None:
             self._model.resume_scan()
-
-    def select_texture(self, uuid: str) -> None:
-        model = self._model
-
-        if model is None:
-            return
-
-        row = model.row(uuid)
-
-        if row is None:
-            return
-
-        self._view.selectionModel().setCurrentIndex(
-            model.index(row, 0),
-            QItemSelectionModel.SelectionFlag.ClearAndSelect,
-        )
 
     def scroll_to_end(self) -> None:
         self._view.pin_to_bottom()
@@ -1381,6 +1289,22 @@ class MainWindow(QMainWindow):
 
         self._status.show_selection(len(self._view.selectionModel().selectedIndexes()), model.rowCount())
 
+    def repopulate(self, note: str | None = None, *, to_end: bool) -> None:
+        selection, scroll = self._view.kept_selection(), self._view.kept_scroll()
+
+        self.populate_grid(note)
+
+        self._view.restore_selection(selection)
+
+        # a ranking has already put the view at the top
+        if self.ranking():
+            return
+
+        if to_end:
+            self.scroll_to_end()
+        else:
+            self._view.restore_scroll(scroll)
+
     def populate_grid(self, note: str | None = None) -> None:
         if self._cache is None:
             return
@@ -1411,9 +1335,6 @@ class MainWindow(QMainWindow):
         selection = self._view.selectionModel()
         selection.selectionChanged.connect(self.selection_action)
         selection.currentChanged.connect(self.selection_action)
-
-        model.modelAboutToBeReset.connect(self.keep_view)
-        model.modelReset.connect(self.restore_view)
 
         self._stack = []
         self._inspector.clear()
