@@ -8,11 +8,14 @@
 lltexturecache-browser-qt is a cross-platform tool to browse and export textures
 from the second life texture cache.
 
-this application is useful if you want to mod existing assets on second life, like character clothing and the author does not provide a texture to download.
+this application is useful if you want to mod existing assets on second life,
+like character clothing and the author does not provide a texture to download.
 
-lltexturecache-browser-qt only reads what is stored in your cache files. it is not a copybot and should not be used to steal assets.
+lltexturecache-browser-qt can only read what is stored in your cache files. it
+never connects to second life directly.
 
-the app's icon, slcachegirl, is designed by [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
+the app's icon, slcachegirl, is designed by
+[@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
 
 ## features
 
@@ -37,7 +40,7 @@ on mac, you may install with homebrew, from the
 brew install --cask furudean/tap/lltexturecache-browser-qt
 ```
 
-### platform requirements
+### install requirements
 
 | platform | runs on                                     |
 | -------- | ------------------------------------------- |
@@ -51,4 +54,5 @@ to build from source or run as dev, see [HACKING.md](HACKING.md).
 
 ## prior art
 
-- [SLCacheViewer](http://slcacheviewer.com/) (Windows only)
+- [SLCacheViewer](http://slcacheviewer.com/)
+- [texture-courier](https://github.com/furudean/texture-courier)
