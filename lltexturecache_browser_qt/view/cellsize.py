@@ -87,11 +87,3 @@ def step_cell_size(step: int) -> None:
 
 def can_step(step: int) -> bool:
     return stepped(step) != cell_size()
-
-
-def reset(to: float | None = None) -> float | None:
-    global _size
-
-    was, _size = _size, to
-
-    return was
