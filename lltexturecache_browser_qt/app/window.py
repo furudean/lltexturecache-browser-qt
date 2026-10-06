@@ -81,6 +81,9 @@ from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 NEW_WINDOW_OFFSET = QPoint(32, 32)
 
+ZOOM_SETTLE_MS = 150
+SCROLL_SETTLE_MS = 250
+
 SCANNING_MESSAGE = "Identifying texture characteristics..."
 
 
@@ -130,22 +133,11 @@ class MainWindow(QMainWindow):
         self._settle.setInterval(150)  # wait for layout to settle
         self._settle.timeout.connect(self.settle_action)
 
-        self._zoomed = QTimer(self)
-        self._zoomed.setSingleShot(True)
-        self._zoomed.setInterval(150)
-        self._zoomed.timeout.connect(self.zoom_settled_action)
-
-        self._prefetching = QTimer(self)
-        self._prefetching.setSingleShot(True)
-        self._prefetching.setInterval(0)
-        self._prefetching.timeout.connect(self.prefetch_action)
-
-        # the scan holds off while the grid scrolls, and picks up again once
-        # the scroll has been still this long
-        self._scan_held = QTimer(self)
-        self._scan_held.setSingleShot(True)
-        self._scan_held.setInterval(250)
-        self._scan_held.timeout.connect(self.scroll_settled_action)
+        # the model holds its background work while the grid moves, and picks
+        # it up again once the grid has been still for a moment
+        self._moving = QTimer(self)
+        self._moving.setSingleShot(True)
+        self._moving.timeout.connect(self.settled_action)
 
         self._view = TextureGrid()
         self._view.setViewMode(QListView.ViewMode.IconMode)
@@ -427,11 +419,9 @@ class MainWindow(QMainWindow):
 
         # a gesture resizes the grid every frame, and decodes or a scan running
         # alongside slow each layout down. both wait until it settles
-        model.pause_decodes()
-        model.pause_scan()
+        model.hold(decodes=True)
 
-        self._zoomed.start()
-        self._scan_held.start()
+        self._moving.start(ZOOM_SETTLE_MS)
 
     def open_action(self) -> None:
         dialog = QFileDialog(self, "Select a texturecache directory")
@@ -1105,36 +1095,30 @@ class MainWindow(QMainWindow):
         if model is not None:
             paint_pane(self._inspector, model, self._stack)
 
-    def prefetch_action(self) -> None:
-        model = self._model
-
-        if model is not None:
-            prefetch(self._view, model)
-
     def refill_action(self) -> None:
         model = self._model
 
         if model is not None:
             prefetch(self._view, model, force=True)
 
-    def zoom_settled_action(self) -> None:
+    def scrolling_action(self) -> None:
+        model = self._model
+
+        if model is None:
+            return
+
+        model.hold(decodes=False)
+        prefetch(self._view, model)
+
+        self._moving.start(SCROLL_SETTLE_MS)
+
+    def settled_action(self) -> None:
         model = self._model
 
         if model is not None:
-            model.resume_decodes()
+            model.release()
 
         self.refill_action()
-
-    def scrolling_action(self) -> None:
-        if self._model is not None:
-            self._model.pause_scan()
-
-        self._prefetching.start()
-        self._scan_held.start()
-
-    def scroll_settled_action(self) -> None:
-        if self._model is not None:
-            self._model.resume_scan()
 
     def scroll_to_end(self) -> None:
         self._view.pin_to_bottom()
