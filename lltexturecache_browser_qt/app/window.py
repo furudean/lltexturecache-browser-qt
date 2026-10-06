@@ -50,6 +50,7 @@ from lltexturecache_browser_qt.cache.recents import RecentCaches
 from lltexturecache_browser_qt.cache.scan import KnownTraits, stamp
 from lltexturecache_browser_qt.cache.suggested import paths as suggested_paths
 from lltexturecache_browser_qt.grid.cards import grid_cards, stack_textures
+from lltexturecache_browser_qt.grid.cellcache import remove_cells
 from lltexturecache_browser_qt.grid.cells import CELL_PADDING, CellDelegate, KeptScroll, TextureGrid
 from lltexturecache_browser_qt.grid.model import TextureModel, sidebar_key
 from lltexturecache_browser_qt.grid.prefetch import prefetch
@@ -477,7 +478,7 @@ class MainWindow(QMainWindow):
         evicted = [texture for uuid, texture in before.items() if uuid not in self._cache]
 
         for texture in rewritten + evicted:
-            QPixmapCache.remove(texture.uuid)
+            remove_cells(texture.uuid)
             QPixmapCache.remove(sidebar_key(texture.uuid))
 
         self.forget_traits()

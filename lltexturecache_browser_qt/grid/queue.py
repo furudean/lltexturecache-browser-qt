@@ -10,10 +10,11 @@ import threading
 from collections.abc import Callable, Iterable
 
 from PySide6.QtCore import QObject, QThreadPool
-from PySide6.QtGui import QPixmap, QPixmapCache
+from PySide6.QtGui import QPixmap
 from texture_courier import Texture
 
 from lltexturecache_browser_qt.cache.decode import POOL_THREADS
+from lltexturecache_browser_qt.grid.cellcache import has_cell
 
 # the priority a cell goes to the pool at. a row on screen outranks one in the
 # band either side of it, which is decoded only once the screen is filled
@@ -92,9 +93,7 @@ class DecodeQueue:
         if uuid in self._running or uuid in self._failed:
             return False
 
-        held = QPixmap()
-
-        return not QPixmapCache.find(uuid, held) or not self.fits(held)
+        return not has_cell(uuid, self._pixels)
 
     def fits(self, cell: QPixmap) -> bool:
         return max(cell.width(), cell.height()) == self._pixels

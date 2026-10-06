@@ -19,6 +19,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.cache.likeness import describe
 from lltexturecache_browser_qt.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
+from lltexturecache_browser_qt.grid.cellcache import insert_cell, nearest_cell
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
@@ -42,7 +43,9 @@ PREVIEW_PRIORITY = 2
 
 KB_PER_MB = 1024
 
-# a decoded cell is 100x100 at 32 bits, or 39 KB, so this holds about 27k textures
+# a decoded cell is 100x100 at 32 bits, or 39 KB, so this holds about 27k
+# textures. a retina screen doubles each side, and the largest zoom nearly
+# triples it again, which leaves room for about 800
 PIXMAP_CACHE_MB = 1024
 PIXMAP_CACHE_KB = PIXMAP_CACHE_MB * KB_PER_MB
 
@@ -277,11 +280,11 @@ class TextureModel(QAbstractListModel):
         return None
 
     def decoration(self, texture: Texture) -> QPixmap:
-        decoded = QPixmap()
+        decoded = nearest_cell(texture.uuid, self._pixels)
 
-        if QPixmapCache.find(texture.uuid, decoded):
-            # a cell from before the grid was resized stands in for its
-            # replacement until that lands
+        if not decoded.isNull():
+            # a cell at another size stands in for its replacement until that
+            # lands
             if not self._decodes.fits(decoded):
                 self.request(texture)
 
@@ -329,13 +332,14 @@ class TextureModel(QAbstractListModel):
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""
 
-        pixmap = QPixmap()
+        cell = nearest_cell(texture.uuid, self._pixels)
 
-        for key in (texture.uuid, sidebar_key(texture.uuid)):
-            if QPixmapCache.find(key, pixmap):
-                return pixmap
+        if not cell.isNull():
+            return cell
 
-        return QPixmap()
+        sidebar = QPixmap()
+
+        return sidebar if QPixmapCache.find(sidebar_key(texture.uuid), sidebar) else QPixmap()
 
     def full_decode(self, texture: Texture, *, decode: bool = True) -> tuple[QPixmap, QSize] | None:
         """Nothing until it is in, and one is started if there is none, unless asked only to look"""
@@ -567,7 +571,7 @@ class TextureModel(QAbstractListModel):
         self.learn(uuid, natural)
 
         if self._decodes.landed(uuid, decoded=not image.isNull()):
-            QPixmapCache.insert(uuid, QPixmap.fromImage(image))
+            insert_cell(uuid, self._pixels, QPixmap.fromImage(image))
 
             # the real texture is in now, so the sidebar is dead weight
             QPixmapCache.remove(sidebar_key(uuid))

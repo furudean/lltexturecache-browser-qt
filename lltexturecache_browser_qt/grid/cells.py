@@ -25,6 +25,7 @@ from PySide6.QtGui import (
     QKeyEvent,
     QMouseEvent,
     QNativeGestureEvent,
+    QPaintDevice,
     QPainter,
     QPainterPath,
     QPalette,
@@ -81,8 +82,8 @@ SIMPLE_DASH = 2.5
 WHEEL_STEP = 120
 
 
-# the room baked cells may take up
-BAKED_BYTES = 64 * 1024 * 1024
+MIN_BAKED_BYTES = 64 * 1024 * 1024
+BAKED_SCREENS = 2
 
 
 def icon_mode(state: QStyle.StateFlag) -> QIcon.Mode:
@@ -155,10 +156,13 @@ def ring(box: QRect, weight: float, inset: float) -> QPainterPath:
 
 
 class BakedCells:
-    def __init__(self, budget: int = BAKED_BYTES) -> None:
+    def __init__(self, budget: int = MIN_BAKED_BYTES) -> None:
         self._budget = budget
         self._bytes = 0
         self._cells: OrderedDict[tuple[int, int, int, float, int, QIcon.Mode], QPixmap] = OrderedDict()
+
+    def make_room(self, screen: int) -> None:
+        self._budget = max(MIN_BAKED_BYTES, screen * BAKED_SCREENS)
 
     def cell(self, pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
         key = (pixmap.cacheKey(), size.width(), size.height(), ratio, border.rgba(), mode)
@@ -182,6 +186,12 @@ class BakedCells:
 
 def baked_bytes(pixmap: QPixmap) -> int:
     return pixmap.width() * pixmap.height() * 4
+
+
+def screen_bytes(device: QPaintDevice) -> int:
+    ratio = device.devicePixelRatioF()
+
+    return round(device.width() * ratio * device.height() * ratio) * 4
 
 
 def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor, mode: QIcon.Mode) -> QPixmap:
@@ -262,6 +272,9 @@ class CellDelegate(QStyledItemDelegate):
             return
 
         ratio = painter.device().devicePixelRatioF()
+
+        self._baked.make_room(screen_bytes(painter.device()))
+
         baked = self._baked.cell(pixmap, box.size(), ratio, border_color(option.palette), icon_mode(option.state))
 
         painter.drawPixmap(box.topLeft(), baked)
