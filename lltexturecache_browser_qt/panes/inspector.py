@@ -2,6 +2,7 @@ from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import (
     QContextMenuEvent,
     QMouseEvent,
+    QPainter,
     QPixmap,
     QResizeEvent,
 )
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 from texture_courier import Texture
 
 from lltexturecache_browser_qt.cache.export import FORMATS, Format
+from lltexturecache_browser_qt.grid.cells import paint_texture, texture_brush
 from lltexturecache_browser_qt.view.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
 from lltexturecache_browser_qt.view.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
@@ -139,9 +141,19 @@ class SidebarLabel(QLabel):
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-        fitted.setDevicePixelRatio(ratio)
 
-        self.setPixmap(fitted)
+        rounded = QPixmap(fitted.size())
+        rounded.setDevicePixelRatio(ratio)
+        rounded.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(rounded)
+        box = QRect(QPoint(), rounded.deviceIndependentSize().toSize())
+
+        paint_texture(painter, texture_brush(fitted, fitted.size(), ratio), box)
+
+        painter.end()
+
+        self.setPixmap(rounded)
 
 
 def bezel_inset(button: QPushButton) -> int:
