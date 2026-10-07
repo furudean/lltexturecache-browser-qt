@@ -46,7 +46,8 @@ the script will
 2. retitle `## unreleased` in [CHANGELOG.md](CHANGELOG.md) to the version and
    date being released
 3. commit that along with the bump, and tag it
-4. push the commit and the tag
+4. print the command that pushes the commit and the tag, so you can check
+   before anything leaves your machine
 
 the tag triggers a github workflow, which builds every target, then creates the
 release with notes read back out of the changelog section for that version and
