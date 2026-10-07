@@ -1,4 +1,4 @@
-import json
+import tomllib
 from dataclasses import dataclass
 from functools import cache
 from typing import ClassVar
@@ -19,7 +19,7 @@ from lltexturecache_browser_qt.assets import LICENCES
 from lltexturecache_browser_qt.view.widgets import bold, dim, linked
 
 LICENCES_PATH = LICENCES
-INDEX_PATH = LICENCES_PATH / "index.json"
+INDEX_PATH = LICENCES_PATH / "index.toml"
 
 DIALOG_MARGIN = 16
 COLUMN_SPACING = 16
@@ -32,22 +32,22 @@ DIALOG_SIZE = (760, 480)
 
 
 @dataclass(frozen=True)
-class Component:
+class License:
     name: str
     licence: str
     homepage: str
     file: str
 
     def text(self) -> str:
-        return (LICENCES_PATH / self.file).read_text()
+        return (LICENCES_PATH / self.file).read_text(encoding="utf-8")
 
 
 @cache
-def components() -> list[Component]:
+def licenses() -> list[License]:
     if not INDEX_PATH.exists():
         return []
 
-    return [Component(**entry) for entry in json.loads(INDEX_PATH.read_text())]
+    return [License(**entry) for entry in tomllib.loads(INDEX_PATH.read_text(encoding="utf-8"))["license"]]
 
 
 def text_view(parent: QWidget) -> QPlainTextEdit:
@@ -78,10 +78,10 @@ class LicencesDialog(QDialog):
         self._list = QListWidget(self)
         self._list.setFixedWidth(LIST_WIDTH)
 
-        for component in components():
+        for component in licenses():
             QListWidgetItem(component.name, self._list)
 
-        self._list.currentRowChanged.connect(self.show_component)
+        self._list.currentRowChanged.connect(self.show_license)
 
         heading = QVBoxLayout()
         heading.setSpacing(HEADING_SPACING)
@@ -102,7 +102,7 @@ class LicencesDialog(QDialog):
 
         self.resize(*DIALOG_SIZE)
 
-        if components():
+        if licenses():
             self._list.setCurrentRow(0)
         else:
             self._text.setPlainText("The app was built without licencing information.")
@@ -118,16 +118,16 @@ class LicencesDialog(QDialog):
         window.raise_()
         window.activateWindow()
 
-    def show_component(self, row: int) -> None:
+    def show_license(self, row: int) -> None:
         if row < 0:
             return
 
-        component = components()[row]
+        license = licenses()[row]
 
-        self._name.setText(component.name)
-        self._licence.setText(component.licence)
-        self._link.setText(f'<a href="{component.homepage}">{component.homepage}</a>')
+        self._name.setText(license.name)
+        self._licence.setText(license.licence)
+        self._link.setText(f'<a href="{license.homepage}">{license.homepage}</a>')
 
-        self._text.setPlainText(component.text())
+        self._text.setPlainText(license.text())
 
         self._text.moveCursor(self._text.textCursor().MoveOperation.Start)

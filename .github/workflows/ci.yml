@@ -60,6 +60,3 @@ jobs:
 
       - name: Pytest
         run: uv run poe test
-
-      - name: Check for valid licences
-        run: uv run python scripts/generate-licences

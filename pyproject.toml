@@ -30,7 +30,7 @@ build-backend = "setuptools.build_meta"
 include = ["lltexturecache_browser_qt*"]
 
 [tool.setuptools.package-data]
-lltexturecache_browser_qt = ["assets/*.png", "assets/licences/*.txt"]
+lltexturecache_browser_qt = ["assets/*.png", "assets/licences/*.txt", "assets/licences/*.toml"]
 
 [project.scripts]
 lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
@@ -63,7 +63,7 @@ cmd = "pytest"
 help = "run the test suite"
 
 [tool.poe.tasks.check]
-sequence = ["lint", "fmt-check", "types", "test", { cmd = "python scripts/generate-licences" }]
+sequence = ["lint", "fmt-check", "types", "test"]
 help = "run all CI checks"
 
 [tool.pytest.ini_options]

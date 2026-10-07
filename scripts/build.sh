@@ -47,10 +47,6 @@ awk -v extra="$extra_args" -v icon="$icon" '
 
 uv run python scripts/generate-metadata
 
-# the licence of everything the build bundles, read out of the installed
-# packages rather than kept in the tree
-uv run python scripts/generate-licences
-
 rm -rf "$EXEC_DIRECTORY/$NAME.app" "$EXEC_DIRECTORY/$NAME.exe" "$EXEC_DIRECTORY/$NAME.bin"
 
 uv run pyside6-deploy --config-file "$generated_spec" --name "$NAME" --force
