@@ -21,23 +21,19 @@ jobs:
       version: ${{ steps.info.outputs.version }}
       tag: ${{ steps.info.outputs.tag }}
       stable: ${{ steps.info.outputs.stable }}
+      prerelease: ${{ steps.info.outputs.prerelease }}
       exec_directory: ${{ steps.info.outputs.exec_directory }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version-file: ".python-version"
-
       - name: Read name and version from pyproject.toml
         id: info
         env:
           # empty when the workflow is dispatched on a branch instead of a tag
-          TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          info="$(python scripts/app-info)"
+          info="$(python3 scripts/app-info)"
           eval "$info"
 
           echo "$NAME is version $VERSION"
@@ -49,8 +45,8 @@ jobs:
 
           # a tag with a suffix, v1.2.3-rc1, is a pre-release
           case "$TAG" in
-            *-*) stable=false ;;
-            *) stable=true ;;
+            *-*) stable=false prerelease=true ;;
+            *) stable=true prerelease=false ;;
           esac
 
           {
@@ -58,6 +54,7 @@ jobs:
             echo "version=$VERSION"
             echo "tag=$TAG"
             echo "stable=$stable"
+            echo "prerelease=$prerelease"
             echo "exec_directory=$EXEC_DIRECTORY"
           } >> "$GITHUB_OUTPUT"
 
@@ -66,7 +63,6 @@ jobs:
     needs: meta
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
       matrix:
         include:
           - os: macos-15
@@ -195,11 +191,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version-file: ".python-version"
-
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
@@ -230,7 +221,6 @@ jobs:
         run: ./scripts/macos-icon.sh
 
       - name: Sign and notarize
-        if: env.MACOS_SIGN_IDENTITY != ''
         run: ./scripts/macos-sign.sh
 
       - name: Package
@@ -246,7 +236,7 @@ jobs:
   release:
     name: Publish the release
     needs: [meta, build, universal]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.meta.outputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -255,6 +245,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ needs.meta.outputs.tag }}
       STABLE: ${{ needs.meta.outputs.stable }}
+      PRERELEASE: ${{ needs.meta.outputs.prerelease }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -269,12 +260,6 @@ jobs:
         run: |
           ls -l artifacts
           ./scripts/changelog-notes.sh "$TAG" > notes.md
-
-          if [ "$STABLE" = "true" ]; then
-            prerelease=false
-          else
-            prerelease=true
-          fi
 
           assets=()
           for path in artifacts/*; do
@@ -294,7 +279,7 @@ jobs:
           done
 
           gh release create "$TAG" "${assets[@]}" \
-            --notes-file notes.md --prerelease="$prerelease" --latest="$STABLE"
+            --notes-file notes.md --prerelease="$PRERELEASE" --latest="$STABLE"
 
   homebrew:
     name: Update homebrew tap
