@@ -12,7 +12,8 @@ from PySide6.QtGui import QPixmap
 from texture_courier import Texture
 
 from lltexturecache_browser_qt.grid.cards import Card
-from lltexturecache_browser_qt.grid.model import TextureModel, full_size
+from lltexturecache_browser_qt.grid.decodes import full_size, held_to
+from lltexturecache_browser_qt.grid.model import TextureModel
 from lltexturecache_browser_qt.panes.inspector import InspectorPane
 from lltexturecache_browser_qt.view.checkerboard import pixmap_lightness, set_picked_lightness
 from lltexturecache_browser_qt.view.stack import stack_pixmap
@@ -25,10 +26,7 @@ def pile_card(pixmap: QPixmap, natural: QSize, room: QSize) -> QPixmap:
     is composed in, since the sidebar would only scale anything bigger back down.
     """
 
-    laid = pixmap.size() if natural.isEmpty() else full_size(natural)
-
-    if laid.width() > room.width() or laid.height() > room.height():
-        laid = laid.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+    laid = held_to(pixmap.size() if natural.isEmpty() else full_size(natural), room)
 
     if laid == pixmap.size():
         return pixmap
@@ -71,10 +69,12 @@ def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> 
     if not textures:
         return
 
-    # only the texture on top is worth a decode on the spot
-    model.full_decode(textures[-1])
+    room = pane.pile_room()
 
-    cards = standing_cards(model, textures, pane.pile_room())
+    # only the texture on top is worth a decode on the spot
+    model.full_decode(textures[-1], room)
+
+    cards = standing_cards(model, textures, room)
 
     # a hidden pane is repainted with whatever the last visible one was left on,
     # which is not what the preview beside it is showing

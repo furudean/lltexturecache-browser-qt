@@ -4,7 +4,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.grid.model import FULL_SIZE, full_size
+from lltexturecache_browser_qt.grid.decodes import FULL_SIZE, full_size
 from lltexturecache_browser_qt.panes.inspector import card_room
 from lltexturecache_browser_qt.panes.sidebar import pile_card
 

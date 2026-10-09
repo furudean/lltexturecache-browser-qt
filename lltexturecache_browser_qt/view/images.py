@@ -28,7 +28,7 @@ THUMBNAIL_FORMATS = {
 THUMBNAIL_SIZE = 100
 
 
-def decode_image(codestream: bytes, threads: int = 1, *, fit: int | None = None) -> QImage:
+def decode_image(codestream: bytes, threads: int = 1, *, fit: QSize | None = None) -> QImage:
     decoded = decode_texture(codestream, threads, fit=fit)
 
     # the rows are packed tight, which is not the alignment QImage assumes when

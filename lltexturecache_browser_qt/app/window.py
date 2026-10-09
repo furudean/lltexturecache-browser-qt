@@ -1045,8 +1045,10 @@ class MainWindow(QMainWindow):
         if model is None:
             return
 
+        room = self._inspector.pile_room()
+
         for texture in self._stack:
-            model.full_decode(texture)
+            model.full_decode(texture, room)
 
         self.paint_inspector()
 

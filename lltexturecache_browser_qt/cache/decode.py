@@ -6,7 +6,7 @@ import imagecodecs
 # imagecodecs reaches its codecs through a module level __getattr__ that imports
 # them by name. it is referenced so its included in the build by static analysis
 from imagecodecs import _jpeg2k, _shared_cython  # noqa: F401
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QSize, QThread
 from texture_courier import TextureCacheError
 
 GREYSCALE = 1
@@ -70,30 +70,36 @@ def decomposition_levels(codestream: bytes) -> int:
     return 0
 
 
-def skipped_resolutions(codestream: bytes, fit: int) -> int:
-    """How many halvings openjpeg can skip and still fill a box of `fit` pixels"""
+def skipped_resolutions(codestream: bytes, fit: QSize) -> int:
+    """How many halvings openjpeg can skip and still fill the texture fitted to `fit`"""
 
-    if (size := declared_size(codestream)) is None:
+    if (size := declared_size(codestream)) is None or min(size) <= 0:
         return 0
 
     # openjpeg refuses to skip as many resolutions as the stream holds
     levels = decomposition_levels(codestream)
 
+    width, height = size
     longer = max(size)
+
+    # the fit keeps the texture's shape, so its longer side is the one to fill.
+    # rounded up in whole numbers, since a float a hair over would cost a level
+    needed = min(-(-longer * fit.width() // width), -(-longer * fit.height() // height), longer)
+
     skipped = 0
 
-    while skipped < levels and longer // 2 >= fit:
+    while skipped < levels and longer // 2 >= needed:
         longer //= 2
         skipped += 1
 
     return skipped
 
 
-def decode_texture(codestream: bytes, threads: int = 1, *, fit: int | None = None) -> Decoded:
+def decode_texture(codestream: bytes, threads: int = 1, *, fit: QSize | None = None) -> Decoded:
     """Pixels from a codestream, in the nearest component count anything else understands
 
-    With `fit`, the decode stops at the smallest resolution that still fills a
-    box that many pixels wide.
+    With `fit`, the decode stops at the smallest resolution that still fills
+    the texture fitted to that box.
     """
 
     # Everything decodes through openjpeg because qt only reads jpeg 2000 on macOS,

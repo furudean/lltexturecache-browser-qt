@@ -21,7 +21,7 @@ from lltexturecache_browser_qt.cache.decode import declared_size
 from lltexturecache_browser_qt.cache.likeness import describe
 from lltexturecache_browser_qt.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
 from lltexturecache_browser_qt.grid.cellcache import insert_cell, nearest_cell, remove_cells
-from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
+from lltexturecache_browser_qt.grid.decodes import FULL_SIZE, FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
 from lltexturecache_browser_qt.view.cellsize import cell_size
@@ -34,8 +34,6 @@ from lltexturecache_browser_qt.view.images import (
     placeholder,
     thumbnail_image,
 )
-
-FULL_SIZE = 800
 
 log = logging.getLogger(__name__)
 
@@ -78,10 +76,6 @@ def cell_pixels(ratio: float) -> int:
     return round(round(cell_size()) * ratio)
 
 
-def full_size(natural: QSize) -> QSize:
-    return natural.scaled(QSize(FULL_SIZE, FULL_SIZE).boundedTo(natural), Qt.AspectRatioMode.KeepAspectRatio)
-
-
 class DecodeSignals(QObject):
     done = Signal(str, QImage, QSize)
 
@@ -98,7 +92,7 @@ class DecodeTask(QRunnable):
         checkerboard: bool = True,
         ratio: float = 1.0,
         threads: Callable[[], int] | None = None,
-        reduced: bool = False,
+        fit: QSize | None = None,
     ):
         super().__init__()
 
@@ -110,7 +104,7 @@ class DecodeTask(QRunnable):
         self._board = checkerboard
         self._ratio = ratio
         self._threads = threads
-        self._reduced = reduced
+        self._fit = fit
 
     @Slot()
     def run(self) -> None:
@@ -128,7 +122,7 @@ class DecodeTask(QRunnable):
             # drained since the task was queued
             threads = self._threads() if self._threads else 1
 
-            image = decode_image(codestream, threads, fit=self._size if self._reduced else None)
+            image = decode_image(codestream, threads, fit=self._fit)
         except (TextureCacheError, OSError) as e:
             # a cache is full of entries the viewer never finished writing, so
             # one that will not decode is ordinary rather than news. the cell
@@ -356,13 +350,23 @@ class TextureModel(QAbstractListModel):
 
         return cell if not cell.isNull() else nearest_cell(sidebar_key(texture.uuid), self._pixels)
 
-    def full_decode(self, texture: Texture, *, decode: bool = True) -> tuple[QPixmap, QSize] | None:
-        """Nothing until it is in, and one is started if there is none, unless asked only to look"""
+    def full_decode(
+        self,
+        texture: Texture,
+        room: QSize | None = None,
+        *,
+        decode: bool = True,
+    ) -> tuple[QPixmap, QSize] | None:
+        """The decode in hand, or nothing until one is in
 
-        if (ready := self._fulls.ready(texture.uuid)) is not None:
-            return ready
+        A decode is started when there is none or the one in hand is too coarse
+        for a card in the room, unless asked only to look. Without a room, the
+        decode is for a card at full size.
+        """
 
-        if decode and self._fulls.wanted(texture):
+        ready = self._fulls.ready(texture.uuid)
+
+        if decode and not self._fulls.fills(texture.uuid, room) and self._fulls.wanted(texture, room):
             # the selection is what the user is looking at, so this goes in
             # ahead of the screenful of cells the grid has already asked for
             task = DecodeTask(
@@ -373,11 +377,12 @@ class TextureModel(QAbstractListModel):
                 upscale=False,
                 checkerboard=False,
                 threads=self._decodes.spare_threads,
+                fit=room,
             )
 
             self._decodes.pool.start(task, FULL_PRIORITY)
 
-        return None
+        return ready
 
     def natural(self, texture: Texture) -> QSize:
         return self._natural.get(texture.uuid, QSize())
@@ -552,7 +557,14 @@ class TextureModel(QAbstractListModel):
         self._decodes.release()
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        task = DecodeTask(texture, self.reads, self._signals, self._pixels, ratio=self._ratio, reduced=True)
+        task = DecodeTask(
+            texture,
+            self.reads,
+            self._signals,
+            self._pixels,
+            ratio=self._ratio,
+            fit=QSize(self._pixels, self._pixels),
+        )
 
         self._decodes.pool.start(task, priority)
 

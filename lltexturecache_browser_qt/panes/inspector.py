@@ -23,7 +23,7 @@ from texture_courier import Texture
 
 from lltexturecache_browser_qt.cache.export import FORMATS, Format
 from lltexturecache_browser_qt.grid.cells import paint_texture, texture_brush
-from lltexturecache_browser_qt.grid.model import FULL_SIZE
+from lltexturecache_browser_qt.grid.decodes import FULL_SIZE
 from lltexturecache_browser_qt.view.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
 from lltexturecache_browser_qt.view.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped

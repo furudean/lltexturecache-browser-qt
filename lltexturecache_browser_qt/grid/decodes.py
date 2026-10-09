@@ -6,16 +6,32 @@ own small store rather than competing with the wall of cells for room in the
 pixmap cache.
 """
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QImage, QPixmap
 from texture_courier import Texture
 
 from lltexturecache_browser_qt.view.images import placeholder
 
+# the largest size a cell is drawn at
+FULL_SIZE = 800
+
 # how many inspector-sized decodes are kept. a selection walked with the arrow
 # keys comes back through the ones just left, and a screenful of them is more
 # than anyone walks back through
 FULL_CACHE = 12
+
+
+def full_size(natural: QSize) -> QSize:
+    return natural.scaled(QSize(FULL_SIZE, FULL_SIZE).boundedTo(natural), Qt.AspectRatioMode.KeepAspectRatio)
+
+
+def held_to(size: QSize, room: QSize) -> QSize:
+    """Scaled down into the room, and left alone if it already fits"""
+
+    if size.width() > room.width() or size.height() > room.height():
+        return size.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+
+    return size
 
 
 class FullDecodes:
@@ -24,20 +40,48 @@ class FullDecodes:
     Held rather than put in the pixmap cache: these are much larger than a
     cell, and a handful of them would push out the thousands of cells the
     grid is painting from.
+
+    Each is decoded for the room the pile had when it was asked for, which
+    is often a halving or two short of the texture. The room goes in beside
+    it, so a pane widened past that room knows to ask again.
     """
 
     def __init__(self) -> None:
-        self._ready: dict[str, tuple[QPixmap, QSize]] = {}
-        self._running: set[str] = set()
+        self._ready: dict[str, tuple[QPixmap, QSize, QSize | None]] = {}
+        self._running: dict[str, QSize | None] = {}
 
     def ready(self, uuid: str) -> tuple[QPixmap, QSize] | None:
-        return self._ready.get(uuid)
+        ready = self._ready.get(uuid)
 
-    def wanted(self, texture: Texture) -> bool:
+        return (ready[0], ready[1]) if ready is not None else None
+
+    def fills(self, uuid: str, room: QSize | None) -> bool:
+        """Whether the decode in hand is as sharp as a card in the room can show"""
+
+        if (ready := self._ready.get(uuid)) is None:
+            return False
+
+        pixmap, natural, decoded_for = ready
+
+        # one that failed or came in at full size has nothing finer to give
+        if natural.isEmpty() or decoded_for is None or pixmap.size() == full_size(natural):
+            return True
+
+        if room is None:
+            return False
+
+        # compared as cards rather than rooms, since a room only grown along the
+        # side the texture does not reach lays the same card
+        wanted = held_to(full_size(natural), room)
+        had = held_to(full_size(natural), decoded_for)
+
+        return wanted.width() <= had.width() and wanted.height() <= had.height()
+
+    def wanted(self, texture: Texture, room: QSize | None) -> bool:
         if not texture.whole() or texture.uuid in self._running:
             return False
 
-        self._running.add(texture.uuid)
+        self._running[texture.uuid] = room
 
         return True
 
@@ -50,13 +94,16 @@ class FullDecodes:
         is here so the two stores read the same way at their call sites.
         """
 
-        self._running.discard(uuid)
+        room = self._running.pop(uuid, None)
 
         # a texture that cannot be decoded caches its placeholder, or every
         # reselect would set the same doomed decode going again
         pixmap = placeholder() if image.isNull() else QPixmap.fromImage(image)
 
-        self._ready[uuid] = (pixmap, natural)
+        # put back at the end, so a decode redone for a wider pane is not the
+        # first one dropped
+        self._ready.pop(uuid, None)
+        self._ready[uuid] = (pixmap, natural, room)
 
         while len(self._ready) > FULL_CACHE:
             del self._ready[next(iter(self._ready))]
