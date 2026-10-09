@@ -165,6 +165,7 @@ class MainWindow(QMainWindow):
         self._inspector.dragged.connect(self.inspector_drag_action)
         self._inspector.menued.connect(self.inspector_context_action)
         self._inspector.exported.connect(lambda format: self.export_action(format, False))
+        self._inspector.outgrown.connect(self._settle.start)
 
         splitter = HairlineSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._view)

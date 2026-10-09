@@ -18,12 +18,19 @@ from lltexturecache_browser_qt.view.checkerboard import pixmap_lightness, set_pi
 from lltexturecache_browser_qt.view.stack import stack_pixmap
 
 
-def stand_in_card(pixmap: QPixmap, natural: QSize) -> QPixmap:
-    """Sized to the decode it stands in for, so the pile does not jump when that lands"""
+def pile_card(pixmap: QPixmap, natural: QSize, room: QSize) -> QPixmap:
+    """Sized to the decode it stands in for, so the pile does not jump when that lands
 
-    laid = full_size(natural)
+    A landed decode is sized here too, and both are kept to the room the pile
+    is composed in, since the sidebar would only scale anything bigger back down.
+    """
 
-    if natural.isEmpty() or laid == pixmap.size():
+    laid = pixmap.size() if natural.isEmpty() else full_size(natural)
+
+    if laid.width() > room.width() or laid.height() > room.height():
+        laid = laid.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+
+    if laid == pixmap.size():
         return pixmap
 
     # the stand-in is a picture of the same texture, so any shape it has that
@@ -46,7 +53,7 @@ def drawn_size(model: TextureModel, texture: Texture) -> QSize | None:
     return QSize() if model.full_decode(texture, decode=False) is not None else None
 
 
-def standing_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
+def standing_cards(model: TextureModel, textures: list[Texture], room: QSize) -> list[Card]:
     cards = []
 
     for texture in textures:
@@ -55,7 +62,7 @@ def standing_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
         ready = model.stand_in(texture)
 
         if ready is not None:
-            cards.append((texture.uuid, stand_in_card(*ready)))
+            cards.append((texture.uuid, pile_card(*ready, room)))
 
     return cards
 
@@ -67,7 +74,7 @@ def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> 
     # only the texture on top is worth a decode on the spot
     model.full_decode(textures[-1])
 
-    cards = standing_cards(model, textures)
+    cards = standing_cards(model, textures, pane.pile_room())
 
     # a hidden pane is repainted with whatever the last visible one was left on,
     # which is not what the preview beside it is showing

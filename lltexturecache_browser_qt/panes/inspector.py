@@ -23,6 +23,7 @@ from texture_courier import Texture
 
 from lltexturecache_browser_qt.cache.export import FORMATS, Format
 from lltexturecache_browser_qt.grid.cells import paint_texture, texture_brush
+from lltexturecache_browser_qt.grid.model import FULL_SIZE
 from lltexturecache_browser_qt.view.checkerboard import cycle_pane_tone
 from lltexturecache_browser_qt.view.formatting import format_count, format_size, format_time
 from lltexturecache_browser_qt.view.widgets import ClickTracker, bold, copyable, dim, height_for_width, wrapped
@@ -38,6 +39,19 @@ HEADING_SPACING = 10
 
 LABEL_SPACING = 12
 ROW_SPACING = 4
+
+
+def card_room(room: QSize) -> QSize:
+    """The most a card in the pile is composed at, in device pixels
+
+    The sidebar only ever scales the pile down, so a card larger than the room
+    is work thrown away. The room is empty before the label is laid out, and
+    as tall as a widget can be before the pane first shares out its height.
+    """
+
+    full = QSize(FULL_SIZE, FULL_SIZE)
+
+    return full if room.isEmpty() else room.boundedTo(full)
 
 
 class SidebarLabel(QLabel):
@@ -173,10 +187,15 @@ class InspectorPane(QWidget):
     menued = Signal(QPoint)
     exported = Signal(Format)
 
+    # the sidebar has grown past the room its pile was composed for, which
+    # it can only show by scaling up
+    outgrown = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._texture: Texture | None = None
+        self._composed = QSize()
 
         self.setMinimumWidth(INSPECTOR_MIN_WIDTH)
 
@@ -290,12 +309,20 @@ class InspectorPane(QWidget):
         if room != self._sidebar.maximumHeight():
             self._sidebar.setMaximumHeight(room)
 
+        grown = card_room(self.sidebar_room())
+
+        if self._composed.isValid() and (
+            grown.width() > self._composed.width() or grown.height() > self._composed.height()
+        ):
+            self.outgrown.emit()
+
     @property
     def texture(self) -> Texture | None:
         return self._texture
 
     def clear(self) -> None:
         self._texture = None
+        self._composed = QSize()
 
         self._sidebar.set_source(QPixmap())
 
@@ -340,6 +367,13 @@ class InspectorPane(QWidget):
 
     def sidebar_room(self) -> QSize:
         return self._sidebar.room()
+
+    def pile_room(self) -> QSize:
+        """The room a pile is composed for, which is watched for the pane outgrowing it"""
+
+        self._composed = card_room(self.sidebar_room())
+
+        return self._composed
 
     def sidebar_ratio(self) -> float:
         return self._sidebar.devicePixelRatioF()
