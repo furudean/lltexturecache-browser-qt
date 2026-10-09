@@ -24,7 +24,6 @@ from PySide6.QtGui import (
     QGuiApplication,
     QImage,
     QPixmap,
-    QPixmapCache,
 )
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -457,7 +456,7 @@ class MainWindow(QMainWindow):
 
         for texture in rewritten + evicted:
             remove_cells(texture.uuid)
-            QPixmapCache.remove(sidebar_key(texture.uuid))
+            remove_cells(sidebar_key(texture.uuid))
 
         forget_gone(self._known, self._cache)
 

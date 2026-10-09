@@ -19,7 +19,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from lltexturecache_browser_qt.cache.likeness import describe
 from lltexturecache_browser_qt.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
-from lltexturecache_browser_qt.grid.cellcache import insert_cell, nearest_cell
+from lltexturecache_browser_qt.grid.cellcache import insert_cell, nearest_cell, remove_cells
 from lltexturecache_browser_qt.grid.decodes import FullDecodes, PreviewDecodes
 from lltexturecache_browser_qt.grid.narrowing import Narrowing
 from lltexturecache_browser_qt.grid.queue import DecodeQueue
@@ -295,15 +295,17 @@ class TextureModel(QAbstractListModel):
         return self.sidebar(texture)
 
     def sidebar(self, texture: Texture) -> QPixmap:
+        """The thumbnail beside a texture in the cache, at the size and on the checkerboard of a cell"""
+
         if texture.uuid in self._no_sidebar:
             return placeholder()
 
-        cached = QPixmap()
+        cached = nearest_cell(sidebar_key(texture.uuid), self._pixels)
 
-        if QPixmapCache.find(sidebar_key(texture.uuid), cached):
+        if not cached.isNull() and self._decodes.fits(cached):
             return cached
 
-        image = self.thumbnail(texture)
+        image = self.thumbnail(texture, self._pixels, ratio=self._ratio)
 
         if image.isNull():
             self._no_sidebar.add(texture.uuid)
@@ -312,11 +314,18 @@ class TextureModel(QAbstractListModel):
 
         pixmap = QPixmap.fromImage(image)
 
-        QPixmapCache.insert(sidebar_key(texture.uuid), pixmap)
+        insert_cell(sidebar_key(texture.uuid), self._pixels, pixmap)
 
         return pixmap
 
-    def thumbnail(self, texture: Texture, *, checkerboard: bool = True) -> QImage:
+    def thumbnail(
+        self,
+        texture: Texture,
+        size: int = THUMBNAIL_SIZE,
+        *,
+        checkerboard: bool = True,
+        ratio: float = 1.0,
+    ) -> QImage:
         try:
             with self._thumbnails:
                 kept = texture.thumbnail
@@ -327,19 +336,17 @@ class TextureModel(QAbstractListModel):
 
             kept = None
 
-        return thumbnail_image(kept, checkerboard=checkerboard) if kept is not None else QImage()
+        if kept is None:
+            return QImage()
+
+        return thumbnail_image(kept, size, checkerboard=checkerboard, ratio=ratio)
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""
 
         cell = nearest_cell(texture.uuid, self._pixels)
 
-        if not cell.isNull():
-            return cell
-
-        sidebar = QPixmap()
-
-        return sidebar if QPixmapCache.find(sidebar_key(texture.uuid), sidebar) else QPixmap()
+        return cell if not cell.isNull() else nearest_cell(sidebar_key(texture.uuid), self._pixels)
 
     def full_decode(self, texture: Texture, *, decode: bool = True) -> tuple[QPixmap, QSize] | None:
         """Nothing until it is in, and one is started if there is none, unless asked only to look"""
@@ -572,7 +579,7 @@ class TextureModel(QAbstractListModel):
             insert_cell(uuid, self._pixels, QPixmap.fromImage(image))
 
             # the real texture is in now, so the sidebar is dead weight
-            QPixmapCache.remove(sidebar_key(uuid))
+            remove_cells(sidebar_key(uuid))
 
         # started after the arrival is booked in, so the slot freed by this
         # decode is one the next of them can be handed

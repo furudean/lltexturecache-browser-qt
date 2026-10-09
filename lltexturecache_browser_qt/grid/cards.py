@@ -58,9 +58,9 @@ def grid_cards(model: TextureModel, textures: list[Texture]) -> list[Card]:
 
     for texture in textures:
         cell = model.cell(texture)
-        card = model.sidebar(texture) if cell.isNull() else point_sized(cell)
+        card = model.sidebar(texture) if cell.isNull() else cell
 
         if not card.isNull():
-            cards.append((texture.uuid, card))
+            cards.append((texture.uuid, point_sized(card)))
 
     return cards

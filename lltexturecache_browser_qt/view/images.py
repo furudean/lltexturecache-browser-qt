@@ -75,8 +75,14 @@ def thumbnail_pixels(kept: Thumbnail) -> QImage:
     return image.flipped(Qt.Orientation.Vertical).convertToFormat(THUMBNAIL_FORMATS[components])
 
 
-def thumbnail_image(kept: Thumbnail, *, checkerboard: bool = True) -> QImage:
-    return fit_image(thumbnail_pixels(kept), checkerboard=checkerboard)
+def thumbnail_image(
+    kept: Thumbnail,
+    size: int = THUMBNAIL_SIZE,
+    *,
+    checkerboard: bool = True,
+    ratio: float = 1.0,
+) -> QImage:
+    return fit_image(thumbnail_pixels(kept), size, checkerboard=checkerboard, ratio=ratio)
 
 
 def fit_image(
