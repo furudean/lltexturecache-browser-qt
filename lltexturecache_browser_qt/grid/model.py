@@ -327,7 +327,7 @@ class TextureModel(QAbstractListModel):
 
             kept = None
 
-        return thumbnail_image(kept.png(), checkerboard=checkerboard) if kept is not None else QImage()
+        return thumbnail_image(kept, checkerboard=checkerboard) if kept is not None else QImage()
 
     def cell(self, texture: Texture) -> QPixmap:
         """Whatever the grid already holds for a texture, without decoding"""

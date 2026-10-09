@@ -1,8 +1,9 @@
 from functools import cache
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QImageReader, QPixmap
+from texture_courier import Thumbnail
 
 from lltexturecache_browser_qt.cache.decode import GREYSCALE, RGB, RGBA, decode_texture
 from lltexturecache_browser_qt.view.checkerboard import over_checkerboard
@@ -14,16 +15,17 @@ IMAGE_FORMATS = {
     RGBA: QImage.Format.Format_RGBA8888,
 }
 
+# the formats qt's png reader hands a thumbnail back in, which scale a touch
+# differently from the packed ones a decode is described in
+THUMBNAIL_FORMATS = {
+    GREYSCALE: QImage.Format.Format_Grayscale8,
+    RGB: QImage.Format.Format_RGB32,
+    RGBA: QImage.Format.Format_ARGB32,
+}
+
 # the box a cell's texture is fitted into, and the size everything that stands
 # in for one is drawn at
 THUMBNAIL_SIZE = 100
-
-
-def read_image(data: QByteArray) -> QImage:
-    buffer = QBuffer(data)
-    buffer.open(QBuffer.OpenModeFlag.ReadOnly)
-
-    return QImageReader(buffer).read()
 
 
 def decode_image(codestream: bytes, threads: int = 1) -> QImage:
@@ -44,8 +46,37 @@ def decode_image(codestream: bytes, threads: int = 1) -> QImage:
     return image.copy()
 
 
-def thumbnail_image(png: bytes, *, checkerboard: bool = True) -> QImage:
-    return fit_image(read_image(QByteArray(png)), checkerboard=checkerboard)
+def thumbnail_pixels(kept: Thumbnail) -> QImage:
+    """A cache thumbnail as an image, straight from the rows the viewer kept"""
+
+    pixels = kept.pixels
+    components = kept.components
+
+    if len(pixels) != kept.width * kept.height * components:
+        return QImage()
+
+    if components == 2:
+        # greyscale with opacity alongside, which qt has no format for, so the
+        # one colour component is spread over three the way a decode's is
+        grey = pixels[0::2]
+        spread = bytearray(len(pixels) * 2)
+        spread[0::4] = grey
+        spread[1::4] = grey
+        spread[2::4] = grey
+        spread[3::4] = pixels[1::2]
+
+        pixels = bytes(spread)
+        components = RGBA
+
+    image = QImage(pixels, kept.width, kept.height, kept.width * components, IMAGE_FORMATS[components])
+
+    # the rows run bottom up, the way gl takes them. the flip is a copy, so the
+    # image owns its pixels before they go out of scope
+    return image.flipped(Qt.Orientation.Vertical).convertToFormat(THUMBNAIL_FORMATS[components])
+
+
+def thumbnail_image(kept: Thumbnail, *, checkerboard: bool = True) -> QImage:
+    return fit_image(thumbnail_pixels(kept), checkerboard=checkerboard)
 
 
 def fit_image(

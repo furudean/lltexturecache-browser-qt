@@ -12,7 +12,7 @@ import threading
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
-from PySide6.QtCore import QByteArray, QObject, QRunnable, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 from PySide6.QtGui import QImage
 from texture_courier import Texture, TextureCacheError, Thumbnail
 
@@ -26,7 +26,7 @@ from lltexturecache_browser_qt.cache.color import (
     signature,
 )
 from lltexturecache_browser_qt.cache.likeness import Descriptor, LikenessIndex, describe
-from lltexturecache_browser_qt.view.images import read_image
+from lltexturecache_browser_qt.view.images import thumbnail_pixels
 
 log = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class CacheScan(QRunnable):
         if kept is None:
             return None
 
-        image = read_image(QByteArray(kept.png()))
+        image = thumbnail_pixels(kept)
 
         if image.isNull():
             return None
