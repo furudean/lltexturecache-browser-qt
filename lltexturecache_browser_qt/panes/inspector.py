@@ -149,7 +149,7 @@ class SidebarLabel(QLabel):
         painter = QPainter(rounded)
         box = QRect(QPoint(), rounded.deviceIndependentSize().toSize())
 
-        paint_texture(painter, texture_brush(fitted, fitted.size(), ratio), box)
+        paint_texture(painter, texture_brush(fitted, ratio), box)
 
         painter.end()
 

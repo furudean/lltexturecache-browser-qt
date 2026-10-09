@@ -1,7 +1,7 @@
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from math import exp
+from math import exp, floor
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -115,14 +115,31 @@ def fitted(size: QSize, room: QSize) -> QSize:
     return size.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
 
 
-def image_box(pixmap: QPixmap, cell: QRect) -> QRect | None:
-    room = texture_room(cell)
-    size = fitted(pixmap.size(), room.size())
+def image_pixels(pixmap: QPixmap, cell: QRect, ratio: float) -> QSize:
+    room = texture_room(cell).size()
 
-    if size.isEmpty():
+    # rounded the way cell_pixels is, so a settled cell fits at its own size
+    return fitted(pixmap.size(), QSize(round(room.width() * ratio), round(room.height() * ratio)))
+
+
+def image_box(pixels: QSize, cell: QRect, ratio: float) -> QRectF | None:
+    if pixels.isEmpty():
         return None
 
-    return QStyle.alignedRect(Qt.LayoutDirection.LeftToRight, Qt.AlignmentFlag.AlignCenter, size, room)
+    room = QRectF(texture_room(cell))
+    width = pixels.width() / ratio
+    height = pixels.height() / ratio
+
+    left = snapped(room.center().x() - width / 2, ratio)
+    top = snapped(room.center().y() - height / 2, ratio)
+
+    return QRectF(left, top, width, height)
+
+
+def snapped(at: float, ratio: float) -> float:
+    # onto a whole device pixel, so a settled cell lands one texel to a pixel.
+    # halves go down and right, the way qt centres a box in whole pixels
+    return floor(at * ratio + 0.5) / ratio
 
 
 def target_box(box: QRect, cell: QRect) -> QRect:
@@ -132,9 +149,9 @@ def target_box(box: QRect, cell: QRect) -> QRect:
     return box.adjusted(-grow_x, -grow_y, grow_x, grow_y) & cell
 
 
-def frame_box(box: QRect | None, cell: QRect) -> QRect:
+def frame_box(box: QRectF | None, cell: QRect) -> QRectF:
     if box is None:
-        return cell
+        return QRectF(cell)
 
     return box.adjusted(-SELECTION_INSET, -SELECTION_INSET, SELECTION_INSET, SELECTION_INSET)
 
@@ -146,30 +163,33 @@ def rounded(rect: QRectF, radius: float) -> QPainterPath:
     return path
 
 
-def ring(box: QRect, weight: float, inset: float) -> QPainterPath:
+def ring(box: QRectF, weight: float, inset: float) -> QPainterPath:
     room = inset + weight / 2
 
-    return rounded(QRectF(box).adjusted(room, room, -room, -room), max(TEXTURE_RADIUS - room, 0))
+    return rounded(box.adjusted(room, room, -room, -room), max(TEXTURE_RADIUS - room, 0))
 
 
 class BakedCells:
     def __init__(self, budget: int = MIN_BAKED_BYTES) -> None:
         self._budget = budget
         self._bytes = 0
-        self._cells: OrderedDict[tuple[int, int, int, float, int], QPixmap] = OrderedDict()
+        self._cells: OrderedDict[tuple[int, float, int | None], QPixmap] = OrderedDict()
+
+    def __len__(self) -> int:
+        return len(self._cells)
 
     def make_room(self, screen: int) -> None:
         self._budget = max(MIN_BAKED_BYTES, screen * BAKED_SCREENS)
 
-    def cell(self, pixmap: QPixmap, size: QSize, ratio: float, border: QColor) -> QPixmap:
-        key = (pixmap.cacheKey(), size.width(), size.height(), ratio, border.rgba())
+    def cell(self, pixmap: QPixmap, ratio: float, border: QColor | None) -> QPixmap:
+        key = (pixmap.cacheKey(), ratio, border.rgba() if border is not None else None)
 
         if (baked := self._cells.get(key)) is not None:
             self._cells.move_to_end(key)
 
             return baked
 
-        baked = bake(pixmap, size, ratio, border)
+        baked = bake(pixmap, ratio, border)
 
         self._cells[key] = baked
         self._bytes += baked_bytes(baked)
@@ -191,26 +211,25 @@ def screen_bytes(device: QPaintDevice) -> int:
     return round(device.width() * ratio * device.height() * ratio) * 4
 
 
-def bake(pixmap: QPixmap, size: QSize, ratio: float, border: QColor) -> QPixmap:
-    baked = QPixmap(round(size.width() * ratio), round(size.height() * ratio))
+def bake(pixmap: QPixmap, ratio: float, border: QColor | None) -> QPixmap:
+    baked = QPixmap(pixmap.size())
     baked.setDevicePixelRatio(ratio)
     baked.fill(Qt.GlobalColor.transparent)
 
     painter = QPainter(baked)
-    box = QRect(QPoint(), size)
+    box = QRectF(QPointF(), baked.deviceIndependentSize())
 
-    paint_texture(painter, texture_brush(pixmap, baked.size(), ratio), box)
-    mark_border(painter, box, border)
+    paint_texture(painter, texture_brush(pixmap, ratio), box)
+
+    if border is not None:
+        mark_border(painter, box, border)
 
     painter.end()
 
     return baked
 
 
-def texture_brush(pixmap: QPixmap, pixels: QSize, ratio: float) -> QBrush:
-    if pixmap.size() != pixels:
-        pixmap = pixmap.scaled(pixels, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
-
+def texture_brush(pixmap: QPixmap, ratio: float) -> QBrush:
     brush = QBrush(pixmap)
 
     # undoes the ratio, so one texel lands on one pixel
@@ -219,7 +238,7 @@ def texture_brush(pixmap: QPixmap, pixels: QSize, ratio: float) -> QBrush:
     return brush
 
 
-def paint_texture(painter: QPainter, brush: QBrush, box: QRect) -> None:
+def paint_texture(painter: QPainter, brush: QBrush, box: QRect | QRectF) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
@@ -231,7 +250,7 @@ def paint_texture(painter: QPainter, brush: QBrush, box: QRect) -> None:
     painter.restore()
 
 
-def mark_border(painter: QPainter, box: QRect, color: QColor) -> None:
+def mark_border(painter: QPainter, box: QRectF, color: QColor) -> None:
     weight = BORDER_WEIGHT / painter.device().devicePixelRatioF()
 
     painter.save()
@@ -240,6 +259,20 @@ def mark_border(painter: QPainter, box: QRect, color: QColor) -> None:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawPath(ring(box, weight, 0))
     painter.restore()
+
+
+def paint_stand_in(painter: QPainter, baked: BakedCells, pixmap: QPixmap, box: QRectF, border: QColor) -> None:
+    # a stand-in is baked at its own size and stretched on the way out, so
+    # every frame of a zoom draws from the one bake. the hairline goes on
+    # after the stretch to stay a device pixel wide
+    cell = baked.cell(pixmap, painter.device().devicePixelRatioF(), None)
+
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.drawPixmap(box, cell, QRectF(cell.rect()))
+    painter.restore()
+
+    mark_border(painter, box, border)
 
 
 class CellDelegate(QStyledItemDelegate):
@@ -252,7 +285,9 @@ class CellDelegate(QStyledItemDelegate):
         # the selection is drawn here and a cell has no text, focus or
         # background, so the style's item and the option it reads are skipped
         pixmap = decoration(index)
-        box = image_box(pixmap, option.rect)
+        ratio = painter.device().devicePixelRatioF()
+        pixels = image_pixels(pixmap, option.rect, ratio)
+        box = image_box(pixels, option.rect, ratio)
 
         if option.state & QStyle.StateFlag.State_Selected:
             self.mark_selected(painter, frame_box(box, option.rect), option)
@@ -260,13 +295,14 @@ class CellDelegate(QStyledItemDelegate):
         if box is None:
             return
 
-        ratio = painter.device().devicePixelRatioF()
-
         self._baked.make_room(screen_bytes(painter.device()))
 
-        baked = self._baked.cell(pixmap, box.size(), ratio, border_color(option.palette))
+        border = border_color(option.palette)
 
-        painter.drawPixmap(box.topLeft(), baked)
+        if pixmap.size() == pixels:
+            painter.drawPixmap(box.topLeft(), self._baked.cell(pixmap, ratio, border))
+        else:
+            paint_stand_in(painter, self._baked, pixmap, box, border)
 
         incomplete = bool(index.data(INCOMPLETE_ROLE))
 
@@ -276,7 +312,7 @@ class CellDelegate(QStyledItemDelegate):
         if incomplete:
             self.mark_incomplete(painter, box)
 
-    def mark_selected(self, painter: QPainter, rect: QRect, cell: QStyleOptionViewItem) -> None:
+    def mark_selected(self, painter: QPainter, rect: QRectF, cell: QStyleOptionViewItem) -> None:
         active = cell.state & QStyle.StateFlag.State_Active
         group = QPalette.ColorGroup.Active if active else QPalette.ColorGroup.Inactive
 
@@ -284,10 +320,10 @@ class CellDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(cell.palette.color(group, QPalette.ColorRole.Highlight))
-        painter.drawRoundedRect(QRectF(rect), SELECTION_RADIUS, SELECTION_RADIUS)
+        painter.drawRoundedRect(rect, SELECTION_RADIUS, SELECTION_RADIUS)
         painter.restore()
 
-    def mark_incomplete(self, painter: QPainter, box: QRect) -> None:
+    def mark_incomplete(self, painter: QPainter, box: QRectF) -> None:
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(INCOMPLETE_COLOR, INCOMPLETE_WEIGHT))
@@ -295,7 +331,7 @@ class CellDelegate(QStyledItemDelegate):
         painter.drawPath(ring(box, INCOMPLETE_WEIGHT, 0))
         painter.restore()
 
-    def mark_simple(self, painter: QPainter, box: QRect, inset: float) -> None:
+    def mark_simple(self, painter: QPainter, box: QRectF, inset: float) -> None:
         path = ring(box, SIMPLE_WEIGHT, inset)
         dashed = QPen(SIMPLE_COLOR, SIMPLE_WEIGHT, Qt.PenStyle.CustomDashLine)
         dashed.setDashPattern([SIMPLE_DASH, SIMPLE_DASH])
@@ -634,9 +670,10 @@ class TextureGrid(QListView):
 
     def target(self, index: Index) -> QRect:
         cell = self.visualRect(index)
-        box = image_box(decoration(index), cell)
+        ratio = self.viewport().devicePixelRatioF()
+        box = image_box(image_pixels(decoration(index), cell, ratio), cell, ratio)
 
-        return cell if box is None else target_box(box, cell)
+        return cell if box is None else target_box(box.toAlignedRect(), cell)
 
     def setSelection(self, rect: QRect, command: QItemSelectionModel.SelectionFlag) -> None:
         box = rect.normalized()
