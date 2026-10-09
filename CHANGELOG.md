@@ -24,6 +24,7 @@ all notable changes to this project are documented in this file.
 - fix the scroll bar missing its outer edge with the fusion style (linux)
 - faster decoding, exporting and filtering overall
 - more performant scrolling
+- detailed textures no longer shimmer in a small preview window
 - bump texture-courier to 0.2.0, pulling in faster and more correct texture
   parsing
 - bump other dependencies

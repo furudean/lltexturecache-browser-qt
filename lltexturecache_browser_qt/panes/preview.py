@@ -29,6 +29,9 @@ MIN_PANE_SIZE = 32
 # what the title says with nothing to say anything about
 WINDOW_TITLE = "Preview"
 
+# the smallest a texture is halved down to for a small window
+MIP_FLOOR = 64
+
 
 def nearest(edge: int, length: int, low: int, high: int) -> int:
     return min(max(edge, low), max(high - length + 1, low))
@@ -51,6 +54,35 @@ def preview_title(texture: Texture, natural: QSize) -> str:
     return f"{texture.uuid} ({about})"
 
 
+def mip_levels(pixmap: QPixmap) -> list[QPixmap]:
+    """The pixmap and each halving of it, down to the floor
+
+    Smooth pixmap drawing is bilinear, which shimmers once it shrinks a texture
+    more than twice over. Drawing from the nearest halving keeps it within that.
+    """
+
+    levels = [pixmap]
+
+    while max(levels[-1].width(), levels[-1].height()) // 2 >= MIP_FLOOR:
+        level = levels[-1]
+        half = QSize(max(1, level.width() // 2), max(1, level.height() // 2))
+
+        levels.append(
+            level.scaled(half, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        )
+
+    return levels
+
+
+def mip_level(levels: list[QPixmap], pixels: QSize) -> QPixmap:
+    """The smallest level that still covers what it is drawn into"""
+
+    return next(
+        (level for level in reversed(levels) if level.width() >= pixels.width() and level.height() >= pixels.height()),
+        levels[0],
+    )
+
+
 class PreviewWindow(QWidget):
     closed = Signal()
 
@@ -66,6 +98,7 @@ class PreviewWindow(QWidget):
         self.resize(WINDOW_SIZE, WINDOW_SIZE)
 
         self._pixmap = QPixmap()
+        self._levels = [self._pixmap]
         self._message = ""
         self._lightness: float | None = None
         self._click = ClickTracker()
@@ -127,6 +160,7 @@ class PreviewWindow(QWidget):
 
     def set_image(self, pixmap: QPixmap, message: str) -> None:
         self._pixmap = pixmap
+        self._levels = mip_levels(pixmap)
         self._message = message
         self._lightness = pixmap_lightness(pixmap)
 
@@ -214,7 +248,7 @@ class PreviewWindow(QWidget):
                 painter.fillRect(target, QBrush(checkerboard))
 
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(target, self._pixmap)
+            painter.drawPixmap(target, mip_level(self._levels, target.size() * self.devicePixelRatioF()))
 
         painter.end()
 
