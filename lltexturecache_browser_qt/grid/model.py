@@ -17,6 +17,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QImage, QPixmap, QPixmapCache
 from texture_courier import Texture, TextureCache, TextureCacheError
 
+from lltexturecache_browser_qt.cache.decode import declared_size
 from lltexturecache_browser_qt.cache.likeness import describe
 from lltexturecache_browser_qt.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
 from lltexturecache_browser_qt.grid.cellcache import insert_cell, nearest_cell, remove_cells
@@ -97,6 +98,7 @@ class DecodeTask(QRunnable):
         checkerboard: bool = True,
         ratio: float = 1.0,
         threads: Callable[[], int] | None = None,
+        reduced: bool = False,
     ):
         super().__init__()
 
@@ -108,6 +110,7 @@ class DecodeTask(QRunnable):
         self._board = checkerboard
         self._ratio = ratio
         self._threads = threads
+        self._reduced = reduced
 
     @Slot()
     def run(self) -> None:
@@ -125,7 +128,7 @@ class DecodeTask(QRunnable):
             # drained since the task was queued
             threads = self._threads() if self._threads else 1
 
-            image = decode_image(codestream, threads)
+            image = decode_image(codestream, threads, fit=self._size if self._reduced else None)
         except (TextureCacheError, OSError) as e:
             # a cache is full of entries the viewer never finished writing, so
             # one that will not decode is ordinary rather than news. the cell
@@ -136,7 +139,12 @@ class DecodeTask(QRunnable):
 
         fitted = fit_image(image, self._size, upscale=self._upscale, checkerboard=self._board, ratio=self._ratio)
 
-        return fitted, image.size()
+        # a reduced decode comes back smaller than the texture, so its size is
+        # taken from the header
+        declared = declared_size(codestream)
+        natural = QSize(*declared) if declared is not None else image.size()
+
+        return fitted, natural
 
 
 class TextureModel(QAbstractListModel):
@@ -544,7 +552,7 @@ class TextureModel(QAbstractListModel):
         self._decodes.release()
 
     def start_decode(self, texture: Texture, priority: int) -> None:
-        task = DecodeTask(texture, self.reads, self._signals, self._pixels, ratio=self._ratio)
+        task = DecodeTask(texture, self.reads, self._signals, self._pixels, ratio=self._ratio, reduced=True)
 
         self._decodes.pool.start(task, priority)
 

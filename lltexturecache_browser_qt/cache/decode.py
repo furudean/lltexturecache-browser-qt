@@ -1,3 +1,4 @@
+import struct
 from dataclasses import dataclass
 
 import imagecodecs
@@ -13,6 +14,13 @@ RGB = 3
 RGBA = 4
 
 POOL_THREADS = max(1, QThread.idealThreadCount() - 2)
+
+# second life hands out bare codestreams, which open on the start of codestream
+# marker and then the image and tile size segment
+SOC_SIZ = b"\xff\x4f\xff\x51"
+
+COD = 0xFF52
+SOT = 0xFF90
 
 
 @dataclass(frozen=True)
@@ -31,8 +39,62 @@ class Decoded:
         return self.width * self.components
 
 
-def decode_texture(codestream: bytes, threads: int = 1) -> Decoded:
-    """Pixels from a codestream, in the nearest component count anything else understands"""
+def declared_size(codestream: bytes) -> tuple[int, int] | None:
+    """The width and height the codestream's header gives, without decoding it"""
+
+    if len(codestream) < 24 or codestream[:4] != SOC_SIZ:
+        return None
+
+    xsiz, ysiz, xosiz, yosiz = struct.unpack_from(">IIII", codestream, 8)
+
+    return xsiz - xosiz, ysiz - yosiz
+
+
+def decomposition_levels(codestream: bytes) -> int:
+    """How many times the coding style marker says each tile was halved"""
+
+    position = 2
+
+    # the main header runs from the size segment up to the first tile
+    while position + 4 <= len(codestream):
+        marker, length = struct.unpack_from(">HH", codestream, position)
+
+        if marker == COD:
+            return codestream[position + 9] if position + 9 < len(codestream) else 0
+
+        if marker == SOT:
+            break
+
+        position += 2 + length
+
+    return 0
+
+
+def skipped_resolutions(codestream: bytes, fit: int) -> int:
+    """How many halvings openjpeg can skip and still fill a box of `fit` pixels"""
+
+    if (size := declared_size(codestream)) is None:
+        return 0
+
+    # openjpeg refuses to skip as many resolutions as the stream holds
+    levels = decomposition_levels(codestream)
+
+    longer = max(size)
+    skipped = 0
+
+    while skipped < levels and longer // 2 >= fit:
+        longer //= 2
+        skipped += 1
+
+    return skipped
+
+
+def decode_texture(codestream: bytes, threads: int = 1, *, fit: int | None = None) -> Decoded:
+    """Pixels from a codestream, in the nearest component count anything else understands
+
+    With `fit`, the decode stops at the smallest resolution that still fills a
+    box that many pixels wide.
+    """
 
     # Everything decodes through openjpeg because qt only reads jpeg 2000 on macOS,
     # where it loads `qmacjp2` over Apple's ImageIO. Nothing equivalent ships in the qt
@@ -47,7 +109,11 @@ def decode_texture(codestream: bytes, threads: int = 1) -> Decoded:
     try:
         # openjpeg lets go of the gil while it works, so this runs in the decode
         # pool as happily as qt's reader did
-        decoded = imagecodecs.jpeg2k_decode(codestream, numthreads=threads)
+        decoded = imagecodecs.jpeg2k_decode(
+            codestream,
+            skipres=skipped_resolutions(codestream, fit) if fit is not None else None,
+            numthreads=threads,
+        )
     except imagecodecs.Jpeg2kError as e:
         # a RuntimeError on the way out of a decode thread says nothing about
         # which texture stopped it, and none of the callers are watching for one

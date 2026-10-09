@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
-    "imagecodecs>=2026.8.16",
+    "imagecodecs>=2026.10.10",
     "pillow>=12.3.0",
     "pyside6>=6.11.2",
     "texture-courier>=0.2.0",
