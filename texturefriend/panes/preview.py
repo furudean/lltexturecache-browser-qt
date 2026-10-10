@@ -1,7 +1,10 @@
+from math import ceil
+
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
+    QHideEvent,
     QKeyEvent,
     QMouseEvent,
     QMoveEvent,
@@ -24,13 +27,12 @@ from texturefriend.view.formatting import format_count, format_size
 from texturefriend.view.widgets import ClickTracker
 from texturefriend.view.zoomable import ZoomableView
 
+WINDOW_TITLE = "Preview"
 WINDOW_SIZE = 480
 MIN_PANE_SIZE = 32
+MIN_OPEN_SIZE = 400
+MAX_OPEN_SHARE = 2 / 3
 
-# what the title says with nothing to say anything about
-WINDOW_TITLE = "Preview"
-
-# the smallest a texture is halved down to for a small window
 MIP_FLOOR = 64
 
 
@@ -56,6 +58,16 @@ def preview_title(texture: Texture, natural: QSize, scale: float | None = None) 
     zoom = f" @ {format_count(round(scale * 100))}%" if scale is not None else ""
 
     return f"{texture.uuid}{zoom} ({about})"
+
+
+def open_size(natural: QSize, room: QSize | None) -> QSize:
+    size = natural * ceil(MIN_OPEN_SIZE / max(natural.width(), natural.height()))
+
+    # a texture bigger than the screen is shrunk to fit it, keeping its shape
+    if room is not None and (size.width() > room.width() or size.height() > room.height()):
+        size = size.scaled(room, Qt.AspectRatioMode.KeepAspectRatio)
+
+    return size
 
 
 def drawn_sharp(pixmap: QSize, natural: QSize, drawn: QSize) -> bool:
@@ -121,10 +133,13 @@ class PreviewWindow(ZoomableView):
         # shaping the window a second time
         self._shaped_for: str | None = None
 
-        # the room every shape is given, which is the area the window was last
-        # put at by hand rather than anything a texture has asked for, and the
-        # middle of that area, which every shape is kept over
-        self._box = QSize(WINDOW_SIZE, WINDOW_SIZE)
+        # the size the window was last given by hand, which later textures
+        # are fitted inside until the window is hidden
+        self._box: QSize | None = None
+        self._shaped_size = QSize()
+
+        # the middle of where the window was last put by hand, which every
+        # shape is kept over
         self._middle: QPoint | None = None
         self._shaping = False
 
@@ -211,25 +226,21 @@ class PreviewWindow(ZoomableView):
         return screen.availableGeometry() if screen is not None else None
 
     def shape_window(self, natural: QSize) -> None:
-        # the title bar and the border take room the pane never gets, so what
-        # the screen has for a shape is what is left once they have had theirs
+        # the title bar and the border take room the pane never gets
         chrome = self.frameGeometry().size() - self.size()
         room = self.room()
 
-        # the area the window was last put at by hand is as much room across and
-        # down as any shape is given, and a shape is laid inside it the way a
-        # letterbox lays a picture inside a screen: as large as it goes without
-        # passing either edge, which is the window's own shape here rather than
-        # bars, since the texture is stretched over whatever pane it is given
-        box = self._box if room is None else self._box.boundedTo(room.size() - chrome)
+        if self._box is not None:
+            box = self._box if room is None else self._box.boundedTo(room.size() - chrome)
+            size = natural.scaled(box, Qt.AspectRatioMode.KeepAspectRatio)
+        else:
+            size = open_size(natural, None if room is None else room.size() * MAX_OPEN_SHARE - chrome)
 
-        # the box is the one asked for by hand, so a shape that will not go in it
-        # is shown as near as it goes without moving it, and one too slight to
-        # take hold of is held open by the smallest pane there is
         self._shaping = True
+        self._shaped_size = size
 
         try:
-            self.resize(natural.scaled(box, Qt.AspectRatioMode.KeepAspectRatio))
+            self.resize(size)
             self.centre()
         finally:
             self._shaping = False
@@ -251,23 +262,39 @@ class PreviewWindow(ZoomableView):
 
         self.move(left, top)
 
-    def remember_box(self) -> None:
+    def remember_middle(self) -> None:
         if self._shaping:
             return
 
-        self._box = self.size()
         self._middle = self.frameGeometry().center()
+
+    def remember_box(self) -> None:
+        # a resize that lands at the shaped size is the window system catching
+        # up with the shape, and one while hidden is a restore or a show
+        if self._shaping or not self.isVisible() or self.size() == self._shaped_size:
+            return
+
+        self._box = self.size()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
 
         self.remember_box()
+        self.remember_middle()
         self.sync_title()
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        super().hideEvent(event)
+
+        # macOS hides tool windows while the app is in the background, which
+        # is no reason to forget the size
+        if not event.spontaneous():
+            self._box = None
 
     def moveEvent(self, event: QMoveEvent) -> None:
         super().moveEvent(event)
 
-        self.remember_box()
+        self.remember_middle()
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)

@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - zoom the preview window with a zoom/pan gestures
+- open the preview window at the texture's own size
 - fix inspector's checkerboard not tiling from top-left origin
 - fix inspector's hairline covering the texture's edge instead of sitting outside it
 - fix incomplete textures contributing to simple textures filter
