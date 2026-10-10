@@ -2,6 +2,10 @@
 
 all notable changes to this project are documented in this file.
 
+## unreleased
+
+- fix a build error on intel macs
+
 ## v1.0.0 - 2026-10-10
 
 - the app is now called TextureFriend
