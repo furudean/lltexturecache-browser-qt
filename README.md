@@ -1,17 +1,17 @@
-# lltexturecache-browser-qt
+# TextureFriend
 
 <p align="center">
   <img src="preview.png" width="600"
-    alt="a screenshot of lltexturecache-browser-qt with a cache open">
+    alt="a screenshot of TextureFriend with a cache open">
 </p>
 
-lltexturecache-browser-qt is a cross-platform tool to browse and export textures
+TextureFriend is a cross-platform tool to browse and export textures
 from the second life texture cache.
 
 this application is useful if you want to mod existing assets on second life,
 like character clothing and the author does not provide a texture to download.
 
-lltexturecache-browser-qt can only read what is stored in your cache files. it
+TextureFriend can only read what is stored in your cache files. it
 never connects to second life directly.
 
 the app's icon, slcachegirl, is designed by
@@ -30,14 +30,14 @@ the app's icon, slcachegirl, is designed by
 ## install
 
 windows, linux and mac builds are attached to
-[each release](https://github.com/furudean/lltexturecache-browser-qt/releases).
+[each release](https://github.com/furudean/texturefriend/releases).
 on mac, open the `.dmg` and drag the app into Applications.
 
 on mac, you may install with homebrew, from the 
 [homebrew tap](https://github.com/furudean/homebrew-tap/tree/main):
 
 ```bash
-brew install --cask furudean/tap/lltexturecache-browser-qt
+brew install --cask furudean/tap/texturefriend
 ```
 
 ### install requirements

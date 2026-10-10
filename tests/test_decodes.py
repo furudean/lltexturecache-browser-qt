@@ -6,7 +6,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 from texture_courier import Texture
 
-from lltexturecache_browser_qt.grid.decodes import FullDecodes, full_size
+from texturefriend.grid.decodes import FullDecodes, full_size
 
 UUID = "0" * 36
 

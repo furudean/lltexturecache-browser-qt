@@ -3,8 +3,8 @@
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.cache.color import QUANTIZE
-from lltexturecache_browser_qt.cache.likeness import (
+from texturefriend.cache.color import QUANTIZE
+from texturefriend.cache.likeness import (
     BACKDROP,
     CELLS,
     Descriptor,

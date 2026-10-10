@@ -5,7 +5,7 @@ from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.grid.cells import (
+from texturefriend.grid.cells import (
     BakedCells,
     image_box,
     image_pixels,
@@ -13,9 +13,9 @@ from lltexturecache_browser_qt.grid.cells import (
     slot_size,
     texture_room,
 )
-from lltexturecache_browser_qt.grid.model import cell_pixels
-from lltexturecache_browser_qt.view import cellsize
-from lltexturecache_browser_qt.view.cellsize import CELL_SIZES
+from texturefriend.grid.model import cell_pixels
+from texturefriend.view import cellsize
+from texturefriend.view.cellsize import CELL_SIZES
 
 RATIOS = (1.0, 1.25, 1.5, 2.0)
 

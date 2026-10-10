@@ -4,9 +4,9 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.grid.decodes import FULL_SIZE, full_size
-from lltexturecache_browser_qt.panes.inspector import card_room
-from lltexturecache_browser_qt.panes.sidebar import pile_card
+from texturefriend.grid.decodes import FULL_SIZE, full_size
+from texturefriend.panes.inspector import card_room
+from texturefriend.panes.sidebar import pile_card
 
 # what a widget's maximum height is until something sets one
 WIDGET_MAX = 16777215

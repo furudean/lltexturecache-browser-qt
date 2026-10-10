@@ -3,7 +3,7 @@ import struct
 import pytest
 from PySide6.QtCore import QSize
 
-from lltexturecache_browser_qt.cache.decode import skipped_resolutions
+from texturefriend.cache.decode import skipped_resolutions
 
 
 def header(width: int, height: int, levels: int = 5) -> bytes:

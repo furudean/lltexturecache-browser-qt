@@ -2,7 +2,7 @@
 
 from PySide6.QtGui import QColor, QImage
 
-from lltexturecache_browser_qt.cache.color import (
+from texturefriend.cache.color import (
     CLUSTERS,
     FULL_CHROMA,
     LIGHTNESS_WEIGHT,

@@ -8,8 +8,8 @@ from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 from texture_courier import Entry, Texture, TextureCache, Thumbnail
 
-from lltexturecache_browser_qt.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
-from lltexturecache_browser_qt.cache.scan import (
+from texturefriend.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
+from texturefriend.cache.scan import (
     PLACEHOLDER_BYTE,
     CacheScan,
     ScanSignals,

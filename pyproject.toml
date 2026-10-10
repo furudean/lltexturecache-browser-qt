@@ -1,5 +1,5 @@
 [project]
-name = "lltexturecache-browser-qt"
+name = "texturefriend"
 version = "0.7.3"
 description = "a cross-platform tool to browse and export textures from the second life texture cache"
 readme = "README.md"
@@ -27,17 +27,17 @@ requires = ["setuptools", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["lltexturecache_browser_qt*"]
+include = ["texturefriend*"]
 
 [tool.setuptools.package-data]
-lltexturecache_browser_qt = ["assets/*.png", "assets/licences/*.txt", "assets/licences/*.toml"]
+texturefriend = ["assets/*.png", "assets/licences/*.txt", "assets/licences/*.toml"]
 
 [project.scripts]
-lltexturecache-browser-qt = "lltexturecache_browser_qt.main:main"
+texturefriend = "texturefriend.main:main"
 
 [tool.app]
-display-name = "lltexturecache-browser-qt"
-bundle-id = "com.furudean.lltexturecache-browser-qt"
+display-name = "TextureFriend"
+bundle-id = "com.furudean.texturefriend"
 company-name = "paisley softworks"
 copyright = "Copyright (c) 2026 meri p"
 macos-category = "public.app-category.utilities"

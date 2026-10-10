@@ -1,0 +1,90 @@
+"""Filling the inspector's sidebar from a selection
+
+The pane shows a pile of cards standing for whatever is selected, drawn from
+the best decode of each texture that has landed so far and repainted as better
+ones arrive. Which cards those are, how the pile is measured, and which of
+them the automatic checkerboard is taken from is all one job, kept here rather
+than spread across the window that holds the pane.
+"""
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPixmap
+from texture_courier import Texture
+
+from texturefriend.grid.cards import Card
+from texturefriend.grid.decodes import full_size, held_to
+from texturefriend.grid.model import TextureModel
+from texturefriend.panes.inspector import InspectorPane
+from texturefriend.view.checkerboard import pixmap_lightness, set_picked_lightness
+from texturefriend.view.stack import stack_pixmap
+
+
+def pile_card(pixmap: QPixmap, natural: QSize, room: QSize) -> QPixmap:
+    """Sized to the decode it stands in for, so the pile does not jump when that lands
+
+    A landed decode is sized here too, and both are kept to the room the pile
+    is composed in, since the sidebar would only scale anything bigger back down.
+    """
+
+    laid = held_to(pixmap.size() if natural.isEmpty() else full_size(natural), room)
+
+    if laid == pixmap.size():
+        return pixmap
+
+    # the stand-in is a picture of the same texture, so any shape it has that
+    # the texture does not is rounding from the size it was kept at
+    return pixmap.scaled(laid, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+
+def drawn_size(model: TextureModel, texture: Texture) -> QSize | None:
+    """Empty when the texture would not decode, nothing while its decode is out
+
+    The pane shows the last of those as "Decoding..." rather than as a shape it
+    does not know yet.
+    """
+
+    natural = model.natural(texture)
+
+    if not natural.isEmpty():
+        return natural
+
+    return QSize() if model.full_decode(texture, decode=False) is not None else None
+
+
+def standing_cards(model: TextureModel, textures: list[Texture], room: QSize) -> list[Card]:
+    cards = []
+
+    for texture in textures:
+        # a card goes in with whatever the grid or an earlier selection left
+        # behind, until the selection settles and it is decoded properly
+        ready = model.stand_in(texture)
+
+        if ready is not None:
+            cards.append((texture.uuid, pile_card(*ready, room)))
+
+    return cards
+
+
+def paint(pane: InspectorPane, model: TextureModel, textures: list[Texture]) -> None:
+    if not textures:
+        return
+
+    room = pane.pile_room()
+
+    # only the texture on top is worth a decode on the spot
+    model.full_decode(textures[-1], room)
+
+    cards = standing_cards(model, textures, room)
+
+    # a hidden pane is repainted with whatever the last visible one was left on,
+    # which is not what the preview beside it is showing
+    if cards and pane.isVisible():
+        # the card on top is the one the pane is really about, so the automatic
+        # checkerboard behind that one is where a click in the pane carries on from
+        set_picked_lightness(pixmap_lightness(cards[-1][1]))
+
+    pane.set_sidebar(
+        stack_pixmap(cards, pane.sidebar_room(), pane.sidebar_ratio()),
+        drawn_size(model, textures[-1]),
+        transparent=any(card.hasAlphaChannel() for _, card in cards),
+    )

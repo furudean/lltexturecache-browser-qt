@@ -14,8 +14,8 @@ wheels/
 .mypy_cache
 .ruff_cache
 
-lltexturecache_browser_qt/_meta.py
-lltexturecache_browser_qt/deployment
+texturefriend/_meta.py
+texturefriend/deployment
 pysidedeploy.generated.spec
 nuitka-crash-report.xml
 staging/

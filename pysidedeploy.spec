@@ -7,7 +7,7 @@ title =
 project_dir = .
 
 # source file entry point path. default = main.py
-input_file = lltexturecache_browser_qt/main.py
+input_file = texturefriend/main.py
 
 # directory where the executable output is generated
 exec_directory = dist
@@ -75,7 +75,7 @@ mode = onefile
 #
 # nuitka copies whatever the qt plugins link, so a reader nothing calls drags a
 # framework in behind it.
-extra_args = --quiet --noinclude-qt-translations --include-package-data=lltexturecache_browser_qt '--noinclude-dlls=*qpdf*' '--noinclude-dlls=*qtiff*' '--noinclude-dlls=*qtga*' '--noinclude-dlls=*qwbmp*' '--noinclude-dlls=*qicns*' '--noinclude-dlls=*qwebp*' '--noinclude-dlls=*qico.*' '--noinclude-dlls=*virtualkeyboard*' '--noinclude-dlls=*VirtualKeyboard*' '--noinclude-dlls=*Qt*Pdf*' '--noinclude-dlls=*Qt*Quick*' '--noinclude-dlls=*Qt*Qml*' --nofollow-import-to=PIL.AvifImagePlugin --nofollow-import-to=PIL.WebPImagePlugin
+extra_args = --quiet --noinclude-qt-translations --include-package-data=texturefriend '--noinclude-dlls=*qpdf*' '--noinclude-dlls=*qtiff*' '--noinclude-dlls=*qtga*' '--noinclude-dlls=*qwbmp*' '--noinclude-dlls=*qicns*' '--noinclude-dlls=*qwebp*' '--noinclude-dlls=*qico.*' '--noinclude-dlls=*virtualkeyboard*' '--noinclude-dlls=*VirtualKeyboard*' '--noinclude-dlls=*Qt*Pdf*' '--noinclude-dlls=*Qt*Quick*' '--noinclude-dlls=*Qt*Qml*' --nofollow-import-to=PIL.AvifImagePlugin --nofollow-import-to=PIL.WebPImagePlugin
 
 [buildozer]
 

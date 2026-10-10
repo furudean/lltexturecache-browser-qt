@@ -6,7 +6,7 @@ import pytest
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.view.checkerboard import (
+from texturefriend.view.checkerboard import (
     CHECKERBOARD_SIZE,
     DARK_SHADES,
     GRID_KEY,

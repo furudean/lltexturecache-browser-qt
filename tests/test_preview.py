@@ -5,7 +5,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.panes.preview import MIP_FLOOR, mip_level, mip_levels
+from texturefriend.panes.preview import MIP_FLOOR, mip_level, mip_levels
 
 TEXTURES = [QSize(2048, 2048), QSize(1024, 1024), QSize(1024, 256), QSize(128, 1024), QSize(100, 100)]
 

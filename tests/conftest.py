@@ -43,7 +43,7 @@ def settings(app: QApplication, tmp_path: Path) -> Iterator[None]:
     the app has stored and write the test's values back over it.
     """
 
-    QCoreApplication.setOrganizationName("lltexturecache-browser-qt-tests")
+    QCoreApplication.setOrganizationName("texturefriend-tests")
     QCoreApplication.setApplicationName("suite")
 
     QSettings.setDefaultFormat(QSettings.Format.IniFormat)

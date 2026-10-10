@@ -4,6 +4,8 @@ all notable changes to this project are documented in this file.
 
 ## unreleased
 
+- the app is now called TextureFriend
+- set TEXTUREFRIEND_LOG env var to see debugging information
 - zoom slider in the status bar to grow or shrink textures
 - zoom is now more granular, and you can zoom with trackpad gestures
 - export as button at the bottom of the inspector

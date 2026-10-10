@@ -5,7 +5,7 @@
 use [uv](https://docs.astral.sh/uv/) to run the app in a development context
 
 ```bash
-uv run lltexturecache-browser-qt
+uv run texturefriend
 ```
 
 common tasks are defined under `[tool.poe.tasks]` in

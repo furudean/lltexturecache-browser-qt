@@ -6,7 +6,7 @@ from PySide6.QtGui import QImage, QImageReader
 from PySide6.QtWidgets import QApplication
 from texture_courier import Thumbnail
 
-from lltexturecache_browser_qt.view.images import fit_image, thumbnail_pixels
+from texturefriend.view.images import fit_image, thumbnail_pixels
 
 
 def kept(width: int, height: int, components: int) -> Thumbnail:

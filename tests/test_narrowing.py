@@ -3,10 +3,10 @@
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 
-from lltexturecache_browser_qt.cache.color import ColorIndex, Signature, to_lab
-from lltexturecache_browser_qt.cache.likeness import Descriptor, LikenessIndex, describe
-from lltexturecache_browser_qt.cache.scan import Scan
-from lltexturecache_browser_qt.grid.narrowing import SHORTLIST, Narrowing
+from texturefriend.cache.color import ColorIndex, Signature, to_lab
+from texturefriend.cache.likeness import Descriptor, LikenessIndex, describe
+from texturefriend.cache.scan import Scan
+from texturefriend.grid.narrowing import SHORTLIST, Narrowing
 
 
 def scanned(count: int, **rows: object) -> Scan:
