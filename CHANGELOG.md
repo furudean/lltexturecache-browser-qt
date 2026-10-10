@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v1.0.0 - 2026-10-10
 
 - the app is now called TextureFriend
 - set TEXTUREFRIEND_LOG env var to see debugging information
