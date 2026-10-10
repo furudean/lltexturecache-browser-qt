@@ -160,6 +160,7 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None, ra
         checkerboard = pane_checkerboard_at(square, pane_lightness(pixmap)) if pixmap.hasAlphaChannel() else None
 
         if checkerboard is not None:
+            painter.setBrushOrigin(image.topLeft())
             painter.fillRect(image, QBrush(checkerboard))
 
         painter.drawPixmap(image.topLeft(), pixmap)
