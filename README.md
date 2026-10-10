@@ -24,7 +24,7 @@ the app's icon, slcachegirl, is designed by
 - save to disk in commonly-used image formats
 - drag and drop support
 - it's fast
-- it's not an electron app
+- native app
 
 
 ## install
