@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v1.0.1 - 2026-10-10
 
 - fix a build error on intel macs
 
