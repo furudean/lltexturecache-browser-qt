@@ -1,7 +1,7 @@
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from math import exp, floor
+from math import floor
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -24,7 +24,6 @@ from PySide6.QtGui import (
     QColor,
     QKeyEvent,
     QMouseEvent,
-    QNativeGestureEvent,
     QPaintDevice,
     QPainter,
     QPainterPath,
@@ -51,6 +50,7 @@ from texturefriend.grid.model import INCOMPLETE_ROLE, SIMPLE_ROLE, Index, Textur
 from texturefriend.grid.prefetch import visible_rows
 from texturefriend.grid.selection import KeptSelection
 from texturefriend.view.cellsize import RUNG_RATIO, cell_size, scale_cell_size
+from texturefriend.view.gestures import pinch_scale, wheel_scale, wheel_zooms
 from texturefriend.view.widgets import BORDER_WEIGHT, border_color
 
 CELL_PADDING = 12
@@ -78,11 +78,6 @@ SIMPLE_COLOR = QColor(0x33, 0x33, 0x33)
 SIMPLE_GROUND = QColor(0xFF, 0xFF, 0xFF, 0xB0)
 SIMPLE_WEIGHT = 2
 SIMPLE_DASH = 2.5
-
-# how much of a scroll moves the grid one rung along. a wheel notch is 120
-# eighths of a degree
-WHEEL_STEP = 120
-
 
 MIN_BAKED_BYTES = 64 * 1024 * 1024
 BAKED_SCREENS = 2
@@ -799,33 +794,22 @@ class TextureGrid(QListView):
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        # the command key on mac, and control elsewhere
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            self.scroll_zoom(event)
+        if wheel_zooms(event):
+            event.accept()
+            scale_cell_size(wheel_scale(event, RUNG_RATIO))
             return
 
         self.unpin()
 
         super().wheelEvent(event)
 
-    def scroll_zoom(self, event: QWheelEvent) -> None:
-        event.accept()
-
-        if event.phase() == Qt.ScrollPhase.ScrollMomentum:
-            return
-
-        scale_cell_size(RUNG_RATIO ** (event.angleDelta().y() / WHEEL_STEP))
-
     def viewportEvent(self, event: QEvent) -> bool:
-        if not isinstance(event, QNativeGestureEvent):
+        scale = pinch_scale(event)
+
+        if scale is None:
             return super().viewportEvent(event)
 
-        match event.gestureType():
-            # a pinch's changes in scale sum to the log of its total scale
-            case Qt.NativeGestureType.ZoomNativeGesture:
-                scale_cell_size(exp(event.value()))
-            case _:
-                return super().viewportEvent(event)
+        scale_cell_size(scale)
 
         return True
 

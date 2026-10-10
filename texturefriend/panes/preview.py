@@ -1,4 +1,4 @@
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
@@ -22,6 +22,7 @@ from texturefriend.view.checkerboard import (
 )
 from texturefriend.view.formatting import format_count, format_size
 from texturefriend.view.widgets import ClickTracker
+from texturefriend.view.zoomable import ZoomableView
 
 WINDOW_SIZE = 480
 MIN_PANE_SIZE = 32
@@ -37,7 +38,7 @@ def nearest(edge: int, length: int, low: int, high: int) -> int:
     return min(max(edge, low), max(high - length + 1, low))
 
 
-def preview_title(texture: Texture, natural: QSize) -> str:
+def preview_title(texture: Texture, natural: QSize, scale: float | None = None) -> str:
     dimensions = f"{format_count(natural.width())} × {format_count(natural.height())}"
 
     # the shape of a texture is not known until it has been decoded
@@ -51,7 +52,14 @@ def preview_title(texture: Texture, natural: QSize) -> str:
         if part
     )
 
-    return f"{texture.uuid} ({about})"
+    # how large the texture is drawn against its own pixels
+    zoom = f" @ {format_count(round(scale * 100))}%" if scale is not None else ""
+
+    return f"{texture.uuid}{zoom} ({about})"
+
+
+def drawn_sharp(pixmap: QSize, natural: QSize, drawn: QSize) -> bool:
+    return pixmap == natural and drawn.width() >= natural.width() and drawn.height() >= natural.height()
 
 
 def mip_levels(pixmap: QPixmap) -> list[QPixmap]:
@@ -83,7 +91,7 @@ def mip_level(levels: list[QPixmap], pixels: QSize) -> QPixmap:
     )
 
 
-class PreviewWindow(QWidget):
+class PreviewWindow(ZoomableView):
     closed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -102,6 +110,11 @@ class PreviewWindow(QWidget):
         self._message = ""
         self._lightness: float | None = None
         self._click = ClickTracker()
+
+        # the texture shown, so a decode landing over its own stand-in keeps
+        # the zoom and a new texture starts back at fit
+        self._texture: Texture | None = None
+        self._natural = QSize()
 
         # the texture the window has been shaped to, which is what keeps a
         # decode landing on top of the stand-in for the same texture from
@@ -127,10 +140,11 @@ class PreviewWindow(QWidget):
         self.closed.emit()
 
     def clear(self) -> None:
-        self.setWindowTitle(WINDOW_TITLE)
-
         self._shaped_for = None
+        self._texture = None
+        self._natural = QSize()
 
+        self.reset_zoom()
         self.set_image(QPixmap(), "No selection")
 
     def show_texture(
@@ -141,7 +155,15 @@ class PreviewWindow(QWidget):
     ) -> None:
         pixmap, natural = (decoded or standing) or (QPixmap(), QSize())
 
-        self.setWindowTitle(preview_title(texture, natural))
+        known = self._texture is not None and self._texture.uuid == texture.uuid
+
+        self._texture = texture
+        self._natural = natural
+
+        if not known:
+            self.reset_zoom()
+
+        self.sync_title()
 
         if not texture.whole():
             message = "Texture incomplete"
@@ -167,6 +189,21 @@ class PreviewWindow(QWidget):
         set_picked_lightness(self._lightness)
 
         self.update()
+
+    def can_zoom(self) -> bool:
+        return not self._pixmap.isNull()
+
+    def zoom_changed(self) -> None:
+        self.sync_title()
+
+    def sync_title(self) -> None:
+        if self._texture is None:
+            self.setWindowTitle(WINDOW_TITLE)
+            return
+
+        scale = self.width() * self.zoom / self._natural.width() if not self._natural.isEmpty() else None
+
+        self.setWindowTitle(preview_title(self._texture, self._natural, scale))
 
     def room(self) -> QRect | None:
         screen = self.screen()
@@ -225,6 +262,7 @@ class PreviewWindow(QWidget):
         super().resizeEvent(event)
 
         self.remember_box()
+        self.sync_title()
 
     def moveEvent(self, event: QMoveEvent) -> None:
         super().moveEvent(event)
@@ -240,32 +278,48 @@ class PreviewWindow(QWidget):
         else:
             # the texture is given the whole window, which is kept in the shape
             # the texture was drawn in so that filling it holds that shape
-            target = self.rect()
+            target = self.view()
 
             checkerboard = pane_checkerboard(self._lightness) if self._pixmap.hasAlphaChannel() else None
 
             if checkerboard is not None:
-                painter.fillRect(target, QBrush(checkerboard))
+                brush = QBrush(checkerboard)
+                brush.setTransform(self.zoom_transform())
 
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(target, mip_level(self._levels, target.size() * self.devicePixelRatioF()))
+                painter.fillRect(target, brush)
+
+            # a zoom draws the part of the texture in view, clear of the scroll bars
+            drawn = self.size() * self.devicePixelRatioF() * self.zoom
+            level = mip_level(self._levels, drawn)
+            source = self.zoomed_source(level.size())
+
+            if not drawn_sharp(self._pixmap.size(), self._natural, drawn):
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+            painter.drawPixmap(QRectF(target), level, source)
 
         painter.end()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        super().mousePressEvent(event)
+
         # an empty window has no texture to cycle the checkerboard behind
         if self._click.press(event, taking=not self._pixmap.isNull()):
             event.accept()
-            return
 
-        super().mousePressEvent(event)
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        super().mouseMoveEvent(event)
+
+        # a pan is not a click
+        if self.panning:
+            self._click.cancel()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if self._click.release(event, self.rect()):
-            cycle_pane_tone()
-            return
-
         super().mouseReleaseEvent(event)
+
+        if self._click.release(event, self.rect()):
+            event.accept()
+            cycle_pane_tone()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Escape):
