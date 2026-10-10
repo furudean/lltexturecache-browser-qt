@@ -31,7 +31,6 @@ the app's icon, slcachegirl, is designed by
 
 windows, linux and mac builds are attached to
 [each release](https://github.com/furudean/texturefriend/releases).
-on mac, open the `.dmg` and drag the app into Applications.
 
 on mac, you may install with homebrew, from the 
 [homebrew tap](https://github.com/furudean/homebrew-tap/tree/main):
