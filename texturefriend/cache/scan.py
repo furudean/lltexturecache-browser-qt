@@ -180,7 +180,10 @@ class CacheScan(QRunnable):
     def signature(self, texture: Texture, kept: Thumbnail, image: QImage) -> Signature | None:
         found = signature(image)
 
-        if found is not None and found.flat and self.dense(texture, kept, clear=found.clear):
+        if found is None or not found.flat:
+            return found
+
+        if not texture.whole() or self.dense(texture, kept, clear=found.clear):
             return replace(found, flat=False, clear=False)
 
         return found
