@@ -10,7 +10,6 @@ from PySide6.QtCore import (
     QRunnable,
     QSize,
     Qt,
-    QThreadPool,
     Signal,
     Slot,
 )
@@ -19,7 +18,7 @@ from texture_courier import Texture, TextureCache, TextureCacheError
 
 from texturefriend.cache.decode import declared_size
 from texturefriend.cache.likeness import describe
-from texturefriend.cache.scan import CacheScan, KnownTraits, Scan, ScanSignals
+from texturefriend.cache.scan import CacheScan, KnownTraits, Scan
 from texturefriend.grid.cellcache import insert_cell, nearest_cell, remove_cells
 from texturefriend.grid.decodes import FULL_SIZE, FullDecodes, PreviewDecodes
 from texturefriend.grid.narrowing import Narrowing
@@ -178,7 +177,6 @@ class TextureModel(QAbstractListModel):
         # 100 point cell is 200 pixels across
         self._ratio = ratio
         self._pixels = cell_pixels(ratio)
-        self._thumbnails = threading.Lock()
 
         self._decodes = DecodeQueue(self, start=self.start_decode, pixels=self._pixels)
 
@@ -198,12 +196,9 @@ class TextureModel(QAbstractListModel):
         self._preview_signals = DecodeSignals(self)
         self._preview_signals.done.connect(self.preview_decoded)
 
-        self._scan_signals = ScanSignals(self)
-        self._scan_signals.done.connect(self.scanned)
-
-        self._scan = CacheScan(self._textures, self._thumbnails, self._scan_signals, known)
-
-        QThreadPool.globalInstance().start(self._scan)
+        self._scan = CacheScan(self._textures, known, self)
+        self._scan.done.connect(self.scanned)
+        self._scan.start()
 
     @property
     def reads(self) -> threading.Lock:
@@ -329,8 +324,7 @@ class TextureModel(QAbstractListModel):
         ratio: float = 1.0,
     ) -> QImage:
         try:
-            with self._thumbnails:
-                kept = texture.thumbnail
+            kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # not every entry has a thumbnail beside it, and the placeholder
             # stands in for the ones that do not
@@ -637,7 +631,6 @@ class TextureModel(QAbstractListModel):
         self._preview_signals.done.disconnect(self.preview_decoded)
 
         self._scan.cancel()
-        self._scan_signals.done.disconnect(self.scanned)
 
         self._fulls.clear()
         self._previews.clear()

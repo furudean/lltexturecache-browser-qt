@@ -1,18 +1,9 @@
-"""The one pass over a cache that answers everything the grid can be asked
-
-Which colours a texture holds, whether it holds a picture at all, and what
-that picture looks like all come out of the same thumbnail the viewer kept
-beside each entry. Reading every one of them takes long enough to be worth
-doing off the ui thread, and once is enough, so the pass is made the once and
-hands back an index for each question.
-"""
-
 import logging
-import threading
-from collections.abc import Iterable
+import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
 
-from PySide6.QtCore import QObject, QRunnable, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QImage
 from texture_courier import Texture, TextureCacheError, Thumbnail
 
@@ -31,6 +22,8 @@ from texturefriend.view.images import thumbnail_pixels
 log = logging.getLogger(__name__)
 
 PLACEHOLDER_BYTE = 0x80
+
+SLICE_SECONDS = 0.004
 
 
 def placeholder(kept: Thumbnail) -> bool:
@@ -69,80 +62,79 @@ def forget_gone(known: KnownTraits, textures: Iterable[Texture]) -> None:
         del known[key]
 
 
-class ScanSignals(QObject):
+class CacheScan(QObject):
     done = Signal(object)
-
-
-class CacheScan(QRunnable):
-    """Reads every thumbnail in a cache, off the ui thread"""
 
     def __init__(
         self,
         textures: list[Texture],
-        thumbnails: threading.Lock,
-        signals: ScanSignals,
         known: KnownTraits | None = None,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(parent)
 
-        self._textures = textures
-        self._thumbnails = thumbnails
-        self._signals = signals
         self._known: KnownTraits = known if known is not None else {}
-        self._stopped = threading.Event()
 
-        self._free = threading.Event()
-        self._free.set()
+        self._left: Iterator[tuple[int, Texture]] | None = enumerate(textures)
+
+        self._colors = ColorIndex(len(textures))
+        self._likeness = LikenessIndex(len(textures))
+
+        # a zero interval fires once per pass of the event loop, so a slice runs
+        # after whatever input and repaints were waiting
+        self._timer = QTimer(self)
+        self._timer.setInterval(0)
+        self._timer.timeout.connect(self.step)
+
+    def start(self) -> None:
+        self.resume()
 
     def cancel(self) -> None:
-        self._stopped.set()
-        self._free.set()
+        self._left = None
+        self._timer.stop()
 
     def pause(self) -> None:
-        self._free.clear()
+        self._timer.stop()
 
     def resume(self) -> None:
-        self._free.set()
+        if self._left is not None:
+            self._timer.start()
 
     @Slot()
-    def run(self) -> None:
-        count = len(self._textures)
+    def step(self) -> None:
+        left = self._left
 
-        colors = ColorIndex(count)
-        likeness = LikenessIndex(count)
-
-        for row, texture in enumerate(self._textures):
-            self._free.wait()
-
-            if self._stopped.is_set():
-                return
-
-            key = stamp(texture)
-            found = self._known.get(key)
-
-            if found is None:
-                found = self.traits(texture)
-
-                if found is None:
-                    continue
-
-                self._known[key] = found
-
-            if found.signature is not None:
-                colors.add(row, found.signature)
-
-            if found.descriptor is not None:
-                likeness.add(row, found.descriptor)
-
-        if self._stopped.is_set():
+        if left is None:
             return
 
-        try:
-            self._signals.done.emit(Scan(colors, likeness))
-        except RuntimeError:
-            # the model this was reading for went out from under it between the
-            # check above and here, taking the signals it reports through along
-            log.debug("cache scan finished after its model closed", exc_info=True)
+        stop = time.perf_counter() + SLICE_SECONDS
+
+        for row, texture in left:
+            self.read(row, texture)
+
+            if time.perf_counter() >= stop:
+                return
+
+        self.cancel()
+        self.done.emit(Scan(self._colors, self._likeness))
+
+    def read(self, row: int, texture: Texture) -> None:
+        key = stamp(texture)
+        found = self._known.get(key)
+
+        if found is None:
+            found = self.traits(texture)
+
+            if found is None:
+                return
+
+            self._known[key] = found
+
+        if found.signature is not None:
+            self._colors.add(row, found.signature)
+
+        if found.descriptor is not None:
+            self._likeness.add(row, found.descriptor)
 
     def traits(self, texture: Texture) -> Traits | None:
         kept = self.thumbnail(texture)
@@ -159,10 +151,7 @@ class CacheScan(QRunnable):
 
     def thumbnail(self, texture: Texture) -> Thumbnail | None:
         try:
-            # the thumbnails all come out of the one file, the same as the reads
-            # the grid makes, so this waits its turn among them
-            with self._thumbnails:
-                kept = texture.thumbnail
+            kept = texture.thumbnail
         except (TextureCacheError, OSError) as e:
             # a texture with no readable thumbnail has nothing to be filed
             # under, which leaves it out of the indexes rather than stopping the scan

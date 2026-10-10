@@ -8,6 +8,7 @@ all notable changes to this project are documented in this file.
 - fix inspector's checkerboard not tiling from top-left origin
 - fix inspector's hairline covering the texture's edge instead of sitting outside it
 - fix incomplete textures contributing to simple textures filter
+- fix the window stalling while texture characteristics are identified
 
 ## v1.0.1 - 2026-10-10
 

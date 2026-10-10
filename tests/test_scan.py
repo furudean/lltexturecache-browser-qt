@@ -1,35 +1,40 @@
-import threading
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication
 from texture_courier import Entry, Texture, TextureCache, Thumbnail
 
+from texturefriend.cache import scan as scanning
 from texturefriend.cache.color import BLIND_BASE_BYTES, FLAT_BASE_BYTES
 from texturefriend.cache.scan import (
     PLACEHOLDER_BYTE,
     CacheScan,
-    ScanSignals,
+    Scan,
     Traits,
     forget_gone,
     placeholder,
     stamp,
 )
 
+HEAD_BYTES = 600
 
-def entry(image_size: int, uuid: str = "0" * 36) -> Texture:
+
+def entry(image_size: int, uuid: str = "0" * 36, *, whole: bool = True) -> Texture:
+    body_size = max(image_size - HEAD_BYTES, 0) if whole else 0
+
     return Texture(
         index=0,
-        entry=Entry(uuid=uuid, image_size=image_size, body_size=0, time=datetime.now()),  # noqa: DTZ005
+        entry=Entry(uuid=uuid, image_size=image_size, body_size=body_size, time=datetime.now()),  # noqa: DTZ005
         cache=cast("TextureCache", SimpleNamespace(cache_dir=Path("nowhere"))),
     )
 
 
 def scan() -> CacheScan:
-    return CacheScan([], threading.Lock(), ScanSignals())
+    return CacheScan([])
 
 
 def kept(width: int = 16, height: int = 16, discard_level: int = 2, fill: int = 0) -> Thumbnail:
@@ -112,6 +117,13 @@ class TestSignature:
         assert found.flat is False
         assert found.clear is False
 
+    def test_an_incomplete_texture_is_never_simple(self, app: QApplication) -> None:
+        found = scan().signature(entry(FLAT_BASE_BYTES * 2, whole=False), kept(), filled(QColor("red")))
+
+        assert found is not None
+        assert found.flat is False
+        assert found.clear is False
+
     def test_a_thumbnail_that_cannot_be_read_has_no_signature(self, app: QApplication) -> None:
         assert scan().signature(entry(FLAT_BASE_BYTES * 8), kept(), QImage()) is None
 
@@ -152,3 +164,44 @@ class TestForgetGone:
         forget_gone(known, [held, entry(21, "b" * 36)])
 
         assert list(known) == [stamp(held)]
+
+
+def known_scan(count: int) -> tuple[CacheScan, list[Scan]]:
+    textures = [entry(10, f"{row:036}") for row in range(count)]
+    known = {stamp(texture): Traits(None, None) for texture in textures}
+
+    found = CacheScan(textures, known)
+    reports: list[Scan] = []
+    found.done.connect(reports.append)
+
+    return found, reports
+
+
+class TestSlices:
+    @pytest.fixture(autouse=True)
+    def one_texture_a_slice(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(scanning, "SLICE_SECONDS", 0)
+
+    def test_a_scan_reports_once_however_often_it_is_resumed(self, app: QApplication) -> None:
+        # every scroll that settles resumes the scan, finished or not
+        found, reports = known_scan(3)
+
+        found.start()
+
+        for _ in range(10):
+            app.processEvents()
+            found.resume()
+
+        assert len(reports) == 1
+
+    def test_a_cancelled_scan_never_reports(self, app: QApplication) -> None:
+        found, reports = known_scan(3)
+
+        found.start()
+        found.cancel()
+        found.resume()
+
+        for _ in range(10):
+            app.processEvents()
+
+        assert reports == []
