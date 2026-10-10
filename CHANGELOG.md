@@ -2,7 +2,7 @@
 
 all notable changes to this project are documented in this file.
 
-## unreleased
+## v1.1.0 - 2026-10-10
 
 - zoom the preview window with a zoom/pan gestures
 - open the preview window at the texture's own size
