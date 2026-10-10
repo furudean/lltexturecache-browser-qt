@@ -5,6 +5,7 @@ all notable changes to this project are documented in this file.
 ## unreleased
 
 - fix inspector's checkerboard not tiling from top-left origin
+- fix inspector's hairline covering the texture's edge instead of sitting outside it
 
 ## v1.0.1 - 2026-10-10
 

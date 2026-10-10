@@ -118,12 +118,16 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None, ra
     # whenever it is the one that set the size
     dealt.append((dealt_card(cards[-1][1], box, span), QTransform()))
 
-    bounds = QRectF()
+    def bounds(reach: float) -> QRectF:
+        united = QRectF()
 
-    for pixmap, transform in dealt:
-        bounds = bounds.united(transform.mapRect(framed(pixmap)))
+        for pixmap, transform in dealt:
+            united = united.united(transform.mapRect(framed(pixmap).adjusted(-reach, -reach, reach, reach)))
 
-    laid = bounds.adjusted(-1, -1, 1, 1).toAlignedRect()
+        return united
+
+    reach = hairline_weight(bounds(0).toAlignedRect().size(), room, ratio)
+    laid = bounds(reach).adjusted(-1, -1, 1, 1).toAlignedRect()
 
     canvas = QPixmap(laid.size())
     canvas.fill(Qt.GlobalColor.transparent)
@@ -166,7 +170,7 @@ def stack_pixmap(cards: list[tuple[str, QPixmap]], room: QSize | None = None, ra
         painter.drawPixmap(image.topLeft(), pixmap)
 
         painter.setPen(hairline)
-        painter.drawRect(outline.adjusted(weight / 2, weight / 2, -weight / 2, -weight / 2))
+        painter.drawRect(outline.adjusted(-weight / 2, -weight / 2, weight / 2, weight / 2))
 
         painter.restore()
 
