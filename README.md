@@ -1,18 +1,18 @@
-# TextureFriend
+# texturefriend
 
 <p align="center">
   <img src="preview.png" width="600"
     alt="a screenshot of TextureFriend with a cache open">
 </p>
 
-TextureFriend is a cross-platform tool to browse and export textures
-from the second life texture cache.
+texturefriend is a cross-platform tool used to browse and export textures
+from second life.
 
-this application is useful if you want to mod existing assets on second life,
-like character clothing and the author does not provide a texture to download.
+this application is useful if you want to mod existing assets,
+like for example character clothing, but the author does not provide a texture to download.
 
-TextureFriend can only read what is stored in your cache files. it
-never connects to second life directly.
+texturefriend can only read what is stored in your cache files. it
+never connects to any second life servers.
 
 the app's icon, slcachegirl, is designed by
 [@sferics32.bsky.social](https://bsky.app/profile/did:plc:omeuiwhg6nfnwdorlfxtszei).
