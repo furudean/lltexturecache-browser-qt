@@ -58,7 +58,7 @@ if [ "$(uname -s)" = Darwin ]; then
 	if [ "${macos%%.*}" -ge 26 ]; then
 		./scripts/macos-icon.sh
 	else
-		echo "note: skipping the icon catalogue, macos 26 is needed="
+		echo "note: skipping the icon catalogue, macos 26 is needed"
 	fi
 fi
 
